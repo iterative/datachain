@@ -605,7 +605,7 @@ class DataChain:
             project = self.session.catalog.metastore.get_project(
                 project_name,
                 namespace_name,
-                create=not self.session.catalog.is_cli,
+                create=self.session.catalog.is_studio,
             )
         except ProjectNotFoundError as e:
             # not being able to create it as creation is not allowed

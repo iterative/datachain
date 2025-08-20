@@ -3868,7 +3868,7 @@ def test_delete_dataset_versions_all(test_session):
 
 
 @pytest.mark.parametrize("force", (True, False))
-@pytest.mark.parametrize("is_cli", (True,))
+@pytest.mark.parametrize("is_studio", (False,))
 @skip_if_not_sqlite
 def test_delete_dataset_from_studio(test_session, studio_token, requests_mock, force):
     requests_mock.delete(f"{STUDIO_URL}/api/datachain/datasets", json={"ok": True})
@@ -3881,7 +3881,7 @@ def test_delete_dataset_from_studio(test_session, studio_token, requests_mock, f
     )
 
 
-@pytest.mark.parametrize("is_cli", (True,))
+@pytest.mark.parametrize("is_studio", (False,))
 @skip_if_not_sqlite
 def test_delete_dataset_from_studio_not_found(
     test_session, studio_token, requests_mock
@@ -4024,8 +4024,8 @@ def test_semver_preview_ok(test_session):
     assert sorted([p["num"] for p in dataset.get_version("1.0.1").preview]) == [3, 4]
 
 
-@pytest.mark.parametrize("is_cli", [True, False])
-def test_save_to_default_project(test_session, is_cli):
+@pytest.mark.parametrize("is_studio", [True, False])
+def test_save_to_default_project(test_session, is_studio):
     catalog = test_session.catalog
     ds_name = "fibonacci"
     dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save(ds_name)
@@ -4033,8 +4033,8 @@ def test_save_to_default_project(test_session, is_cli):
     assert ds.dataset.project == catalog.metastore.default_project
 
 
-@pytest.mark.parametrize("is_cli", [True, False])
-def test_save_to_default_project_with_read_storage(tmp_dir, test_session, is_cli):
+@pytest.mark.parametrize("is_studio", [True, False])
+def test_save_to_default_project_with_read_storage(tmp_dir, test_session, is_studio):
     catalog = test_session.catalog
     ds_name = "parquet_ds"
 
@@ -4061,6 +4061,7 @@ def test_save_to_non_default_namespace_and_project(
     if use_settings:
         ds = ds.settings(namespace="dev", project="numbers").save("fibonacci")
     else:
+        print("before save")
         ds = ds.save("dev.numbers.fibonacci")
 
     ds = dc.read_dataset(name="dev.numbers.fibonacci")
@@ -4230,9 +4231,9 @@ def test_save_all_ways_to_set_project_invalid_name(
         )
 
 
-@pytest.mark.parametrize("is_cli", [True])
+@pytest.mark.parametrize("is_studio", [False])
 @skip_if_not_sqlite
-def test_save_create_project_not_allowed(test_session, is_cli):
+def test_save_create_project_not_allowed(test_session, is_studio):
     with pytest.raises(ProjectCreateNotAllowedError):
         dc.read_values(fib=[1, 1, 2, 3, 5, 8], session=test_session).save(
             "dev.numbers.fibonacci"

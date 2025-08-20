@@ -527,7 +527,7 @@ class Catalog:
             Callable[["AbstractWarehouse"], None]
         ] = None,
         in_memory: bool = False,
-        is_cli: Optional[bool] = True,
+        is_studio: bool = False,
     ):
         datachain_dir = DataChainDir(cache=cache_dir, tmp=tmp_dir)
         datachain_dir.init()
@@ -541,11 +541,11 @@ class Catalog:
         }
         self._warehouse_ready_callback = warehouse_ready_callback
         self.in_memory = in_memory
-        self._is_cli = is_cli
+        self._is_studio = is_studio
 
     @property
-    def is_cli(self) -> bool:
-        return self._is_cli  # type: ignore[return-value]
+    def is_studio(self) -> bool:
+        return self._is_studio  # type: ignore[return-value]
 
     @cached_property
     def warehouse(self) -> "AbstractWarehouse":
@@ -1121,7 +1121,7 @@ class Catalog:
         # to fetch dataset with local.local namespace & project as that one cannot
         # exist in Studio in the first place
         no_fallback = (
-            not self.is_cli or namespace_name == self.metastore.default_namespace_name
+            self.is_studio or namespace_name == self.metastore.default_namespace_name
         )
 
         if no_fallback or not update:

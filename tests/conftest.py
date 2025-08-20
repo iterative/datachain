@@ -542,17 +542,19 @@ def cloud_test_catalog_tmpfile(
 
 
 @pytest.fixture
-def is_cli():
-    return False
+def is_studio():
+    return True
 
 
 @pytest.fixture(autouse=True)
-def mock_is_cli(is_cli):
-    if is_cli:
+def mock_is_studio(is_studio):
+    if not is_studio:
         yield
     else:
-        with patch.object(Catalog, "is_cli", new_callable=PropertyMock) as mock_catalog:
-            mock_catalog.return_value = False
+        with patch.object(
+            Catalog, "is_studio", new_callable=PropertyMock
+        ) as mock_catalog:
+            mock_catalog.return_value = True
             yield
 
 

@@ -32,7 +32,7 @@ def create(
     """
     session = Session.get(session)
 
-    if session.catalog.is_cli:
+    if not session.catalog.is_studio:
         raise ProjectCreateNotAllowedError("Creating project is not allowed")
 
     Project.validate_name(name)

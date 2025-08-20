@@ -62,7 +62,7 @@ def test_invalid_name(test_session, name):
 
 
 @skip_if_not_sqlite
-@pytest.mark.parametrize("is_cli", [True])
+@pytest.mark.parametrize("is_studio", [False])
 def test_create_by_user_not_allowed(test_session):
     with pytest.raises(ProjectCreateNotAllowedError) as excinfo:
         dc.create_project("dev", "chatbot", session=test_session)

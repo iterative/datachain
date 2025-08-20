@@ -199,7 +199,7 @@ def test_studio_datasets(capsys, studio_datasets, mocker):
 
 
 @skip_if_not_sqlite
-@pytest.mark.parametrize("is_cli", (True,))
+@pytest.mark.parametrize("is_studio", (False,))
 def test_studio_edit_dataset(capsys, mocker):
     with requests_mock.mock() as m:
         m.post(f"{STUDIO_URL}/api/datachain/datasets", json={})
@@ -286,7 +286,7 @@ def test_studio_edit_dataset(capsys, mocker):
 
 
 @skip_if_not_sqlite
-@pytest.mark.parametrize("is_cli", (True,))
+@pytest.mark.parametrize("is_studio", (False,))
 def test_studio_rm_dataset(capsys, mocker):
     with requests_mock.mock() as m:
         m.delete(f"{STUDIO_URL}/api/datachain/datasets", json={})

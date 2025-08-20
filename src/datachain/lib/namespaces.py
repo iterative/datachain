@@ -28,7 +28,7 @@ def create(
     """
     session = Session.get(session)
 
-    if session.catalog.is_cli:
+    if not session.catalog.is_studio:
         raise NamespaceCreateNotAllowedError("Creating namespace is not allowed")
 
     Namespace.validate_name(name)

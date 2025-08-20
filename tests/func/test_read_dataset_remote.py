@@ -259,7 +259,7 @@ def mock_dataset_rows_fetcher_status_check(mocker):
 
 
 @skip_if_not_sqlite
-@pytest.mark.parametrize("is_cli", (True,))
+@pytest.mark.parametrize("is_studio", (False,))
 def test_read_dataset_remote_basic(
     studio_token,
     test_session,
@@ -289,7 +289,7 @@ def test_read_dataset_remote_basic(
 
 
 @skip_if_not_sqlite
-@pytest.mark.parametrize("is_cli", (True,))
+@pytest.mark.parametrize("is_studio", (False,))
 def test_read_dataset_remote_already_exists(
     studio_token,
     test_session,
@@ -338,7 +338,7 @@ def test_read_dataset_remote_already_exists(
 
 
 @skip_if_not_sqlite
-@pytest.mark.parametrize("is_cli", (True,))
+@pytest.mark.parametrize("is_studio", (False,))
 def test_read_dataset_remote_update_flag(
     studio_token,
     test_session,
@@ -409,7 +409,7 @@ def test_read_dataset_remote_update_flag(
 
 
 @skip_if_not_sqlite
-@pytest.mark.parametrize("is_cli", (True,))
+@pytest.mark.parametrize("is_studio", (False,))
 def test_read_dataset_remote_update_flag_no_version(
     studio_token,
     test_session,
@@ -449,7 +449,7 @@ def test_read_dataset_remote_update_flag_no_version(
 
 
 @skip_if_not_sqlite
-@pytest.mark.parametrize("is_cli", (True,))
+@pytest.mark.parametrize("is_studio", (False,))
 def test_read_dataset_remote_version_specifiers(
     studio_token,
     test_session,
@@ -483,7 +483,7 @@ def test_read_dataset_remote_version_specifiers(
 
 
 @skip_if_not_sqlite
-@pytest.mark.parametrize("is_cli", (True,))
+@pytest.mark.parametrize("is_studio", (False,))
 def test_read_dataset_remote_version_specifier_no_match(
     studio_token,
     test_session,
@@ -508,7 +508,7 @@ def test_read_dataset_remote_version_specifier_no_match(
 
 
 @skip_if_not_sqlite
-@pytest.mark.parametrize("is_cli", (True,))
+@pytest.mark.parametrize("is_studio", (False,))
 def test_read_dataset_remote_not_found(
     studio_token,
     test_session,
@@ -530,7 +530,7 @@ def test_read_dataset_remote_not_found(
 
 
 @skip_if_not_sqlite
-@pytest.mark.parametrize("is_cli", (True,))
+@pytest.mark.parametrize("is_studio", (False,))
 def test_read_dataset_remote_version_not_found(
     studio_token,
     test_session,
@@ -553,7 +553,7 @@ def test_read_dataset_remote_version_not_found(
 
 
 @skip_if_not_sqlite
-@pytest.mark.parametrize("is_cli", (True,))
+@pytest.mark.parametrize("is_studio", (False,))
 def test_read_dataset_remote_latest_version(
     studio_token,
     test_session,
@@ -586,7 +586,7 @@ def test_read_dataset_remote_latest_version(
 
 
 @skip_if_not_sqlite
-@pytest.mark.parametrize("is_cli", (True,))
+@pytest.mark.parametrize("is_studio", (False,))
 def test_read_dataset_remote_export_failed(
     studio_token,
     test_session,
