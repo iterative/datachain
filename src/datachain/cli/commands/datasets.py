@@ -167,7 +167,10 @@ def edit_dataset(
 ):
     namespace_name, project_name, name = catalog.get_full_dataset_name(name)
 
-    if namespace_name != catalog.metastore.default_namespace_name:
+    # studio dataset is if it has non "local" namespace
+    is_studio_dataset = namespace_name != catalog.metastore.default_namespace_name
+
+    if is_studio_dataset:
         from datachain.studio import edit_studio_dataset
 
         if Config().read().get("studio", {}).get("token"):
