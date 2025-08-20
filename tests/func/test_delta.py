@@ -98,11 +98,13 @@ def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path, project):
 
 def test_delta_update_unsafe(test_session, tmp_dir, tmp_path):
     catalog = test_session.catalog
+
     default_namespace_name = catalog.metastore.default_namespace_name
     default_project_name = catalog.metastore.default_project_name
 
     starting_ds_name = "starting_ds"
     merge_ds_name = "merge_ds"
+
     dependency_ds_name = (
         f"{default_namespace_name}.{default_project_name}.{starting_ds_name}"
     )
@@ -110,85 +112,62 @@ def test_delta_update_unsafe(test_session, tmp_dir, tmp_path):
         f"{default_namespace_name}.{default_project_name}.{merge_ds_name}"
     )
     ds_name = "delta_ds"
-    ds_name = "delta_ds"
-
-    images = [
-        {"name": f"img{i}.jpg", "data": Image.new(mode="RGB", size=(64, 128))}
-        for i in range(1, 5)
-    ]
-
-    merge_images = [
-        {
-            "name": f"img{i}.jpg",
-            "data": Image.new(mode="RGB", size=(64, 128)),
-            "value": i,
-        }
-        for i in range(1, 5)
-    ]
 
     # create dataset which will be merged to delta one
     merge_ds = dc.read_values(
-        file=[
-            ImageFile(path=img["name"], source=f"file://{tmp_path}")
-            for img in merge_images
-        ],
-        value=[img["value"] for img in merge_images],
-        session=test_session,
+        id=[1, 2, 3, 4, 5, 6], value=[1, 2, 3, 4, 5, 6], session=test_session
     ).save(merge_ds_name)
 
-    def create_image_dataset(ds_name, images):
-        dc.read_values(
-            file=[
-                ImageFile(path=img["name"], source=f"file://{tmp_path}")
-                for img in images
-            ],
-            session=test_session,
-        ).save(ds_name)
-
-    def create_delta_dataset(ds_name):
-        dc.read_dataset(
-            starting_ds_name,
-            session=test_session,
-            delta=True,
-            delta_on=["file.source", "file.path"],
-            delta_result_on=["file.source", "file.path"],
-            delta_compare=["file.version", "file.etag"],
-            delta_unsafe=True,
-        ).merge(merge_ds, on="file.path", inner=True).save(ds_name)
-
     # first version of starting dataset
-    create_image_dataset(starting_ds_name, images[:2])
+    dc.read_values(id=[1, 2, 3], session=test_session).save(starting_ds_name)
     # first version of delta dataset
-    create_delta_dataset(ds_name)
-    assert sorted(_get_dependencies(catalog, ds_name, "1.0.0")) == sorted(
-        [(dependency_ds_name, "1.0.0"), (dependency_ds_merge_name, "1.0.0")]
-    )
+    dc.read_dataset(
+        starting_ds_name,
+        session=test_session,
+        delta_on="id",
+        delta=True,
+        delta_unsafe=True,
+    ).merge(merge_ds, on="id", inner=True).save(ds_name)
+
+    assert set(_get_dependencies(catalog, ds_name, "1.0.0")) == {
+        (dependency_ds_name, "1.0.0"),
+        (dependency_ds_merge_name, "1.0.0"),
+    }
+
     # second version of starting dataset
-    create_image_dataset(starting_ds_name, images[2:])
+    dc.read_values(id=[1, 2, 3, 4, 5, 6], session=test_session).save(starting_ds_name)
     # second version of delta dataset
-    create_delta_dataset(ds_name)
+    dc.read_dataset(
+        starting_ds_name,
+        session=test_session,
+        delta_on="id",
+        delta=True,
+        delta_unsafe=True,
+    ).merge(merge_ds, on="id", inner=True).save(ds_name)
 
-    assert sorted(_get_dependencies(catalog, ds_name, "1.0.1")) == sorted(
-        [(dependency_ds_name, "1.0.1"), (dependency_ds_merge_name, "1.0.0")]
-    )
+    assert set(_get_dependencies(catalog, ds_name, "1.0.1")) == {
+        (dependency_ds_name, "1.0.1"),
+        (dependency_ds_merge_name, "1.0.0"),
+    }
 
-    assert (dc.read_dataset(ds_name, version="1.0.0").order_by("file.path")).to_list(
-        "file.path", "value"
+    assert (dc.read_dataset(ds_name, version="1.0.0").order_by("id")).to_list(
+        "id", "value"
     ) == [
-        ("img1.jpg", 1),
-        ("img2.jpg", 2),
+        (1, 1),
+        (2, 2),
+        (3, 3),
     ]
 
-    assert (dc.read_dataset(ds_name, version="1.0.1").order_by("file.path")).to_list(
-        "file.path", "value"
+    assert (dc.read_dataset(ds_name, version="1.0.1").order_by("id")).to_list(
+        "id", "value"
     ) == [
-        ("img1.jpg", 1),
-        ("img2.jpg", 2),
-        ("img3.jpg", 3),
-        ("img4.jpg", 4),
+        (1, 1),
+        (2, 2),
+        (3, 3),
+        (4, 4),
+        (5, 5),
+        (6, 6),
     ]
-
-    create_delta_dataset(ds_name)
 
 
 def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
@@ -420,7 +399,6 @@ def test_delta_update_union(test_session, file_dataset):
                 file_dataset.name,
                 session=test_session,
                 delta=True,
-                delta_on=["file.source", "file.path"],
             ).union(dc.read_dataset("numbers"), session=test_session)
         )
 
@@ -439,7 +417,6 @@ def test_delta_update_merge(test_session, file_dataset):
                 file_dataset.name,
                 session=test_session,
                 delta=True,
-                delta_on=["file.source", "file.path"],
             ).merge(dc.read_dataset("numbers"), on="id", session=test_session)
         )
 
@@ -456,7 +433,6 @@ def test_delta_update_distinct(test_session, file_dataset):
                 file_dataset.name,
                 session=test_session,
                 delta=True,
-                delta_on=["file.source", "file.path"],
             ).distinct("file.path")
         )
 
@@ -473,7 +449,6 @@ def test_delta_update_group_by(test_session, file_dataset):
                 file_dataset.name,
                 session=test_session,
                 delta=True,
-                delta_on=["file.source", "file.path"],
             ).group_by(cnt=func.count(), partition_by="file.path")
         )
 
@@ -490,7 +465,6 @@ def test_delta_update_agg(test_session, file_dataset):
                 file_dataset.name,
                 session=test_session,
                 delta=True,
-                delta_on=["file.source", "file.path"],
             ).agg(cnt=func.count(), partition_by="file.path")
         )
 
