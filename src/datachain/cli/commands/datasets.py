@@ -179,7 +179,6 @@ def edit_dataset(
                 "Not logged in to Studio. Log in with 'datachain auth login'."
             )
     else:
-        # if catalog.metastore.is_local_dataset(namespace_name):
         try:
             catalog.edit_dataset(
                 name, catalog.metastore.default_project, new_name, description, attrs
