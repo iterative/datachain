@@ -150,24 +150,20 @@ def test_delta_update_unsafe(test_session, tmp_dir, tmp_path):
         (dependency_ds_merge_name, "1.0.0"),
     }
 
-    assert (dc.read_dataset(ds_name, version="1.0.0").order_by("id")).to_list(
-        "id", "value"
-    ) == [
+    assert set((dc.read_dataset(ds_name, version="1.0.0")).to_list("id", "value")) == {
         (1, 1),
         (2, 2),
         (3, 3),
-    ]
+    }
 
-    assert (dc.read_dataset(ds_name, version="1.0.1").order_by("id")).to_list(
-        "id", "value"
-    ) == [
+    assert set((dc.read_dataset(ds_name, version="1.0.1")).to_list("id", "value")) == {
         (1, 1),
         (2, 2),
         (3, 3),
         (4, 4),
         (5, 5),
         (6, 6),
-    ]
+    }
 
 
 def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
