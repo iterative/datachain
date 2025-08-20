@@ -6,6 +6,14 @@ from datachain.sql.functions import string
 
 from .func import ColT, Func
 
+__all__ = [
+    "byte_hamming_distance",
+    "length",
+    "regexp_replace",
+    "replace",
+    "split",
+]
+
 
 def length(col: ColT) -> Func:
     """

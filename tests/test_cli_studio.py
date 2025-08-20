@@ -403,6 +403,8 @@ def test_studio_run(capsys, mocker, tmp_dir):
                     "https://github.com/iterative/datachain",
                     "--cluster",
                     "default",
+                    "--credentials-name",
+                    "my-credentials",
                 ]
             )
             == 0
@@ -444,6 +446,7 @@ def test_studio_run(capsys, mocker, tmp_dir):
         "compute_cluster_name": "default",
         "start_after": None,
         "cron_expression": None,
+        "credentials_name": "my-credentials",
     }
 
 
@@ -493,7 +496,7 @@ def test_studio_run_task(capsys, mocker, tmp_dir, studio_token):
 
 
 @pytest.mark.parametrize(
-    "status,expected_exit_code", [("FAILED", 1), ("CANCELLED", 2), ("COMPLETED", 0)]
+    "status,expected_exit_code", [("FAILED", 1), ("CANCELED", 2), ("COMPLETE", 0)]
 )
 def test_studio_run_non_zero_exit_code(
     capsys, mocker, tmp_dir, status, expected_exit_code

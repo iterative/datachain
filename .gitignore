@@ -145,3 +145,7 @@ cython_debug/
 *.pt
 
 .DS_Store/
+
+# for local dev, e.g. LLM generated files, .env.test to override
+# test variables, local scripts to try, etc
+local/

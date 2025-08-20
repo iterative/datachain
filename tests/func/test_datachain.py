@@ -9,7 +9,7 @@ import uuid
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pandas as pd
@@ -358,15 +358,24 @@ def test_to_storage(
     file_type,
     num_threads,
 ):
+    mapper = Mock(side_effect=lambda file_path: len(file_path))
+
     ctc = cloud_test_catalog
     df = dc.read_storage(ctc.src_uri, type=file_type, session=test_session)
     if use_map:
-        df.settings(cache=use_cache).map(
-            res=lambda file: file.export(tmp_dir / "output", placement=placement)
-        ).exec()
+        (
+            df.settings(cache=use_cache)
+            .map(mapper, params=["file.path"], output={"path_len": int})
+            .map(res=lambda file: file.export(tmp_dir / "output", placement=placement))
+            .exec()
+        )
     else:
-        df.settings(cache=use_cache).to_storage(
-            tmp_dir / "output", placement=placement, num_threads=num_threads
+        (
+            df.settings(cache=use_cache)
+            .map(mapper, params=["file.path"], output={"path_len": int})
+            .to_storage(
+                tmp_dir / "output", placement=placement, num_threads=num_threads
+            )
         )
 
     expected = {
@@ -386,6 +395,8 @@ def test_to_storage(
             file_path = file.get_full_name()
         with open(tmp_dir / "output" / file_path) as f:
             assert f.read() == expected[file.name]
+
+    assert mapper.call_count == len(expected)
 
 
 @pytest.mark.parametrize("use_cache", [True, False])
@@ -2409,3 +2420,22 @@ def test_agg_sample(catalog_tmpfile, parallel, sample):
     records = list(ds.to_records())
     assert len(records) == sample
     assert all(row["count"] == 1 for row in records)
+
+
+def test_batch_for_map(test_session):
+    # Create a chain with batch settings
+    chain = dc.read_values(x=list(range(100)), session=test_session)
+    chain_with_settings = chain.settings(batch_rows=15)
+
+    def add_one(x):
+        return x + 1
+
+    result = chain_with_settings.map(add_one, output={"result": int})
+
+    results = [
+        r[0] for r in result.to_iter("result")
+    ]  # Access the first element of each tuple
+
+    assert len(results) == 100
+
+    assert set(results) == set(range(1, 101))

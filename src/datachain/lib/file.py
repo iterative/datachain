@@ -23,7 +23,7 @@ from pydantic import Field, field_validator
 
 from datachain.client.fileslice import FileSlice
 from datachain.lib.data_model import DataModel
-from datachain.lib.utils import DataChainError
+from datachain.lib.utils import DataChainError, rebase_path
 from datachain.nodes_thread_pool import NodesThreadPool
 from datachain.sql.types import JSON, Boolean, DateTime, Int, String
 from datachain.utils import TIME_ZERO
@@ -634,6 +634,40 @@ class File(DataModel):
             location=self.location,
         )
 
+    def rebase(
+        self,
+        old_base: str,
+        new_base: str,
+        suffix: str = "",
+        extension: str = "",
+    ) -> str:
+        """
+        Rebase the file's URI from one base directory to another.
+
+        Args:
+            old_base: Base directory to remove from the file's URI
+            new_base: New base directory to prepend
+            suffix: Optional suffix to add before file extension
+            extension: Optional new file extension (without dot)
+
+        Returns:
+            str: Rebased URI with new base directory
+
+        Raises:
+            ValueError: If old_base is not found in the file's URI
+
+        Examples:
+            >>> file = File(source="s3://bucket", path="data/2025-05-27/file.wav")
+            >>> file.rebase("s3://bucket/data", "s3://output-bucket/processed", \
+                    extension="mp3")
+            's3://output-bucket/processed/2025-05-27/file.mp3'
+
+            >>> file.rebase("data/audio", "/local/output", suffix="_ch1",
+                    extension="npy")
+            '/local/output/file_ch1.npy'
+        """
+        return rebase_path(self.get_uri(), old_base, new_base, suffix, extension)
+
 
 def resolve(file: File) -> File:
     """
@@ -832,7 +866,10 @@ class VideoFile(File):
             VideoFragment: A Model representing the video fragment.
         """
         if start < 0 or end < 0 or start >= end:
-            raise ValueError(f"Invalid time range: ({start:.3f}, {end:.3f})")
+            raise ValueError(
+                f"Can't get video fragment for '{self.path}', "
+                f"invalid time range: ({start:.3f}, {end:.3f})"
+            )
 
         return VideoFragment(video=self, start=start, end=end)
 
@@ -915,7 +952,10 @@ class AudioFile(File):
             AudioFragment: A Model representing the audio fragment.
         """
         if start < 0 or end < 0 or start >= end:
-            raise ValueError(f"Invalid time range: ({start:.3f}, {end:.3f})")
+            raise ValueError(
+                f"Can't get audio fragment for '{self.path}', "
+                f"invalid time range: ({start:.3f}, {end:.3f})"
+            )
 
         return AudioFragment(audio=self, start=start, end=end)
 
@@ -958,6 +998,35 @@ class AudioFile(File):
             yield self.get_fragment(start, min(start + duration, end))
             start += duration
 
+    def save(  # type: ignore[override]
+        self,
+        output: str,
+        format: Optional[str] = None,
+        start: float = 0,
+        end: Optional[float] = None,
+        client_config: Optional[dict] = None,
+    ) -> "AudioFile":
+        """Save audio file or extract fragment to specified format.
+
+        Args:
+            output: Output directory path
+            format: Output format ('wav', 'mp3', etc). Defaults to source format
+            start: Start time in seconds (>= 0). Defaults to 0
+            end: End time in seconds. If None, extracts to end of file
+            client_config: Optional client configuration
+
+        Returns:
+            AudioFile: New audio file with format conversion/extraction applied
+
+        Examples:
+            audio.save("/path", "mp3")                        # Entire file to MP3
+            audio.save("s3://bucket/path", "wav", start=2.5)  # From 2.5s to end as WAV
+            audio.save("/path", "flac", start=1, end=3)       # 1-3s fragment as FLAC
+        """
+        from .audio import save_audio
+
+        return save_audio(self, output, format, start, end)
+
 
 class AudioFragment(DataModel):
     """
@@ -985,10 +1054,10 @@ class AudioFragment(DataModel):
             tuple[ndarray, int]: A tuple containing the audio data as a NumPy array
                                and the sample rate.
         """
-        from .audio import audio_fragment_np
+        from .audio import audio_to_np
 
         duration = self.end - self.start
-        return audio_fragment_np(self.audio, self.start, duration)
+        return audio_to_np(self.audio, self.start, duration)
 
     def read_bytes(self, format: str = "wav") -> bytes:
         """
@@ -1001,10 +1070,10 @@ class AudioFragment(DataModel):
         Returns:
             bytes: The encoded audio fragment as bytes.
         """
-        from .audio import audio_fragment_bytes
+        from .audio import audio_to_bytes
 
         duration = self.end - self.start
-        return audio_fragment_bytes(self.audio, self.start, duration, format)
+        return audio_to_bytes(self.audio, format, self.start, duration)
 
     def save(self, output: str, format: Optional[str] = None) -> "AudioFile":
         """
@@ -1022,9 +1091,9 @@ class AudioFragment(DataModel):
         Returns:
             AudioFile: A Model representing the saved audio file.
         """
-        from .audio import save_audio_fragment
+        from .audio import save_audio
 
-        return save_audio_fragment(self.audio, self.start, self.end, output, format)
+        return save_audio(self.audio, output, format, self.start, self.end)
 
 
 class VideoFrame(DataModel):
@@ -1183,6 +1252,24 @@ class Audio(DataModel):
     format: str = Field(default="")
     codec: str = Field(default="")
     bit_rate: int = Field(default=-1)
+
+    @staticmethod
+    def get_channel_name(num_channels: int, channel_idx: int) -> str:
+        """Map channel index to meaningful name based on common audio formats"""
+        channel_mappings = {
+            1: ["Mono"],
+            2: ["Left", "Right"],
+            4: ["W", "X", "Y", "Z"],  # First-order Ambisonics
+            6: ["FL", "FR", "FC", "LFE", "BL", "BR"],  # 5.1 surround
+            8: ["FL", "FR", "FC", "LFE", "BL", "BR", "SL", "SR"],  # 7.1 surround
+        }
+
+        if num_channels in channel_mappings:
+            channels = channel_mappings[num_channels]
+            if 0 <= channel_idx < len(channels):
+                return channels[channel_idx]
+
+        return f"Ch{channel_idx + 1}"
 
 
 class ArrowRow(DataModel):

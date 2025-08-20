@@ -82,7 +82,16 @@ nav:
               - Segment: references/data-types/segment.md
           - UDF: references/udf.md
           - Torch: references/torch.md
-          - Functions: references/func.md
+          - Functions:
+              - Overview: references/func.md
+              - Aggregate: references/functions/aggregate.md
+              - Array: references/functions/array.md
+              - Conditional: references/functions/conditional.md
+              - Numeric: references/functions/numeric.md
+              - Path: references/functions/path.md
+              - Random: references/functions/random.md
+              - String: references/functions/string.md
+              - Window: references/functions/window.md
           - Toolkit: references/toolkit.md
       - 📖 CLI Reference:
           - Overview: commands/index.md
@@ -177,7 +186,7 @@ plugins:
             - https://numpy.org/doc/stable/objects.inv
             - https://pandas.pydata.org/docs/objects.inv
             - https://arrow.apache.org/docs/objects.inv
-            - https://docs.sqlalchemy.org/objects.inv
+            # - https://docs.sqlalchemy.org/objects.inv  # SSL certificate issue
             - https://docs.pydantic.dev/latest/objects.inv
 
 watch:

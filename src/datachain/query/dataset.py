@@ -333,32 +333,24 @@ def process_udf_outputs(
     udf_table: "Table",
     udf_results: Iterator[Iterable["UDFResult"]],
     udf: "UDFAdapter",
-    batch_size: int = INSERT_BATCH_SIZE,
     cb: Callback = DEFAULT_CALLBACK,
 ) -> None:
-    import psutil
-
-    rows: list[UDFResult] = []
     # Optimization: Compute row types once, rather than for every row.
     udf_col_types = get_col_types(warehouse, udf.output)
+    batch_rows = udf.batch_rows or INSERT_BATCH_SIZE
 
-    for udf_output in udf_results:
-        if not udf_output:
-            continue
-        with safe_closing(udf_output):
-            for row in udf_output:
-                cb.relative_update()
-                rows.append(adjust_outputs(warehouse, row, udf_col_types))
-                if len(rows) >= batch_size or (
-                    len(rows) % 10 == 0 and psutil.virtual_memory().percent > 80
-                ):
-                    for row_chunk in batched(rows, batch_size):
-                        warehouse.insert_rows(udf_table, row_chunk)
-                    rows.clear()
+    def _insert_rows():
+        for udf_output in udf_results:
+            if not udf_output:
+                continue
 
-    if rows:
-        for row_chunk in batched(rows, batch_size):
-            warehouse.insert_rows(udf_table, row_chunk)
+            with safe_closing(udf_output):
+                for row in udf_output:
+                    cb.relative_update()
+                    yield adjust_outputs(warehouse, row, udf_col_types)
+
+    for row_chunk in batched(_insert_rows(), batch_rows):
+        warehouse.insert_rows(udf_table, row_chunk)
 
     warehouse.insert_rows_done(udf_table)
 
@@ -401,6 +393,7 @@ class UDFStep(Step, ABC):
     min_task_size: Optional[int] = None
     is_generator = False
     cache: bool = False
+    batch_rows: Optional[int] = None
 
     @abstractmethod
     def create_udf_table(self, query: Select) -> "Table":
@@ -602,6 +595,7 @@ class UDFStep(Step, ABC):
                 parallel=self.parallel,
                 workers=self.workers,
                 min_task_size=self.min_task_size,
+                batch_rows=self.batch_rows,
             )
         return self.__class__(self.udf, self.catalog)
 
@@ -671,7 +665,7 @@ class UDFSignal(UDFStep):
         original_cols = [c for c in subq.c if c.name not in partition_col_names]
 
         # new signal columns that are added to udf_table
-        signal_cols = [c for c in udf_table.c if c.name != "sys__id"]
+        signal_cols = [c for c in udf_table.c if not c.name.startswith("sys__")]
         signal_name_cols = {c.name: c for c in signal_cols}
         cols = signal_cols
 
@@ -1633,6 +1627,7 @@ class DatasetQuery:
         min_task_size: Optional[int] = None,
         partition_by: Optional[PartitionByType] = None,
         cache: bool = False,
+        batch_rows: Optional[int] = None,
     ) -> "Self":
         """
         Adds one or more signals based on the results from the provided UDF.
@@ -1658,6 +1653,7 @@ class DatasetQuery:
                 workers=workers,
                 min_task_size=min_task_size,
                 cache=cache,
+                batch_rows=batch_rows,
             )
         )
         return query
@@ -1679,6 +1675,7 @@ class DatasetQuery:
         namespace: Optional[str] = None,
         project: Optional[str] = None,
         cache: bool = False,
+        batch_rows: Optional[int] = None,
     ) -> "Self":
         query = self.clone()
         steps = query.steps
@@ -1691,6 +1688,7 @@ class DatasetQuery:
                 workers=workers,
                 min_task_size=min_task_size,
                 cache=cache,
+                batch_rows=batch_rows,
             )
         )
         return query

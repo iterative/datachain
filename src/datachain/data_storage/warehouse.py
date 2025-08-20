@@ -21,6 +21,7 @@ from datachain.lib.file import File
 from datachain.lib.signal_schema import SignalSchema
 from datachain.node import DirType, DirTypeGroup, Node, NodeWithPath, get_path
 from datachain.query.batch import RowsOutput
+from datachain.query.schema import ColumnMeta
 from datachain.query.utils import get_query_id_column
 from datachain.sql.functions import path as pathfunc
 from datachain.sql.types import Int, SQLType
@@ -400,7 +401,7 @@ class AbstractWarehouse(ABC, Serializable):
         expressions: tuple[_ColumnsClauseArgument[Any], ...] = (
             sa.func.count(table.c.sys__id),
         )
-        size_column_names = [s.replace(".", "__") + "__size" for s in file_signals]
+        size_column_names = [ColumnMeta.to_db_name(s) + "__size" for s in file_signals]
         size_columns = [c for c in table.columns if c.name in size_column_names]
 
         if size_columns:
