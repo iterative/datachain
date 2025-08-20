@@ -58,6 +58,7 @@ from datachain.query.schema import DEFAULT_DELIMITER, Column
 from datachain.sql.functions import path as pathfunc
 from datachain.utils import batched_it, inside_notebook, row_to_nested_dict
 
+from .database import DEFAULT_DATABASE_BATCH_SIZE
 from .utils import (
     DatasetMergeError,
     DatasetPrepareError,
@@ -77,10 +78,22 @@ UDFObjT = TypeVar("UDFObjT", bound=UDFBase)
 DEFAULT_PARQUET_CHUNK_SIZE = 100_000
 
 if TYPE_CHECKING:
+    import sqlite3
+
     import pandas as pd
     from typing_extensions import ParamSpec, Self
 
     P = ParamSpec("P")
+
+    ConnectionType = Union[
+        str,
+        sqlalchemy.engine.URL,
+        sqlalchemy.engine.interfaces.Connectable,
+        sqlalchemy.engine.Engine,
+        sqlalchemy.engine.Connection,
+        "sqlalchemy.orm.Session",
+        sqlite3.Connection,
+    ]
 
 
 T = TypeVar("T", bound="DataChain")
@@ -328,6 +341,7 @@ class DataChain:
         sys: Optional[bool] = None,
         namespace: Optional[str] = None,
         project: Optional[str] = None,
+        batch_rows: Optional[int] = None,
     ) -> "Self":
         """Change settings for chain.
 
@@ -335,22 +349,24 @@ class DataChain:
         It returns chain, so, it can be chained later with next operation.
 
         Parameters:
-            cache : data caching (default=False)
+            cache : data caching. (default=False)
             parallel : number of thread for processors. True is a special value to
-                enable all available CPUs (default=1)
+                enable all available CPUs. (default=1)
             workers : number of distributed workers. Only for Studio mode. (default=1)
-            min_task_size : minimum number of tasks (default=1)
-            prefetch: number of workers to use for downloading files in advance.
+            min_task_size : minimum number of tasks. (default=1)
+            prefetch : number of workers to use for downloading files in advance.
                       This is enabled by default and uses 2 workers.
                       To disable prefetching, set it to 0.
-            namespace: namespace name.
-            project: project name.
+            namespace : namespace name.
+            project : project name.
+            batch_rows : row limit per insert to balance speed and memory usage.
+                      (default=2000)
 
         Example:
             ```py
             chain = (
                 chain
-                .settings(cache=True, parallel=8)
+                .settings(cache=True, parallel=8, batch_rows=300)
                 .map(laion=process_webdataset(spec=WDSLaion), params="file")
             )
             ```
@@ -360,7 +376,14 @@ class DataChain:
         settings = copy.copy(self._settings)
         settings.add(
             Settings(
-                cache, parallel, workers, min_task_size, prefetch, namespace, project
+                cache,
+                parallel,
+                workers,
+                min_task_size,
+                prefetch,
+                namespace,
+                project,
+                batch_rows,
             )
         )
         return self._evolve(settings=settings, _sys=sys)
@@ -715,7 +738,7 @@ class DataChain:
 
         return self._evolve(
             query=self._query.add_signals(
-                udf_obj.to_udf_wrapper(),
+                udf_obj.to_udf_wrapper(self._settings.batch_rows),
                 **self._settings.to_dict(),
             ),
             signal_schema=self.signals_schema | udf_obj.output,
@@ -753,7 +776,7 @@ class DataChain:
             udf_obj.prefetch = prefetch
         return self._evolve(
             query=self._query.generate(
-                udf_obj.to_udf_wrapper(),
+                udf_obj.to_udf_wrapper(self._settings.batch_rows),
                 **self._settings.to_dict(),
             ),
             signal_schema=udf_obj.output,
@@ -889,7 +912,7 @@ class DataChain:
         udf_obj = self._udf_to_obj(Aggregator, func, params, output, signal_map)
         return self._evolve(
             query=self._query.generate(
-                udf_obj.to_udf_wrapper(),
+                udf_obj.to_udf_wrapper(self._settings.batch_rows),
                 partition_by=processed_partition_by,
                 **self._settings.to_dict(),
             ),
@@ -921,11 +944,24 @@ class DataChain:
             )
             chain.save("new_dataset")
             ```
+
+        .. deprecated:: 0.29.0
+            This method is deprecated and will be removed in a future version.
+            Use `agg()` instead, which provides the similar functionality.
         """
+        import warnings
+
+        warnings.warn(
+            "batch_map() is deprecated and will be removed in a future version. "
+            "Use agg() instead, which provides the similar functionality.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         udf_obj = self._udf_to_obj(BatchMapper, func, params, output, signal_map)
+
         return self._evolve(
             query=self._query.add_signals(
-                udf_obj.to_udf_wrapper(batch),
+                udf_obj.to_udf_wrapper(self._settings.batch_rows, batch=batch),
                 **self._settings.to_dict(),
             ),
             signal_schema=self.signals_schema | udf_obj.output,
@@ -2257,6 +2293,102 @@ class DataChain:
         """
         self.to_json(path, fs_kwargs, include_outer_list=False)
 
+    def to_database(
+        self,
+        table_name: str,
+        connection: "ConnectionType",
+        *,
+        batch_rows: int = DEFAULT_DATABASE_BATCH_SIZE,
+        on_conflict: Optional[str] = None,
+        conflict_columns: Optional[list[str]] = None,
+        column_mapping: Optional[dict[str, Optional[str]]] = None,
+    ) -> None:
+        """Save chain to a database table using a given database connection.
+
+        This method exports all DataChain records to a database table, creating the
+        table if it doesn't exist and appending data if it does. The table schema
+        is automatically inferred from the DataChain's signal schema.
+
+        Parameters:
+            table_name: Name of the database table to create/write to.
+            connection: SQLAlchemy connectable, str, or a sqlite3 connection
+                Using SQLAlchemy makes it possible to use any DB supported by that
+                library. If a DBAPI2 object, only sqlite3 is supported. The user is
+                responsible for engine disposal and connection closure for the
+                SQLAlchemy connectable; str connections are closed automatically.
+            batch_rows: Number of rows to insert per batch for optimal performance.
+                Larger batches are faster but use more memory. Default: 10,000.
+            on_conflict: Strategy for handling duplicate rows (requires table
+                constraints):
+                - None: Raise error (`sqlalchemy.exc.IntegrityError`) on conflict
+                  (default)
+                - "ignore": Skip duplicate rows silently
+                - "update": Update existing rows with new values
+            conflict_columns: List of column names that form a unique constraint
+                for conflict resolution. Required when on_conflict='update' and
+                using PostgreSQL.
+            column_mapping: Optional mapping to rename or skip columns:
+                - Dict mapping DataChain column names to database column names
+                - Set values to None to skip columns entirely, or use `defaultdict` to
+                  skip all columns except those specified.
+
+        Examples:
+            Basic usage with PostgreSQL:
+            ```py
+            import sqlalchemy as sa
+            import datachain as dc
+
+            chain = dc.read_storage("s3://my-bucket/")
+            engine = sa.create_engine("postgresql://user:pass@localhost/mydb")
+            chain.to_database("files_table", engine)
+            ```
+
+            Using SQLite with connection string:
+            ```py
+            chain.to_database("my_table", "sqlite:///data.db")
+            ```
+
+            Column mapping and renaming:
+            ```py
+            mapping = {
+                "user.id": "id",
+                "user.name": "name",
+                "user.password": None  # Skip this column
+            }
+            chain.to_database("users", engine, column_mapping=mapping)
+            ```
+
+            Handling conflicts (requires PRIMARY KEY or UNIQUE constraints):
+            ```py
+            # Skip duplicates
+            chain.to_database("my_table", engine, on_conflict="ignore")
+
+            # Update existing records
+            chain.to_database("my_table", engine, on_conflict="update")
+            ```
+
+            Working with different databases:
+            ```py
+            # MySQL
+            mysql_engine = sa.create_engine("mysql+pymysql://user:pass@host/db")
+            chain.to_database("mysql_table", mysql_engine)
+
+            # SQLite in-memory
+            chain.to_database("temp_table", "sqlite:///:memory:")
+            ```
+        """
+        from .database import to_database
+
+        to_database(
+            self,
+            table_name,
+            connection,
+            batch_rows=batch_rows,
+            on_conflict=on_conflict,
+            conflict_columns=conflict_columns,
+            column_mapping=column_mapping,
+        )
+
     @classmethod
     def from_records(
         cls,
@@ -2344,7 +2476,7 @@ class DataChain:
     def setup(self, **kwargs) -> "Self":
         """Setup variables to pass to UDF functions.
 
-        Use before running map/gen/agg/batch_map to save an object and pass it as an
+        Use before running map/gen/agg to save an object and pass it as an
         argument to the UDF.
 
         The value must be a callable (a `lambda: <value>` syntax can be used to quickly

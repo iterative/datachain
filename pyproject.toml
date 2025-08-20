@@ -96,8 +96,11 @@ video = [
   "imageio[ffmpeg,pyav]>=2.37.0",
   "opencv-python"
 ]
+postgres = [
+  "psycopg2-binary>=2.9.0"
+]
 tests = [
-  "datachain[torch,audio,remote,vector,hf,video]",
+  "datachain[torch,audio,remote,vector,hf,video,postgres]",
   "pytest>=8,<9",
   "pytest-sugar>=0.9.6",
   "pytest-cov>=4.1.0",
@@ -105,6 +108,7 @@ tests = [
   "pytest-servers[all]>=0.5.9",
   "pytest-benchmark[histogram]",
   "pytest-xdist>=3.3.1",
+  "pytest-env>=1.1.0",
   "virtualenv",
   "dulwich",
   "hypothesis",
@@ -150,13 +154,16 @@ namespaces = false
 
 [tool.pytest.ini_options]
 addopts = "-rfEs -m 'not examples' --benchmark-skip"
+env_override_existing_values = true
+env_files = "local/.env.test"
 markers = [
   "e2e: End-to-end tests",
   "examples: All examples",
   "computer_vision: Computer vision examples",
   "get_started: Get started examples",
   "llm_and_nlp: LLM and NLP examples",
-  "multimodal: Multimodal examples"
+  "multimodal: Multimodal examples",
+  "incremental_processing: Delta and retry examples"
 ]
 filterwarnings = [
   "error::pandas.errors.PerformanceWarning",

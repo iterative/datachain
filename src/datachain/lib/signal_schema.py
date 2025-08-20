@@ -34,7 +34,7 @@ from datachain.lib.data_model import DataModel, DataType, DataValue
 from datachain.lib.file import File
 from datachain.lib.model_store import ModelStore
 from datachain.lib.utils import DataChainParamsError
-from datachain.query.schema import DEFAULT_DELIMITER, Column
+from datachain.query.schema import DEFAULT_DELIMITER, Column, ColumnMeta
 from datachain.sql.types import SQLType
 
 if TYPE_CHECKING:
@@ -590,7 +590,7 @@ class SignalSchema:
 
         if name:
             if "." in name:
-                name = name.replace(".", "__")
+                name = ColumnMeta.to_db_name(name)
 
             signals = [
                 s

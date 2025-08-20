@@ -58,9 +58,14 @@ def converter(dialect) -> "TypeConverter":
     try:
         return registry[name]
     except KeyError:
-        raise ValueError(
-            f"No type converter registered for dialect: {dialect.name!r}"
-        ) from None
+        # Fall back to default converter if specific dialect not found
+        try:
+            return registry["default"]
+        except KeyError:
+            raise ValueError(
+                f"No type converter registered for dialect: {dialect.name!r} "
+                f"and no default converter available"
+            ) from None
 
 
 def read_converter(dialect) -> "TypeReadConverter":
@@ -68,9 +73,14 @@ def read_converter(dialect) -> "TypeReadConverter":
     try:
         return read_converter_registry[name]
     except KeyError:
-        raise ValueError(
-            f"No read type converter registered for dialect: {dialect.name!r}"
-        ) from None
+        # Fall back to default converter if specific dialect not found
+        try:
+            return read_converter_registry["default"]
+        except KeyError:
+            raise ValueError(
+                f"No read type converter registered for dialect: {dialect.name!r} "
+                f"and no default converter available"
+            ) from None
 
 
 def type_defaults(dialect) -> "TypeDefaults":
@@ -78,7 +88,14 @@ def type_defaults(dialect) -> "TypeDefaults":
     try:
         return type_defaults_registry[name]
     except KeyError:
-        raise ValueError(f"No type defaults registered for dialect: {name!r}") from None
+        # Fall back to default converter if specific dialect not found
+        try:
+            return type_defaults_registry["default"]
+        except KeyError:
+            raise ValueError(
+                f"No type defaults registered for dialect: {dialect.name!r} "
+                f"and no default converter available"
+            ) from None
 
 
 def db_defaults(dialect) -> "DBDefaults":
@@ -86,7 +103,14 @@ def db_defaults(dialect) -> "DBDefaults":
     try:
         return db_defaults_registry[name]
     except KeyError:
-        raise ValueError(f"No DB defaults registered for dialect: {name!r}") from None
+        # Fall back to default converter if specific dialect not found
+        try:
+            return db_defaults_registry["default"]
+        except KeyError:
+            raise ValueError(
+                f"No DB defaults registered for dialect: {dialect.name!r} "
+                f"and no default converter available"
+            ) from None
 
 
 class SQLType(TypeDecorator):
