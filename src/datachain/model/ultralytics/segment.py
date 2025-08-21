@@ -34,16 +34,16 @@ class YoloSegment(DataModel):
         if not summary:
             return YoloSegment(box=BBox(), segment=Segment())
         name = summary[0].get("name", "")
-        box = (
-            BBox.from_dict(summary[0]["box"], title=name)
-            if summary[0].get("box")
-            else BBox()
-        )
-        segment = (
-            Segment.from_dict(summary[0]["segments"], title=name)
-            if summary[0].get("segments")
-            else Segment()
-        )
+        if summary[0].get("box"):
+            assert isinstance(summary[0]["box"], dict)
+            box = BBox.from_dict(summary[0]["box"], title=name)
+        else:
+            box = BBox()
+        if summary[0].get("segments"):
+            assert isinstance(summary[0]["segments"], dict)
+            segment = Segment.from_dict(summary[0]["segments"], title=name)
+        else:
+            segment = Segment()
         return YoloSegment(
             cls=summary[0]["class"],
             name=summary[0]["name"],
@@ -81,9 +81,11 @@ class YoloSegments(DataModel):
                 names.append(name)
                 confidence.append(s["confidence"])
                 if s.get("box"):
-                    box.append(BBox.from_dict(s.get("box"), title=name))
+                    assert isinstance(s["box"], dict)
+                    box.append(BBox.from_dict(s["box"], title=name))
                 if s.get("segments"):
-                    segment.append(Segment.from_dict(s.get("segments"), title=name))
+                    assert isinstance(s["segments"], dict)
+                    segment.append(Segment.from_dict(s["segments"], title=name))
         return YoloSegments(
             cls=cls,
             name=names,
