@@ -7,7 +7,7 @@
 
 **Method**: `GET`
 
-**Authentication**: Requires `DATASETS` scope from [`datachain auth login`](../../../commands/auth/login.md)
+**Authentication**: Requires token with `read` access to `DATASETS` scope from [`datachain auth login`](../../../commands/auth/login.md)
 
 **Parameters**:
 
@@ -94,9 +94,9 @@ if response.ok:
 
 **Method**: `POST`
 
-**Content Type**: `application/msgpack`
+**Content Type**: [`application/msgpack`](https://github.com/msgpack/msgpack-python)
 
-**Authentication**: Requires `DATASETS` scope from [`datachain auth login`](../../../commands/auth/login.md)
+**Authentication**: Requires `read` access to `DATASETS` scope from [`datachain auth login`](../../../commands/auth/login.md)
 
 **Parameters**:
 
@@ -167,7 +167,7 @@ for path, response in client.ls(["s3://my-bucket/dataset/images"]):
 
 **Method**: `GET`
 
-**Authentication**: Requires `DATASETS` scope from [`datachain auth login`](../../../commands/auth/login.md)
+**Authentication**: Requires `read` access to `DATASETS` scope from [`datachain auth login`](../../../commands/auth/login.md)
 
 **Parameters**:
 
@@ -201,41 +201,6 @@ curl -X GET "https://studio.datachain.ai/api/datachain/datasets/info?namespace=d
   "team_id": 1,
   "warehouse_id": null,
   "created_by_id": 1,
-  "schema": {
-    "sys__id": {
-      "type": "UInt64"
-    },
-    "sys__rand": {
-      "type": "UInt64"
-    },
-    "file__source": {
-      "type": "String"
-    },
-    "file__path": {
-      "type": "String"
-    },
-    "file__size": {
-      "type": "Int64"
-    },
-    "file__version": {
-      "type": "String"
-    },
-    "file__etag": {
-      "type": "String"
-    },
-    "file__is_latest": {
-      "type": "Boolean"
-    },
-    "file__last_modified": {
-      "type": "DateTime"
-    },
-    "file__location": {
-      "type": "JSON"
-    }
-  },
-  "feature_schema": {
-    "file": "File@v1"
-  },
   "versions": [
     {
       "id": 4827,

@@ -1,13 +1,13 @@
 
 ### Upload file
 
-**Description**: Upload a file to Studio to use in Studio Job.
+**Description**: Upload a file to Studio to use in a Job.
 
 **Endpoint**: `/datachain/upload-file`
 
 **Method**: `POST`
 
-**Authentication**: Requires `JOB` scope from [`datachain auth login`](../../../commands/auth/login.md)
+**Authentication**: Requires `write` access to `JOB` scope from [`datachain auth login`](../../../commands/auth/login.md)
 
 **Parameters**:
 
@@ -53,7 +53,7 @@ with open("file_name.txt", "rb") as f:
 
 **Method**: `POST`
 
-**Authentication**: Requires `EXPERIMENTS` scope from [`datachain auth login`](../../../commands/auth/login.md)
+**Authentication**: Requires `write` access to `JOBS` scope from [`datachain auth login`](../../../commands/auth/login.md)
 
 **Parameters**:
 
@@ -73,7 +73,7 @@ with open("file_name.txt", "rb") as f:
 - `credentials_name` (body, optional): Credentials identifier
 - `team_name` (body, required): Team identifier (automatically added by client)
 
-Check documentation from [`datachain job run`] for more information about the parameters above.
+Check documentation from [`datachain job run`](../../../commands/job/run.md) for more information about the parameters above.
 You can get the file id from above (Upload file) endpoint.
 
 **Example Request**:
@@ -116,8 +116,8 @@ from datachain.remote.studio import StudioClient
 
 client = StudioClient(team="my-team")
 response = client.create_job(
-    query="SELECT * FROM my_dataset LIMIT 100",
-    query_type="sql",
+    query="print(1)",
+    query_type="PYTHON",
     workers=2,
     query_name="Data Analysis Job",
     priority=3
@@ -138,7 +138,7 @@ if response.ok:
 
 **Method**: `GET`
 
-**Authentication**: Requires `EXPERIMENTS` scope from [`datachain auth login`](../../../commands/auth/login.md)
+**Authentication**: Requires `read` access to `JOBS` scope from [`datachain auth login`](../../../commands/auth/login.md)
 
 **Parameters**:
 
@@ -203,7 +203,7 @@ if response.ok:
 
 **Method**: `POST`
 
-**Authentication**: Requires `EXPERIMENTS` scope from [`datachain auth login`](../../../commands/auth/login.md)
+**Authentication**: Requires `write` access to `JOBS` scope from [`datachain auth login`](../../../commands/auth/login.md)
 
 **Parameters**:
 
@@ -246,7 +246,7 @@ if response.ok:
 
 **Method**: `GET`
 
-**Authentication**: Requires `EXPERIMENTS` scope from [`datachain auth login`](../../../commands/auth/login.md)
+**Authentication**: Requires `read` access to `JOBS` scope from [`datachain auth login`](../../../commands/auth/login.md)
 
 **Parameters**:
 
@@ -299,7 +299,7 @@ if response.ok:
 
 **Method**: `WebSocket`
 
-**Authentication**: Requires `EXPERIMENTS` scope from [`datachain auth login`](../../../commands/auth/login.md)
+**Authentication**: Requires `read` access to `JOBS` scope from [`datachain auth login`](../../../commands/auth/login.md)
 
 **Parameters**:
 
@@ -352,11 +352,3 @@ async def monitor_logs():
 # Run the async function
 asyncio.run(monitor_logs())
 ```
-
-## Dependencies
-
-The Studio client requires the following optional dependencies:
-
-- `msgpack`: For efficient data serialization
-- `requests`: For HTTP communication
-- `websockets`: For real-time log streaming

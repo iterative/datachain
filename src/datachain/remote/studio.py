@@ -546,8 +546,8 @@ class StudioClient:
             cron: Cron expression for recurring jobs
             credentials_name: Credentials identifier
 
-        Check documentation from [`datachain job run`] for more information.
-        You can get the file id from above (Upload file) endpoint.
+        Check documentation from [`datachain job run`](../../commands/job/run.md)
+        for more information. You can get the file id from upload_file method.
 
         Example:
 
