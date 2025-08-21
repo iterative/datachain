@@ -2333,7 +2333,8 @@ class DataChain:
                   skip all columns except those specified.
 
         Returns:
-            int: Number of rows affected (inserted/updated).
+            int: Number of rows affected (inserted/updated). -1 if DB driver doesn't
+                 support telemetry.
 
         Examples:
             Basic usage with PostgreSQL:

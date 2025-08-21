@@ -133,7 +133,10 @@ def to_database(
                         normalized_conflict_columns,
                         column_indices_and_names,
                     )
-                    total_rows_affected += rows_affected
+                    if rows_affected < 0 or total_rows_affected < 0:
+                        total_rows_affected = -1
+                    else:
+                        total_rows_affected += rows_affected
         except Exception:
             if not table_existed_before:
                 try:
