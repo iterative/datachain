@@ -254,10 +254,11 @@ def test_basic_to_database(tmp_dir, connection):
         id=[1, 2, 3], name=["Alice", "Bob", "Charlie"], age=[25, 30, 35]
     )
 
-    chain.to_database("basic_test_table", connection)
+    rows_affected = chain.to_database("basic_test_table", connection)
 
     result = _fetch_all_rows(connection, "basic_test_table")
     assert len(result) == 3
+    assert rows_affected == 3  # Check that we get the correct row count
     assert result[0] == (1, "Alice", 25)
     assert result[1] == (2, "Bob", 30)
     assert result[2] == (3, "Charlie", 35)
@@ -285,10 +286,11 @@ def test_to_database_large_dataset(connection, test_session):
         session=test_session,
     )
 
-    chain.to_database("large_table", connection, batch_rows=1000)
+    rows_affected = chain.to_database("large_table", connection, batch_rows=1000)
 
     count = _count_table_rows(connection, "large_table")
     assert count == large_size
+    assert rows_affected == large_size  # Check correct count for large datasets
 
     rows = _query_table(
         connection,
@@ -315,10 +317,13 @@ def test_to_database_on_conflict_ignore(connection, test_session):
         session=test_session,
     )
 
-    conflict_chain.to_database(table_name, connection, on_conflict="ignore")
+    rows_affected = conflict_chain.to_database(
+        table_name, connection, on_conflict="ignore"
+    )
 
     rows = _fetch_all_rows(connection, table_name)
     assert len(rows) == 5
+    assert rows_affected == 2  # Only 2 new inserts (conflicts ignored)
     assert rows[0] == (1, "Alice", 100)  # Original
     assert rows[1] == (2, "Bob", 200)  # Original (conflict ignored)
     assert rows[2] == (3, "Charlie", 300)  # Original (conflict ignored)
@@ -339,12 +344,13 @@ def test_to_database_on_conflict_update(connection, test_session):
         session=test_session,
     )
 
-    update_chain.to_database(
+    rows_affected = update_chain.to_database(
         table_name, connection, on_conflict="update", conflict_columns=["id"]
     )
 
     rows = _fetch_all_rows(connection, table_name)
     assert len(rows) == 5
+    assert rows_affected == 4  # 2 updates + 2 inserts
     assert rows[0] == (1, "Alice", 100)  # Original (unchanged)
     assert rows[1] == (2, "Bob_Updated", 999)  # Updated
     assert rows[2] == (3, "Charlie_Updated", 888)  # Updated
@@ -392,6 +398,56 @@ def test_to_database_on_conflict_update_postgres_missing_conflict_columns(
     assert rows[0] == (1, "Alice", 100)
     assert rows[1] == (2, "Bob", 200)
     assert rows[2] == (3, "Charlie", 300)
+
+
+def test_to_database_conflict_columns_normalization(postgres_connection, test_session):
+    """Test that conflict_columns supports DataChain format and column mapping."""
+    table_name = "conflict_normalization_table"
+    engine = _get_engine_from_connection(postgres_connection)
+    _create_conflict_test_table(engine, table_name)
+
+    class User(dc.DataModel):
+        id: int
+        name: str
+
+    class Metadata(dc.DataModel):
+        value: int
+
+    update_chain = dc.read_values(
+        user=[
+            User(id=2, name="Bob_Updated"),
+            User(id=3, name="Charlie_Updated"),
+            User(id=4, name="Dave"),
+        ],
+        metadata=[
+            Metadata(value=250),
+            Metadata(value=350),
+            Metadata(value=400),
+        ],
+        session=test_session,
+    )
+
+    column_mapping = {
+        "user.id": "id",  # DataChain format with dots
+        "user.name": "name",
+        "metadata__value": "value",  # DataChain format with underscores
+    }
+
+    rows_affected = update_chain.to_database(
+        table_name,
+        postgres_connection,
+        on_conflict="update",
+        conflict_columns=["user.id"],  # DataChain format, will be mapped to "id"
+        column_mapping=column_mapping,
+    )
+
+    rows = _fetch_all_rows(postgres_connection, table_name, order_by="id")
+    assert len(rows) == 4
+    assert rows_affected == 3  # 2 updates + 1 insert
+    assert rows[0] == (1, "Alice", 100)  # Original unchanged
+    assert rows[1] == (2, "Bob_Updated", 250)  # Updated
+    assert rows[2] == (3, "Charlie_Updated", 350)  # Updated
+    assert rows[3] == (4, "Dave", 400)  # New
 
 
 def test_to_database_table_exists_different_schema(connection, test_session):
@@ -473,10 +529,11 @@ def test_to_database_empty_chain(connection, test_session):
         session=test_session,
     )
 
-    chain.to_database("empty_table", connection)
+    rows_affected = chain.to_database("empty_table", connection)
 
     count = _count_table_rows(connection, "empty_table")
     assert count == 0
+    assert rows_affected == 0  # Check that empty chain returns 0
 
 
 def test_to_database_column_mapping(connection, test_session):
