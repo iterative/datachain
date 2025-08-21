@@ -280,7 +280,13 @@ class AbstractMetastore(ABC, Serializable):
         """
 
     @abstractmethod
-    def get_dataset(self, name: str, project_id: Optional[int] = None) -> DatasetRecord:
+    def get_dataset(
+        self,
+        name: str,  # normal, not full dataset name
+        namespace_name: Optional[str] = None,
+        project_name: Optional[str] = None,
+        conn=None,
+    ) -> DatasetRecord:
         """Gets a single dataset by name."""
 
     @abstractmethod
@@ -891,11 +897,14 @@ class AbstractDBMetastore(AbstractMetastore):
         **kwargs,  # TODO registered = True / False
     ) -> DatasetRecord:
         """Creates new dataset."""
-        project_id = project_id or self.default_project.id
+        if not project_id:
+            project = self.default_project
+        else:
+            project = self.get_project_by_id(project_id)
 
         query = self._datasets_insert().values(
             name=name,
-            project_id=project_id,
+            project_id=project.id,
             status=status,
             feature_schema=json.dumps(feature_schema or {}),
             created_at=datetime.now(timezone.utc),
@@ -914,7 +923,9 @@ class AbstractDBMetastore(AbstractMetastore):
             query = query.on_conflict_do_nothing(index_elements=["project_id", "name"])
         self.db.execute(query)
 
-        return self.get_dataset(name, project_id)
+        return self.get_dataset(
+            name, namespace_name=project.namespace.name, project_name=project.name
+        )
 
     def create_dataset_version(  # noqa: PLR0913
         self,
@@ -971,7 +982,12 @@ class AbstractDBMetastore(AbstractMetastore):
             )
         self.db.execute(query, conn=conn)
 
-        return self.get_dataset(dataset.name, dataset.project.id, conn=conn)
+        return self.get_dataset(
+            dataset.name,
+            namespace_name=dataset.project.namespace.name,
+            project_name=dataset.project.name,
+            conn=conn,
+        )
 
     def remove_dataset(self, dataset: DatasetRecord) -> None:
         """Removes dataset."""
@@ -1195,21 +1211,30 @@ class AbstractDBMetastore(AbstractMetastore):
     def get_dataset(
         self,
         name: str,  # normal, not full dataset name
-        project_id: Optional[int] = None,
+        namespace_name: Optional[str] = None,
+        project_name: Optional[str] = None,
         conn=None,
     ) -> DatasetRecord:
         """
         Gets a single dataset in project by dataset name.
         """
-        project_id = project_id or self.default_project.id
+        namespace_name = namespace_name or self.default_namespace_name
+        project_name = project_name or self.default_project_name
 
         d = self._datasets
+        n = self._namespaces
+        p = self._projects
         query = self._base_dataset_query()
-        query = query.where(d.c.name == name, d.c.project_id == project_id)  # type: ignore [attr-defined]
+        query = query.where(
+            d.c.name == name,
+            n.c.name == namespace_name,
+            p.c.name == project_name,
+        )  # type: ignore [attr-defined]
         ds = self._parse_dataset(self.db.execute(query, conn=conn))
         if not ds:
             raise DatasetNotFoundError(
-                f"Dataset {name} not found in project with id {project_id}"
+                f"Dataset {name} not found in namespace {namespace_name}"
+                f" and project {project_name}"
             )
 
         return ds
