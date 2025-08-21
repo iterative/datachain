@@ -62,7 +62,7 @@ jobs:
           echo "Studio branch: $STUDIO_BRANCH"
 
       - name: Check out Studio
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           repository: iterative/studio
@@ -70,7 +70,7 @@ jobs:
           token: ${{ secrets.ITERATIVE_STUDIO_READ_ACCESS_TOKEN }}
 
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: './backend/datachain'
           fetch-depth: 0
