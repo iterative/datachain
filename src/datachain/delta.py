@@ -33,7 +33,7 @@ def delta_disabled(
         if self.delta and not self._delta_unsafe:
             raise NotImplementedError(
                 f"Cannot use {method.__name__} with delta datasets - may cause"
-                " inconsistency. Use delta_unsafe flag to disable delta tracking."
+                " inconsistency. Use delta_unsafe flag to allow this operation."
             )
         return method(self, *args, **kwargs)
 
