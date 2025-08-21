@@ -36,6 +36,10 @@ class ColumnMeta(type):
     def __getattr__(cls, name: str):
         return cls(ColumnMeta.to_db_name(name))
 
+    @staticmethod
+    def is_nested(name: str) -> bool:
+        return DEFAULT_DELIMITER in name
+
 
 class Column(sa.ColumnClause, metaclass=ColumnMeta):
     inherit_cache: Optional[bool] = True

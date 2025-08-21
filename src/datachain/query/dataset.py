@@ -45,6 +45,7 @@ from datachain.dataset import DatasetDependency, DatasetStatus, RowDict
 from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.func.base import Function
 from datachain.lib.listing import is_listing_dataset, listing_dataset_expired
+from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf import UDFAdapter, _get_cache
 from datachain.progress import CombinedDownloadCallback, TqdmCombinedDownloadCallback
 from datachain.project import Project
@@ -795,24 +796,19 @@ class SQLSelectExcept(SQLClause):
 @frozen
 class SQLMutate(SQLClause):
     args: tuple[Label, ...]
+    new_schema: SignalSchema
 
     def apply_sql_clause(self, query: Select) -> Select:
         original_subquery = query.subquery()
         to_mutate = {c.name for c in self.args}
 
-        # Collect columns that are being referenced by simple column renames
-        # e.g., mutate(new_col=C('old_col')) should exclude 'old_col' from base_cols
-        columns_to_exclude = set()
-        for label_expr in self.args:
-            if isinstance(label_expr.element, ColumnClause):
-                columns_to_exclude.add(label_expr.element.name)
-
-        # Drop the original versions to avoid name collisions and exclude renamed
+        # Drop the original versions to avoid name collisions, exclude renamed
         # columns
+        new_schema_columns = set(self.new_schema.db_signals())
         base_cols = [
             c
             for c in original_subquery.c
-            if c.name not in to_mutate and c.name not in columns_to_exclude
+            if c.name not in to_mutate and c.name in new_schema_columns
         ]
 
         # Create intermediate subquery to properly handle window functions
@@ -1477,7 +1473,7 @@ class DatasetQuery:
         return query
 
     @detach
-    def mutate(self, *args, **kwargs) -> "Self":
+    def mutate(self, *args, new_schema=None, **kwargs) -> "Self":
         """
         Add new columns to this query.
 
@@ -1489,7 +1485,7 @@ class DatasetQuery:
         """
         query_args = [v.label(k) for k, v in dict(args, **kwargs).items()]
         query = self.clone()
-        query.steps.append(SQLMutate((*query_args,)))
+        query.steps.append(SQLMutate((*query_args,), new_schema))
         return query
 
     @detach

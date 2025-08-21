@@ -1,8 +1,11 @@
+import pytest
+
 import datachain as dc
 from datachain import Column, func
 from datachain.func import path as pathfunc
 from datachain.lib.data_model import DataModel
 from datachain.lib.file import File
+from datachain.query.dataset import DatasetQuery
 
 
 def _create_test_files(names_and_sizes):
@@ -143,8 +146,6 @@ def test_mutate_rename_column_no_db_leakage(test_session):
     loaded_ds = dc.read_dataset("test_rename_column", session=test_session)
 
     # Check actual database records using DatasetQuery
-    from datachain.query.dataset import DatasetQuery
-
     query = DatasetQuery("test_rename_column", catalog=test_session.catalog)
     db_records = query.limit(5).to_db_records()
     db_columns = set(db_records[0].keys())
@@ -211,3 +212,72 @@ def test_mutate_with_window_functions(test_session):
         assert dog in all_dogs
         all_dogs.remove(dog)
     assert len(all_dogs) == 2
+
+
+def test_mutate_keeps_nested_column_on_rename(test_session):
+    files = _create_test_files([("1.flac", 0), ("2.flac", 0), ("3.flac", 0)])
+
+    ds = (
+        dc.read_values(file=files, session=test_session)
+        .mutate(tmp=Column("file.path"))
+        .save("test_nested_keep_schema")
+    )
+
+    results = ds.order_by("file.path").to_list()  # file still exists
+    assert len(results) == 3
+    assert results[0][1] == "1.flac"  # tmp column should have file path
+
+
+def test_mutate_nested_column_same_type(test_session):
+    files = _create_test_files([("1.flac", 0), ("2.flac", 0), ("3.flac", 0)])
+
+    (
+        dc.read_values(file=files, session=test_session)
+        .mutate(file__path="aaa")
+        .save("test_nested_same_type")
+    )
+
+    results = dc.read_dataset("test_nested_same_type").to_list()
+    assert len(results) == 3
+    for row in results:
+        assert row[0].path == "aaa"
+
+
+def test_mutate_nested_column_type_change(test_session):
+    files = _create_test_files([("1.flac", 0), ("2.flac", 0), ("3.flac", 0)])
+
+    expected_msg = "Altering nested column type is not allowed"
+    with pytest.raises(ValueError, match=expected_msg):
+        dc.read_values(file=files, session=test_session).mutate(file__path=123).save(
+            "test_nested_type_change"
+        )
+
+
+def test_mutate_nested_column_complex_mutation(test_session):
+    files = _create_test_files([("1.flac", 0), ("2.flac", 0), ("3.flac", 0)])
+
+    ds = (
+        dc.read_values(file=files, session=test_session)
+        .mutate(tmp=func.string.replace(Column("file.path"), ".flac", ".mp3"))
+        .mutate(file__path=Column("tmp"))
+        .save("test_nested_complex")
+    )
+
+    schema = ds.signals_schema.values
+    assert "file__path" not in schema
+    assert "tmp" in schema
+
+    results = ds.order_by("file.path").to_list()
+    assert len(results) == 3
+    paths = [row[0].path for row in results]
+    assert paths == ["1.mp3", "2.mp3", "3.mp3"]
+
+
+def test_mutate_reject_new_nested_columns(test_session):
+    files = _create_test_files([("1.flac", 0), ("2.flac", 0), ("3.flac", 0)])
+
+    expected_msg = "Creating new nested columns directly is not allowed"
+    with pytest.raises(ValueError, match=expected_msg):
+        dc.read_values(file=files, session=test_session).mutate(
+            something__new=Column("file.source")
+        ).save("test_reject_nested")
