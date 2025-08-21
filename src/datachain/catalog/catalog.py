@@ -1198,12 +1198,17 @@ class Catalog:
         return DatasetRecord.from_dict(dataset_info)
 
     def get_dataset_dependencies(
-        self, name: str, version: str, project: Optional[Project] = None, indirect=False
+        self,
+        name: str,
+        version: str,
+        namespace_name: Optional[str] = None,
+        project_name: Optional[str] = None,
+        indirect=False,
     ) -> list[Optional[DatasetDependency]]:
         dataset = self.get_dataset(
             name,
-            namespace_name=project.namespace.name if project else None,
-            project_name=project.name if project else None,
+            namespace_name=namespace_name,
+            project_name=project_name,
         )
 
         direct_dependencies = self.metastore.get_direct_dataset_dependencies(
@@ -1218,10 +1223,13 @@ class Catalog:
                 # dependency has been removed
                 continue
             if d.is_dataset:
-                project = self.metastore.get_project(d.project, d.namespace)
                 # only datasets can have dependencies
                 d.dependencies = self.get_dataset_dependencies(
-                    d.name, d.version, project, indirect=indirect
+                    d.name,
+                    d.version,
+                    namespace_name=d.namespace,
+                    project_name=d.project,
+                    indirect=indirect,
                 )
 
         return direct_dependencies

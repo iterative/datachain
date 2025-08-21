@@ -1703,7 +1703,8 @@ class DatasetQuery:
                 for dep in self.catalog.get_dataset_dependencies(
                     dep_dataset.name,
                     dep_dataset_version,
-                    dep_dataset.project,
+                    namespace_name=dep_dataset.project.namespace.name,
+                    project_name=dep_dataset.project.name,
                     indirect=False,
                 ):
                     if dep:
