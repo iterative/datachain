@@ -362,7 +362,14 @@ def delete_dataset(
         ) from None
 
     if not force:
-        version = version or catalog.get_dataset(name, ds_project).latest_version
+        version = (
+            version
+            or catalog.get_dataset(
+                name,
+                namespace_name=ds_project.namespace.name,
+                project_name=ds_project.name,
+            ).latest_version
+        )
     else:
         version = None
     catalog.remove_dataset(name, ds_project, version=version, force=force)
@@ -408,9 +415,7 @@ def move_dataset(
     namespace, project, name = catalog.get_full_dataset_name(src)
     dest_namespace, dest_project, dest_name = catalog.get_full_dataset_name(dest)
 
-    dataset = catalog.get_dataset(
-        name, catalog.metastore.get_project(project, namespace)
-    )
+    dataset = catalog.get_dataset(name, namespace_name=namespace, project_name=project)
 
     catalog.update_dataset(
         dataset,

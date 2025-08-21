@@ -291,7 +291,11 @@ class DataChain:
         """Underlying dataset, if there is one."""
         if not self.name:
             return None
-        return self.session.catalog.get_dataset(self.name, self._query.project)
+        return self.session.catalog.get_dataset(
+            self.name,
+            namespace_name=self._query.project.namespace.name,
+            project_name=self._query.project.name,
+        )
 
     def __or__(self, other: "Self") -> "Self":
         """Return `self.union(other)`."""
@@ -2306,12 +2310,16 @@ class DataChain:
         on_conflict: Optional[str] = None,
         conflict_columns: Optional[list[str]] = None,
         column_mapping: Optional[dict[str, Optional[str]]] = None,
-    ) -> None:
+    ) -> int:
         """Save chain to a database table using a given database connection.
 
         This method exports all DataChain records to a database table, creating the
         table if it doesn't exist and appending data if it does. The table schema
         is automatically inferred from the DataChain's signal schema.
+
+        For PostgreSQL, tables are created in the schema specified by the connection's
+        search_path (defaults to 'public'). Use URL parameters to target specific
+        schemas.
 
         Parameters:
             table_name: Name of the database table to create/write to.
@@ -2336,20 +2344,26 @@ class DataChain:
                 - Set values to None to skip columns entirely, or use `defaultdict` to
                   skip all columns except those specified.
 
+        Returns:
+            int: Number of rows affected (inserted/updated). -1 if DB driver doesn't
+                 support telemetry.
+
         Examples:
             Basic usage with PostgreSQL:
             ```py
-            import sqlalchemy as sa
             import datachain as dc
 
-            chain = dc.read_storage("s3://my-bucket/")
-            engine = sa.create_engine("postgresql://user:pass@localhost/mydb")
-            chain.to_database("files_table", engine)
+            rows_affected = (dc
+              .read_storage("s3://my-bucket/")
+              .to_database("files_table", "postgresql://user:pass@localhost/mydb")
+            )
+            print(f"Inserted/updated {rows_affected} rows")
             ```
 
             Using SQLite with connection string:
             ```py
-            chain.to_database("my_table", "sqlite:///data.db")
+            rows_affected = chain.to_database("my_table", "sqlite:///data.db")
+            print(f"Affected {rows_affected} rows")
             ```
 
             Column mapping and renaming:
@@ -2368,7 +2382,9 @@ class DataChain:
             chain.to_database("my_table", engine, on_conflict="ignore")
 
             # Update existing records
-            chain.to_database("my_table", engine, on_conflict="update")
+            chain.to_database(
+               "my_table", engine, on_conflict="update", conflict_columns=["id"]
+            )
             ```
 
             Working with different databases:
@@ -2380,10 +2396,16 @@ class DataChain:
             # SQLite in-memory
             chain.to_database("temp_table", "sqlite:///:memory:")
             ```
+
+            PostgreSQL with schema support:
+            ```py
+            pg_url = "postgresql://user:pass@host/db?options=-c search_path=analytics"
+            chain.to_database("processed_data", pg_url)
+            ```
         """
         from .database import to_database
 
-        to_database(
+        return to_database(
             self,
             table_name,
             connection,

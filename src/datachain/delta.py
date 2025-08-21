@@ -78,7 +78,8 @@ def _get_delta_chain(
 
 def _get_retry_chain(
     name: str,
-    project: Project,
+    namespace_name: str,
+    project_name: str,
     latest_version: str,
     source_ds_name: str,
     source_ds_project: Project,
@@ -97,8 +98,8 @@ def _get_retry_chain(
     # Read the latest version of the result dataset for retry logic
     result_dataset = datachain.read_dataset(
         name,
-        namespace=project.namespace.name,
-        project=project.name,
+        namespace=namespace_name,
+        project=project_name,
         version=latest_version,
     )
     source_dc = datachain.read_dataset(
@@ -129,7 +130,8 @@ def _get_retry_chain(
 
 def _get_source_info(
     name: str,
-    project: Project,
+    namespace_name: str,
+    project_name: str,
     latest_version: str,
     catalog,
 ) -> tuple[
@@ -146,7 +148,11 @@ def _get_source_info(
         Returns (None, None, None, None) if source dataset was removed.
     """
     dependencies = catalog.get_dataset_dependencies(
-        name, latest_version, project=project, indirect=False
+        name,
+        latest_version,
+        namespace_name=namespace_name,
+        project_name=project_name,
+        indirect=False,
     )
 
     dep = dependencies[0]
@@ -158,7 +164,9 @@ def _get_source_info(
     source_ds_name = dep.name
     source_ds_version = dep.version
     source_ds_latest_version = catalog.get_dataset(
-        source_ds_name, project=source_ds_project
+        source_ds_name,
+        namespace_name=source_ds_project.namespace.name,
+        project_name=source_ds_project.name,
     ).latest_version
 
     return (
@@ -212,12 +220,14 @@ def delta_retry_update(
     """
 
     catalog = dc.session.catalog
-    project = catalog.metastore.get_project(project_name, namespace_name)
+    # project = catalog.metastore.get_project(project_name, namespace_name)
     dc._query.apply_listing_pre_step()
 
     # Check if dataset exists
     try:
-        dataset = catalog.get_dataset(name, project=project)
+        dataset = catalog.get_dataset(
+            name, namespace_name=namespace_name, project_name=project_name
+        )
         latest_version = dataset.latest_version
     except DatasetNotFoundError:
         # First creation of result dataset
@@ -235,7 +245,7 @@ def delta_retry_update(
         source_ds_version,
         source_ds_latest_version,
         dependencies,
-    ) = _get_source_info(name, project, latest_version, catalog)
+    ) = _get_source_info(name, namespace_name, project_name, latest_version, catalog)
 
     # If source_ds_name is None, starting dataset was removed
     if source_ds_name is None:
@@ -265,7 +275,8 @@ def delta_retry_update(
     if delta_retry:
         retry_chain = _get_retry_chain(
             name,
-            project,
+            namespace_name,
+            project_name,
             latest_version,
             source_ds_name,
             source_ds_project,
@@ -291,8 +302,8 @@ def delta_retry_update(
 
     latest_dataset = datachain.read_dataset(
         name,
-        namespace=project.namespace.name,
-        project=project.name,
+        namespace=namespace_name,
+        project=project_name,
         version=latest_version,
     )
     compared_chain = latest_dataset.diff(
