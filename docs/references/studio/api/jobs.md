@@ -346,7 +346,11 @@ async def monitor_logs():
             for log in message["logs"]:
                 print(log["message"], end="")
         elif "job" in message:
-            latest_status = message["job"]["status"]
+        if "logs" in log_data:
+            for log in log_data["logs"]:
+                print(log["message"], end="")
+        elif "job" in log_data:
+            latest_status = log_data["job"]["status"]
             print(f"\n>>>> Job is now in {latest_status} status.")
 
 # Run the async function
