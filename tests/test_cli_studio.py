@@ -39,6 +39,7 @@ def test_studio_login_token_check_failed(mocker):
     assert main(["auth", "login"]) == 1
 
 
+@pytest.mark.parametrize("is_studio", (False,))
 def test_studio_login_success(mocker):
     mocker.patch(
         "dvc_studio_client.auth.get_access_token",
@@ -52,6 +53,7 @@ def test_studio_login_success(mocker):
     assert config["studio"]["url"] == STUDIO_URL
 
 
+@pytest.mark.parametrize("is_studio", (False,))
 def test_studio_login_arguments(mocker):
     mock = mocker.patch(
         "dvc_studio_client.auth.get_access_token",
@@ -85,6 +87,7 @@ def test_studio_login_arguments(mocker):
     )
 
 
+@pytest.mark.parametrize("is_studio", (False,))
 def test_studio_logout():
     with Config(ConfigLevel.GLOBAL).edit() as conf:
         conf["studio"] = {"token": "isat_access_token"}
@@ -96,6 +99,7 @@ def test_studio_logout():
     assert main(["auth", "logout"]) == 1
 
 
+@pytest.mark.parametrize("is_studio", (False,))
 def test_studio_token(capsys):
     with Config(ConfigLevel.GLOBAL).edit() as conf:
         conf["studio"] = {"token": "isat_access_token"}
@@ -109,18 +113,21 @@ def test_studio_token(capsys):
     assert main(["auth", "token"]) == 1
 
 
+@pytest.mark.parametrize("is_studio", (False,))
 def test_studio_team_local():
     assert main(["auth", "team", "team_name"]) == 0
     config = Config(ConfigLevel.GLOBAL).read()
     assert config["studio"]["team"] == "team_name"
 
 
+@pytest.mark.parametrize("is_studio", (False,))
 def test_studio_team_global():
     assert main(["auth", "team", "team_name", "--local"]) == 0
     config = Config(ConfigLevel.LOCAL).read()
     assert config["studio"]["team"] == "team_name"
 
 
+@pytest.mark.parametrize("is_studio", (False,))
 def test_studio_datasets(capsys, studio_datasets, mocker):
     def list_datasets_local(_, __):
         yield "local.local.local", "1.0.0"
@@ -334,6 +341,7 @@ def test_studio_rm_dataset(capsys, mocker):
         }
 
 
+@pytest.mark.parametrize("is_studio", (False,))
 def test_studio_cancel_job(capsys, mocker):
     job_id = "8bddde6c-c3ca-41b0-9d87-ee945bfdce70"
     with requests_mock.mock() as m:
@@ -352,6 +360,7 @@ def test_studio_cancel_job(capsys, mocker):
         assert m.called
 
 
+@pytest.mark.parametrize("is_studio", (False,))
 def test_studio_run(capsys, mocker, tmp_dir):
     mocker.patch(
         "datachain.remote.studio.websockets.connect", side_effect=mocked_connect
@@ -450,6 +459,7 @@ def test_studio_run(capsys, mocker, tmp_dir):
     }
 
 
+@pytest.mark.parametrize("is_studio", (False,))
 def test_studio_run_task(capsys, mocker, tmp_dir, studio_token):
     mocker.patch(
         "datachain.remote.studio.websockets.connect", side_effect=mocked_connect
@@ -495,6 +505,7 @@ def test_studio_run_task(capsys, mocker, tmp_dir, studio_token):
     assert request_json["cron_expression"] == "0 0 * * *"
 
 
+@pytest.mark.parametrize("is_studio", (False,))
 @pytest.mark.parametrize(
     "status,expected_exit_code", [("FAILED", 1), ("CANCELED", 2), ("COMPLETE", 0)]
 )
