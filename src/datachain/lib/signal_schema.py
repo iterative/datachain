@@ -34,7 +34,7 @@ from datachain.lib.data_model import DataModel, DataType, DataValue
 from datachain.lib.file import File
 from datachain.lib.model_store import ModelStore
 from datachain.lib.utils import DataChainParamsError
-from datachain.query.schema import DEFAULT_DELIMITER, Column, ColumnMeta
+from datachain.query.schema import DEFAULT_DELIMITER, C, Column, ColumnMeta
 from datachain.sql.types import SQLType
 
 if TYPE_CHECKING:
@@ -680,35 +680,46 @@ class SignalSchema:
         primitives = (bool, str, int, float)
 
         for name, value in args_map.items():
+            current_type = None
+
+            if C.is_nested(name):
+                try:
+                    current_type = self.get_column_type(name)
+                except SignalResolvingError as err:
+                    msg = f"Creating new nested columns directly is not allowed: {name}"
+                    raise ValueError(msg) from err
+
             if isinstance(value, Column) and value.name in self.values:
                 # renaming existing signal
+                # Note: it won't touch nested signals here (e.g. file__path)
+                # we don't allow removing nested columns to keep objects consistent
                 del new_values[value.name]
                 new_values[name] = self.values[value.name]
-                continue
-            if isinstance(value, Column):
+            elif isinstance(value, Column):
                 # adding new signal from existing signal field
-                try:
-                    new_values[name] = self.get_column_type(
-                        value.name, with_subtree=True
-                    )
-                    continue
-                except SignalResolvingError:
-                    pass
-            if isinstance(value, Func):
+                new_values[name] = self.get_column_type(value.name, with_subtree=True)
+            elif isinstance(value, Func):
                 # adding new signal with function
                 new_values[name] = value.get_result_type(self)
-                continue
-            if isinstance(value, primitives):
+            elif isinstance(value, primitives):
                 # For primitives, store the type, not the value
                 val = literal(value)
                 val.type = python_to_sql(type(value))()
                 new_values[name] = sql_to_python(val)
-                continue
-            if isinstance(value, ColumnElement):
+            elif isinstance(value, ColumnElement):
                 # adding new signal
                 new_values[name] = sql_to_python(value)
-                continue
-            new_values[name] = value
+            else:
+                new_values[name] = value
+
+            if C.is_nested(name):
+                if current_type != new_values[name]:
+                    msg = (
+                        f"Altering nested column type is not allowed: {name}, "
+                        f"current type: {current_type}, new type: {new_values[name]}"
+                    )
+                    raise ValueError(msg)
+                del new_values[name]
 
         return SignalSchema(new_values)
 

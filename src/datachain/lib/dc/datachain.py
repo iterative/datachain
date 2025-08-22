@@ -1263,8 +1263,10 @@ class DataChain:
                 # adding new signal
                 mutated[name] = value
 
+        new_schema = schema.mutate(kwargs)
         return self._evolve(
-            query=self._query.mutate(**mutated), signal_schema=schema.mutate(kwargs)
+            query=self._query.mutate(new_schema=new_schema, **mutated),
+            signal_schema=new_schema,
         )
 
     @property
