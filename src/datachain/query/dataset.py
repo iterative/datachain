@@ -803,12 +803,13 @@ class SQLMutate(SQLClause):
         to_mutate = {c.name for c in self.args}
 
         # Drop the original versions to avoid name collisions, exclude renamed
-        # columns
+        # columns. Always keep system columns (sys__*) if they exist in original query
         new_schema_columns = set(self.new_schema.db_signals())
         base_cols = [
             c
             for c in original_subquery.c
-            if c.name not in to_mutate and c.name in new_schema_columns
+            if c.name not in to_mutate
+            and (c.name in new_schema_columns or c.name.startswith("sys__"))
         ]
 
         # Create intermediate subquery to properly handle window functions
@@ -1473,7 +1474,7 @@ class DatasetQuery:
         return query
 
     @detach
-    def mutate(self, *args, new_schema=None, **kwargs) -> "Self":
+    def mutate(self, *args, new_schema, **kwargs) -> "Self":
         """
         Add new columns to this query.
 

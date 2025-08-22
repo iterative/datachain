@@ -264,8 +264,9 @@ def test_mutate_nested_column_complex_mutation(test_session):
     )
 
     schema = ds.signals_schema.values
+    assert "file" in schema
     assert "file__path" not in schema
-    assert "tmp" in schema
+    assert "tmp" not in schema
 
     results = ds.order_by("file.path").to_list()
     assert len(results) == 3
