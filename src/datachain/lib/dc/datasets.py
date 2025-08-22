@@ -13,7 +13,7 @@ from datachain.lib.signal_schema import SignalSchema
 from datachain.query import Session
 from datachain.query.dataset import DatasetQuery
 
-from .utils import Sys
+from .utils import Sys, is_studio
 from .values import read_values
 
 if TYPE_CHECKING:
@@ -343,7 +343,7 @@ def delete_dataset(
         namespace_name=namespace,
     )
 
-    if not catalog.is_studio and studio:
+    if not is_studio() and studio:
         return remove_studio_dataset(
             None, name, namespace_name, project_name, version=version, force=force
         )
@@ -418,6 +418,6 @@ def move_dataset(
         project_id=catalog.metastore.get_project(
             dest_project,
             dest_namespace,
-            create=catalog.is_studio,
+            create=is_studio(),
         ).id,
     )

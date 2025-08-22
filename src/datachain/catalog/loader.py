@@ -129,7 +129,6 @@ def get_udf_distributor_class() -> Optional[type["AbstractUDFDistributor"]]:
 def get_catalog(
     client_config: Optional[dict[str, Any]] = None,
     in_memory: bool = False,
-    is_studio: bool = False,
 ) -> "Catalog":
     """
     Function that creates Catalog instance with appropriate metastore
@@ -150,5 +149,4 @@ def get_catalog(
         warehouse=get_warehouse(in_memory=in_memory),
         client_config=client_config,
         in_memory=in_memory,
-        is_studio=is_studio,
     )

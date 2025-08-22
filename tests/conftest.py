@@ -8,7 +8,6 @@ from datetime import datetime
 from pathlib import PosixPath
 from time import sleep
 from typing import NamedTuple
-from unittest.mock import PropertyMock, patch
 
 import attrs
 import pytest
@@ -547,15 +546,12 @@ def is_studio():
 
 
 @pytest.fixture(autouse=True)
-def mock_is_studio(is_studio):
+def mock_is_studio(monkeypatch, is_studio):
     if not is_studio:
         yield
     else:
-        with patch.object(
-            Catalog, "is_studio", new_callable=PropertyMock
-        ) as mock_catalog:
-            mock_catalog.return_value = True
-            yield
+        monkeypatch.setenv("DATACHAIN_IS_STUDIO", True)
+        yield
 
 
 @pytest.fixture

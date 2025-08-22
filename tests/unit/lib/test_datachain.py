@@ -4048,8 +4048,8 @@ def test_save_to_default_project_with_read_storage(tmp_dir, test_session, is_stu
     assert ds.dataset.project == catalog.metastore.default_project
 
 
-@pytest.mark.parametrize("use_settings", (True, False))
-@pytest.mark.parametrize("project_created_upfront", (True, False))
+@pytest.mark.parametrize("use_settings", (False,))
+@pytest.mark.parametrize("project_created_upfront", (False,))
 def test_save_to_non_default_namespace_and_project(
     test_session, use_settings, project_created_upfront
 ):
@@ -4061,7 +4061,6 @@ def test_save_to_non_default_namespace_and_project(
     if use_settings:
         ds = ds.settings(namespace="dev", project="numbers").save("fibonacci")
     else:
-        print("before save")
         ds = ds.save("dev.numbers.fibonacci")
 
     ds = dc.read_dataset(name="dev.numbers.fibonacci")

@@ -527,7 +527,6 @@ class Catalog:
             Callable[["AbstractWarehouse"], None]
         ] = None,
         in_memory: bool = False,
-        is_studio: bool = False,
     ):
         datachain_dir = DataChainDir(cache=cache_dir, tmp=tmp_dir)
         datachain_dir.init()
@@ -541,11 +540,6 @@ class Catalog:
         }
         self._warehouse_ready_callback = warehouse_ready_callback
         self.in_memory = in_memory
-        self._is_studio = is_studio
-
-    @property
-    def is_studio(self) -> bool:
-        return self._is_studio  # type: ignore[return-value]
 
     @cached_property
     def warehouse(self) -> "AbstractWarehouse":
@@ -1127,6 +1121,8 @@ class Catalog:
         pull_dataset: bool = False,
         update: bool = False,
     ) -> DatasetRecord:
+        from datachain.lib.dc.utils import is_studio
+
         # Intentionally ignore update flag is version is provided. Here only exact
         # version can be provided and update then doesn't make sense.
         # It corresponds to a query like this for example:
@@ -1139,7 +1135,7 @@ class Catalog:
         # to fetch dataset with local.local namespace & project as that one cannot
         # exist in Studio in the first place
         no_fallback = (
-            self.is_studio or namespace_name == self.metastore.default_namespace_name
+            is_studio() or namespace_name == self.metastore.default_namespace_name
         )
 
         if no_fallback or not update:
