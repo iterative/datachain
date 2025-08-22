@@ -16,7 +16,6 @@ import pandas as pd
 import pytest
 import pytz
 from PIL import Image
-from sqlalchemy import Column
 
 import datachain as dc
 from datachain import DataModel, func
@@ -234,22 +233,6 @@ def test_read_storage_dependencies(cloud_test_catalog, cloud_type):
     assert len(dependencies) == 1
     assert dependencies[0].type == DatasetDependencyType.STORAGE
     assert dependencies[0].name == dep_name
-
-
-def test_persist_after_mutate(test_session):
-    chain = (
-        dc.read_values(fib=[1, 1, 2, 3, 5, 8, 13, 21], session=test_session)
-        .map(mod3=lambda fib: fib % 3, output=int)
-        .group_by(
-            cnt=dc.func.count(),
-            partition_by="mod3",
-        )
-        .mutate(x=1)
-        .persist()
-    )
-
-    assert chain.count() == 3
-    assert set(chain.to_values("mod3")) == {0, 1, 2}
 
 
 def test_persist_not_affects_dependencies(tmp_dir, test_session):
@@ -774,59 +757,6 @@ def test_read_storage_check_rows(tmp_dir, test_session):
             last_modified=datetime.fromtimestamp(mtime, tz=tz),
             location=None,
         )
-
-
-def test_mutate_existing_column(test_session):
-    ds = dc.read_values(ids=[1, 2, 3], session=test_session)
-    ds = ds.mutate(ids=Column("ids") + 1)
-
-    assert ds.order_by("ids").to_list() == [(2,), (3,), (4,)]
-
-
-def test_mutate_with_primitives_save_load(test_session):
-    """Test that mutate with primitive values properly persists schema
-    through save/load cycle."""
-    original_data = [1, 2, 3]
-
-    # Create dataset with multiple primitive columns added via mutate
-    ds = dc.read_values(data=original_data, session=test_session).mutate(
-        str_col="test_string",
-        int_col=42,
-        float_col=3.14,
-        bool_col=True,
-    )
-
-    # Verify schema before saving
-    schema = ds.signals_schema.values
-    assert schema.get("str_col") is str
-    assert schema.get("int_col") is int
-    assert schema.get("float_col") is float
-    assert schema.get("bool_col") is bool
-
-    ds.save("test_mutate_primitives")
-
-    # Load the dataset back
-    loaded_ds = dc.read_dataset("test_mutate_primitives", session=test_session)
-
-    # Verify schema after loading
-    loaded_schema = loaded_ds.signals_schema.values
-    assert loaded_schema.get("str_col") is str
-    assert loaded_schema.get("int_col") is int
-    assert loaded_schema.get("float_col") is float
-    assert loaded_schema.get("bool_col") is bool
-
-    # Verify data integrity
-    results = set(loaded_ds.to_list())
-    assert len(results) == 3
-
-    # Expected tuples: (data, str_col, int_col, float_col, bool_col)
-    expected_results = {
-        (1, "test_string", 42, 3.14, True),
-        (2, "test_string", 42, 3.14, True),
-        (3, "test_string", 42, 3.14, True),
-    }
-
-    assert results == expected_results
 
 
 @pytest.mark.parametrize("processes", [False, 2, True])

@@ -1147,8 +1147,10 @@ def test_mutate_rename_leaf(nested_file_schema):
 
 def test_mutate_new_signal():
     schema = SignalSchema({"name": str})
-    schema = schema.mutate({"age": Column("age", Float)})
-    assert schema.values == {"name": str, "age": float}
+    with pytest.raises(
+        SignalResolvingError, match="cannot resolve signal name 'age': is not found"
+    ):
+        schema.mutate({"age": Column("age", Float)})
 
 
 def test_mutate_change_type():
