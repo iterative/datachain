@@ -1,6 +1,6 @@
 import sys
 from collections.abc import Iterable, Iterator
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Union
 
 from tabulate import tabulate
 
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 def group_dataset_versions(
     datasets: Iterable[tuple[str, str]], latest_only=True
-) -> dict[str, list[str] | str]:
+) -> dict[str, Union[str, list[str]]]:
     grouped: dict[str, list[tuple[int, int, int]]] = {}
 
     # Sort to ensure groupby works as expected
