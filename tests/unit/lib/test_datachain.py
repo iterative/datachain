@@ -3231,6 +3231,35 @@ def test_read_csv_nan_inf(tmp_dir, test_session):
     assert any(r for r in res if np.isneginf(r))
 
 
+def test_dicts_nan_inf(test_session):
+    metrics_data = [
+        {"accuracy": 0.95, "loss": 0.1, "precision": 0.92},
+        {"accuracy": float("nan"), "loss": float("inf"), "precision": 0.88},
+        {"accuracy": 0.87, "loss": float("-inf"), "precision": float("nan")},
+    ]
+
+    dc.read_values(
+        id=[1, 2, 3],
+        metrics=metrics_data,
+        session=test_session,
+    ).save("test_dicts_nan_inf")
+
+    res = dc.read_dataset("test_dicts_nan_inf").order_by("id").to_values("metrics")
+    assert len(res) == 3
+
+    assert res[0]["accuracy"] == 0.95
+    assert res[0]["loss"] == 0.1
+    assert res[0]["precision"] == 0.92
+
+    assert math.isnan(res[1]["accuracy"])
+    assert math.isinf(res[1]["loss"]) and res[1]["loss"] > 0
+    assert res[1]["precision"] == 0.88
+
+    assert res[2]["accuracy"] == 0.87
+    assert math.isinf(res[2]["loss"]) and res[2]["loss"] < 0
+    assert math.isnan(res[2]["precision"])
+
+
 def test_group_by_int(test_session):
     from datachain import func
 

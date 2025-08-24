@@ -122,7 +122,7 @@ class AbstractWarehouse(ABC, Serializable):
                 if value_type is str:
                     return val
                 if value_type in (dict, list):
-                    return json.dumps(val)
+                    return json.dumps(val, ensure_ascii=False)
                 raise ValueError(
                     f"Cannot convert value {val!r} with type {value_type} to JSON"
                 )
