@@ -55,7 +55,6 @@ from datachain.query.udf import UdfInfo
 from datachain.sql.functions.random import rand
 from datachain.sql.types import SQLType
 from datachain.utils import (
-    batched,
     determine_processes,
     determine_workers,
     filtered_cloudpickle_dumps,
@@ -337,7 +336,7 @@ def process_udf_outputs(
 ) -> None:
     # Optimization: Compute row types once, rather than for every row.
     udf_col_types = get_col_types(warehouse, udf.output)
-    batch_rows = udf.batch_rows or INSERT_BATCH_SIZE
+    batch_size = udf.batch_rows or INSERT_BATCH_SIZE
 
     def _insert_rows():
         for udf_output in udf_results:
@@ -349,9 +348,7 @@ def process_udf_outputs(
                     cb.relative_update()
                     yield adjust_outputs(warehouse, row, udf_col_types)
 
-    for row_chunk in batched(_insert_rows(), batch_rows):
-        warehouse.insert_rows(udf_table, row_chunk)
-
+    warehouse.insert_rows(udf_table, _insert_rows(), batch_size=batch_size)
     warehouse.insert_rows_done(udf_table)
 
 

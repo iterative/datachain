@@ -37,6 +37,7 @@ from datachain import semver
 from datachain.data_storage import AbstractDBMetastore, AbstractWarehouse
 from datachain.data_storage.db_engine import DatabaseEngine
 from datachain.data_storage.schema import DefaultSchema
+from datachain.data_storage.warehouse import INSERT_BATCH_SIZE
 from datachain.dataset import DatasetRecord, StorageURI
 from datachain.error import DataChainError, OutdatedDatabaseSchemaError
 from datachain.namespace import Namespace
@@ -44,7 +45,7 @@ from datachain.project import Project
 from datachain.sql.sqlite import create_user_defined_sql_functions, sqlite_dialect
 from datachain.sql.sqlite.base import load_usearch_extension
 from datachain.sql.types import SQLType
-from datachain.utils import DataChainDir, batched_it
+from datachain.utils import DataChainDir, batched, batched_it
 
 if TYPE_CHECKING:
     from sqlalchemy.dialects.sqlite import Insert
@@ -716,7 +717,12 @@ class SQLiteWarehouse(AbstractWarehouse):
     def prepare_entries(self, entries: "Iterable[File]") -> Iterable[dict[str, Any]]:
         return (e.model_dump() for e in entries)
 
-    def insert_rows(self, table: Table, rows: Iterable[dict[str, Any]]) -> None:
+    def insert_rows(
+        self,
+        table: Table,
+        rows: Iterable[dict[str, Any]],
+        batch_size: int = INSERT_BATCH_SIZE,
+    ) -> None:
         rows = list(rows)
         if not rows:
             return
@@ -724,11 +730,12 @@ class SQLiteWarehouse(AbstractWarehouse):
         with self.db.transaction() as conn:
             # transactions speeds up inserts significantly as there is no separate
             # transaction created for each insert row
-            self.db.executemany(
-                table.insert().values({f: bindparam(f) for f in rows[0]}),
-                rows,
-                conn=conn,
-            )
+            for row_chunk in batched(rows, batch_size):
+                self.db.executemany(
+                    table.insert().values({f: bindparam(f) for f in row_chunk[0]}),
+                    row_chunk,
+                    conn=conn,
+                )
 
     def insert_dataset_rows(self, df, dataset: DatasetRecord, version: str) -> int:
         dr = self.dataset_rows(dataset, version)
