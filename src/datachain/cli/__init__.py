@@ -6,7 +6,7 @@ from multiprocessing import freeze_support
 from typing import Optional
 
 from datachain.cli.utils import get_logging_level
-from datachain.error import DataChainError
+from datachain.error import DataChainError as DataChainError
 
 from .commands import (
     clear_cache,
@@ -79,11 +79,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 def handle_command(args, catalog, client_config) -> int:
     """Handle the different CLI commands."""
-    from datachain.lib.dc.utils import is_studio
     from datachain.studio import process_auth_cli_args, process_jobs_args
-
-    if is_studio():
-        raise DataChainError("CLI is not allowed in Studio environment")
 
     command_handlers = {
         "cp": lambda: handle_cp_command(args, catalog),

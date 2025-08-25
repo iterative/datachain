@@ -252,7 +252,6 @@ def run_step(step, catalog):
 
 @pytest.mark.e2e
 @pytest.mark.xdist_group(name="tmpfile")
-@pytest.mark.parametrize("is_studio", (False,))
 def test_cli_e2e(tmp_dir, catalog_tmpfile):
     """End-to-end CLI Test"""
     for step in E2E_STEPS:
@@ -261,7 +260,6 @@ def test_cli_e2e(tmp_dir, catalog_tmpfile):
 
 @pytest.mark.e2e
 @pytest.mark.xdist_group(name="tmpfile")
-@pytest.mark.parametrize("is_studio", (False,))
 @skip_if_not_sqlite
 def test_cli_e2e_local_only(tmp_dir, catalog_tmpfile):
     """End-to-end CLI Test"""

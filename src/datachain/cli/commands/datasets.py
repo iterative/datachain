@@ -6,6 +6,7 @@ from tabulate import tabulate
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
 
+from datachain.catalog import is_namespace_local
 from datachain.cli.utils import determine_flavors
 from datachain.config import Config
 from datachain.error import DataChainError, DatasetNotFoundError
@@ -166,12 +167,18 @@ def edit_dataset(
     attrs: Optional[list[str]] = None,
     team: Optional[str] = None,
 ):
+    from datachain.lib.dc.utils import is_studio
+
     namespace_name, project_name, name = catalog.get_full_dataset_name(name)
 
-    # studio dataset is if it has non "local" namespace
-    is_studio_dataset = namespace_name != catalog.metastore.default_namespace_name
-
-    if is_studio_dataset:
+    if is_studio() or is_namespace_local(namespace_name):
+        try:
+            catalog.edit_dataset(
+                name, catalog.metastore.default_project, new_name, description, attrs
+            )
+        except DatasetNotFoundError:
+            print("Dataset not found in local", file=sys.stderr)
+    else:
         from datachain.studio import edit_studio_dataset
 
         if Config().read().get("studio", {}).get("token"):
@@ -182,10 +189,3 @@ def edit_dataset(
             raise DataChainError(
                 "Not logged in to Studio. Log in with 'datachain auth login'."
             )
-    else:
-        try:
-            catalog.edit_dataset(
-                name, catalog.metastore.default_project, new_name, description, attrs
-            )
-        except DatasetNotFoundError:
-            print("Dataset not found in local", file=sys.stderr)

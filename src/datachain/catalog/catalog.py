@@ -113,7 +113,7 @@ else:
     SIGINT = signal.SIGINT
 
 
-def _is_namespace_local(namespace_name) -> bool:
+def is_namespace_local(namespace_name) -> bool:
     """Checks if namespace is from local environment, i.e. is `local`"""
     return namespace_name == "local"
 
@@ -1139,7 +1139,7 @@ class Catalog:
         # we don't do Studio fallback is script is already ran in Studio, or if we try
         # to fetch dataset with local namespace as that one cannot
         # exist in Studio in the first place
-        no_fallback = is_studio() or _is_namespace_local(namespace_name)
+        no_fallback = is_studio() or is_namespace_local(namespace_name)
 
         if no_fallback or not update:
             try:
