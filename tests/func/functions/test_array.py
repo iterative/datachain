@@ -356,26 +356,32 @@ def test_array_contains(test_session):
 
     ds = list(
         dc.read_values(
-            id=(1, 2, 3),
+            id=(1, 2, 3, 4),
             arr=(
                 Arr(i=[10, 20, 30], f=[1.0, 2.0, 3.0], s=["a", "b", "c"]),
                 Arr(i=[40, 50, 60], f=[4.0, 5.0, 6.0], s=["d", "e", "f"]),
                 Arr(i=[50], f=[5.0], s=["g"]),
+                # New row with NaN/Inf values for testing
+                Arr(i=[100], f=[float("nan"), float("inf"), float("-inf")], s=["h"]),
             ),
             ii=(
                 [20, 30, 50, 80],
                 [10],
                 [],
+                [200],
             ),
             ff=(
                 [2.0, 3.0, 5.0, 7.0],
                 [4.0],
                 [],
+                # Test array with special float values
+                [float("inf"), float("-inf"), 1.5],
             ),
             ss=(
                 ["b", "c", "e", "f"],
                 ["d"],
                 [],
+                ["i"],
             ),
             session=test_session,
         )
@@ -395,6 +401,14 @@ def test_array_contains(test_session):
             t13=func.array.contains([1, 2, 3, 4, 5], 3),
             t14=func.array.contains([1, 2, 3, 4, 5], 7),
             t15=func.array.contains([], 1),
+            # Test NaN/Inf handling with contains
+            t16=func.array.contains("arr.f", float("inf")),  # Should find inf in row 4
+            # Should find -inf in row 4
+            t17=func.array.contains("arr.f", float("-inf")),
+            # Should NOT find nan (NaN != NaN)
+            t18=func.array.contains("arr.f", float("nan")),
+            t19=func.array.contains("ff", float("inf")),  # Should find inf in row 4
+            t20=func.array.contains("ff", float("-inf")),  # Should find -inf in row 4
         )
         .order_by("id")
         .to_list(
@@ -413,11 +427,75 @@ def test_array_contains(test_session):
             "t13",
             "t14",
             "t15",
+            "t16",
+            "t17",
+            "t18",
+            "t19",
+            "t20",
         )
     )
 
     assert ds == [
-        (1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0),
-        (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0),
-        (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0),
+        # Row 1: Regular values
+        (1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0),
+        # Row 2: Regular values
+        (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0),
+        # Row 3: Regular values
+        (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0),
+        # Row 4: Contains NaN/Inf values - inf/-inf should be found, NaN should not
+        (0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 1),
     ]
+
+
+def test_array_functions_with_nan_inf(test_session):
+    class ArrWithSpecial(dc.DataModel):
+        f: list[float]  # Will contain NaN and Infinity values
+
+    ds = list(
+        dc.read_values(
+            id=(1, 2, 3),
+            arr=(
+                ArrWithSpecial(f=[1.0, float("nan"), 3.0]),
+                ArrWithSpecial(f=[float("inf"), 2.0, float("-inf")]),
+                ArrWithSpecial(f=[float("nan"), float("inf")]),
+            ),
+            special_floats=(
+                [1.0, float("nan"), float("inf")],
+                [float("-inf"), 2.0],
+                [float("nan")],
+            ),
+            session=test_session,
+        )
+        .mutate(
+            # Test array.length with NaN/INF arrays
+            len1=func.array.length("arr.f"),
+            len2=func.array.length("special_floats"),
+            # Test array.slice with NaN/INF arrays
+            slice1=func.array.slice("arr.f", 0, 2),
+            slice2=func.array.slice("special_floats", 1),
+            # Test array.get_element with NaN/INF arrays
+            elem1=func.array.get_element("arr.f", 0),
+            elem2=func.array.get_element("special_floats", 0),
+        )
+        .order_by("id")
+        .to_list("len1", "len2", "slice1", "slice2", "elem1", "elem2")
+    )
+
+    # Verify lengths are correct
+    assert ds[0][0] == 3  # [1.0, nan, 3.0]
+    assert ds[0][1] == 3  # [1.0, nan, inf]
+    assert ds[1][0] == 3  # [inf, 2.0, -inf]
+    assert ds[1][1] == 2  # [-inf, 2.0]
+    assert ds[2][0] == 2  # [nan, inf]
+    assert ds[2][1] == 1  # [nan]
+
+    # Verify slices preserve NaN/INF
+    assert len(ds[0][2]) == 2  # slice of [1.0, nan, 3.0]
+    assert ds[0][2][0] == 1.0
+    assert math.isnan(ds[0][2][1])
+
+    # Verify get_element preserves NaN/INF
+    assert ds[0][4] == 1.0  # arr.f[0] for first row
+    # special_floats[0] for second row (-inf)
+    assert math.isinf(ds[1][5]) and ds[1][5] < 0
+    assert ds[1][4] == float("inf")  # arr.f[0] for second row

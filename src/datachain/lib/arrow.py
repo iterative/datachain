@@ -2,8 +2,8 @@ from collections.abc import Sequence
 from itertools import islice
 from typing import TYPE_CHECKING, Any, Optional
 
-import orjson
 import pyarrow as pa
+import ujson as json
 from pyarrow._csv import ParseOptions
 from pyarrow.dataset import CsvFileFormat, dataset
 from tqdm.auto import tqdm
@@ -269,7 +269,7 @@ def _get_hf_schema(
 def _get_datachain_schema(schema: "pa.Schema") -> Optional[SignalSchema]:
     """Return a restored SignalSchema from parquet metadata, if any is found."""
     if schema.metadata and DATACHAIN_SIGNAL_SCHEMA_PARQUET_KEY in schema.metadata:
-        serialized_signal_schema = orjson.loads(
+        serialized_signal_schema = json.loads(
             schema.metadata[DATACHAIN_SIGNAL_SCHEMA_PARQUET_KEY]
         )
         return SignalSchema.deserialize(serialized_signal_schema)

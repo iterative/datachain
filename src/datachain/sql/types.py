@@ -16,8 +16,8 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import Any, Union
 
-import orjson
 import sqlalchemy as sa
+import ujson as jsonlib
 from sqlalchemy import TypeDecorator, types
 
 from datachain.lib.data_model import StandardType
@@ -352,7 +352,7 @@ class Array(SQLType):
     def on_read_convert(self, value, dialect):
         r = read_converter(dialect).array(value, self.item_type, dialect)
         if isinstance(self.item_type, JSON):
-            r = [orjson.loads(item) if isinstance(item, str) else item for item in r]
+            r = [jsonlib.loads(item) if isinstance(item, str) else item for item in r]
         return r
 
 
@@ -466,7 +466,7 @@ class TypeReadConverter:
         if isinstance(value, str):
             if value == "":
                 return {}
-            return orjson.loads(value)
+            return jsonlib.loads(value)
         return value
 
     def datetime(self, value):
