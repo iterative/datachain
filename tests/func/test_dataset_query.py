@@ -8,7 +8,9 @@ import sqlalchemy
 
 from datachain.dataset import DatasetDependencyType, DatasetStatus
 from datachain.error import DatasetNotFoundError
+from datachain.lib.file import File
 from datachain.lib.listing import parse_listing_uri
+from datachain.lib.signal_schema import SignalSchema
 from datachain.query import C, DatasetQuery, Object, Stream
 from datachain.sql.functions import path as pathfunc
 from datachain.sql.types import String
@@ -17,6 +19,12 @@ from tests.utils import assert_row_names, dataset_dependency_asdict
 
 def from_result_row(col_names, row):
     return dict(zip(col_names, row))
+
+
+def create_dataset_query_mutate_schema(**mutations):
+    schema_values = {"file": File}
+    schema_values.update(mutations)
+    return SignalSchema(schema_values)
 
 
 @pytest.fixture
@@ -306,12 +314,14 @@ def test_distinct_count(cloud_test_catalog, animal_dataset):
 def test_mutate(cloud_test_catalog, save, animal_dataset):
     catalog = cloud_test_catalog.catalog
     ds = DatasetQuery(animal_dataset.name, catalog=catalog)
+    schema = create_dataset_query_mutate_schema(size10x=int, size1000x=int)
     q = (
-        ds.mutate(size10x=C("file.size") * 10)
-        .mutate(size1000x=C.size10x * 100)
+        ds.mutate(new_schema=schema, size10x=C("file.size") * 10)
+        .mutate(new_schema=schema, size1000x=C.size10x * 100)
         .mutate(
             ("s2", C("file.size") * 2),
             ("s3", C("file.size") * 3),
+            new_schema=schema,
             s4=C("file.size") * 4,
         )
         .filter((C.size10x < 40) | (C.size10x > 100) | C("file.path").glob("cat*"))
@@ -349,8 +359,9 @@ def test_mutate(cloud_test_catalog, save, animal_dataset):
 def test_order_by_after_mutate(cloud_test_catalog, save, animal_dataset):
     catalog = cloud_test_catalog.catalog
     ds = DatasetQuery(animal_dataset.name, catalog=catalog)
+    schema = create_dataset_query_mutate_schema(size10x=int)
     q = (
-        ds.mutate(size10x=C("file.size") * 10)
+        ds.mutate(new_schema=schema, size10x=C("file.size") * 10)
         .filter((C.size10x < 40) | (C.size10x > 100) | C("file.path").glob("cat*"))
         .order_by(C.size10x.desc())
     )
@@ -446,10 +457,12 @@ def test_offset_limit(cloud_test_catalog, save, animal_dataset):
 @pytest.mark.parametrize("save", [True, False])
 def test_mutate_offset_limit(cloud_test_catalog, save, animal_dataset):
     catalog = cloud_test_catalog.catalog
+    base_query = DatasetQuery(animal_dataset.name, catalog=catalog).order_by(
+        C("file.path")
+    )
+    schema = create_dataset_query_mutate_schema(size10x=int)
     q = (
-        DatasetQuery(animal_dataset.name, catalog=catalog)
-        .order_by(C("file.path"))
-        .mutate(size10x=C("file.size") * 10)
+        base_query.mutate(new_schema=schema, size10x=C("file.size") * 10)
         .offset(3)
         .limit(2)
     )

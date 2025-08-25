@@ -10,7 +10,6 @@ from abc import ABC, abstractmethod
 from collections.abc import Generator, Iterable, Iterator, Sequence
 from copy import copy
 from functools import wraps
-from secrets import token_hex
 from types import GeneratorType
 from typing import (
     TYPE_CHECKING,
@@ -29,7 +28,7 @@ from attrs import frozen
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback, TqdmCallback
 from sqlalchemy import Column
 from sqlalchemy.sql import func as f
-from sqlalchemy.sql.elements import ColumnClause, ColumnElement
+from sqlalchemy.sql.elements import ColumnClause, ColumnElement, Label
 from sqlalchemy.sql.expression import label
 from sqlalchemy.sql.schema import TableClause
 from sqlalchemy.sql.selectable import Select
@@ -46,6 +45,7 @@ from datachain.dataset import DatasetDependency, DatasetStatus, RowDict
 from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.func.base import Function
 from datachain.lib.listing import is_listing_dataset, listing_dataset_expired
+from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf import UDFAdapter, _get_cache
 from datachain.progress import CombinedDownloadCallback, TqdmCombinedDownloadCallback
 from datachain.project import Project
@@ -795,28 +795,32 @@ class SQLSelectExcept(SQLClause):
 
 @frozen
 class SQLMutate(SQLClause):
-    args: tuple[Union[Function, ColumnElement], ...]
+    args: tuple[Label, ...]
+    new_schema: SignalSchema
 
     def apply_sql_clause(self, query: Select) -> Select:
         original_subquery = query.subquery()
-        args = [
-            original_subquery.c[str(c)] if isinstance(c, (str, C)) else c
-            for c in self.parse_cols(self.args)
-        ]
-        to_mutate = {c.name for c in args}
+        to_mutate = {c.name for c in self.args}
 
-        prefix = f"mutate{token_hex(8)}_"
-        cols = [
-            c.label(prefix + c.name) if c.name in to_mutate else c
+        # Drop the original versions to avoid name collisions, exclude renamed
+        # columns. Always keep system columns (sys__*) if they exist in original query
+        new_schema_columns = set(self.new_schema.db_signals())
+        base_cols = [
+            c
             for c in original_subquery.c
+            if c.name not in to_mutate
+            and (c.name in new_schema_columns or c.name.startswith("sys__"))
         ]
-        # this is needed for new column to be used in clauses
-        # like ORDER BY, otherwise new column is not recognized
-        subquery = (
-            sqlalchemy.select(*cols, *args).select_from(original_subquery).subquery()
-        )
 
-        return sqlalchemy.select(*subquery.c).select_from(subquery)
+        # Create intermediate subquery to properly handle window functions
+        intermediate_query = sqlalchemy.select(*base_cols, *self.args).select_from(
+            original_subquery
+        )
+        intermediate_subquery = intermediate_query.subquery()
+
+        return sqlalchemy.select(*intermediate_subquery.c).select_from(
+            intermediate_subquery
+        )
 
 
 @frozen
@@ -1470,7 +1474,7 @@ class DatasetQuery:
         return query
 
     @detach
-    def mutate(self, *args, **kwargs) -> "Self":
+    def mutate(self, *args, new_schema, **kwargs) -> "Self":
         """
         Add new columns to this query.
 
@@ -1482,7 +1486,7 @@ class DatasetQuery:
         """
         query_args = [v.label(k) for k, v in dict(args, **kwargs).items()]
         query = self.clone()
-        query.steps.append(SQLMutate((*query_args,)))
+        query.steps.append(SQLMutate((*query_args,), new_schema))
         return query
 
     @detach

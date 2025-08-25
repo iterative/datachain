@@ -17,7 +17,7 @@ from datachain.sql.types import (
 from tests.utils import (
     DEFAULT_TREE,
     TARRED_TREE,
-    create_tar_dataset_with_legacy_columns,
+    create_tar_dataset,
 )
 
 COMPLEX_TREE: dict[str, Any] = {
@@ -39,7 +39,7 @@ def test_dir_expansion(cloud_test_catalog, version_aware, cloud_type):
         # we don't want to index things in parent directory
         src_uri += "/"
 
-    chain = create_tar_dataset_with_legacy_columns(session, ctc.src_uri, "dc")
+    chain = create_tar_dataset(session, ctc.src_uri, "dc")
     dataset = catalog.get_dataset(chain.name)
     with catalog.warehouse.clone() as warehouse:
         dr = warehouse.dataset_rows(dataset, column="file")

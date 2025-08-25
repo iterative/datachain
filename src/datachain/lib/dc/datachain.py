@@ -1192,17 +1192,13 @@ class DataChain:
         )
 
     def mutate(self, **kwargs) -> "Self":
-        """Create new signals based on existing signals.
-
-        This method cannot modify existing columns. If you need to modify an
-        existing column, use a different name for the new column and then use
-        `select()` to choose which columns to keep.
+        """Create or modify signals based on existing signals.
 
         This method is vectorized and more efficient compared to map(), and it does not
         extract or download any data from the internal database. However, it can only
         utilize predefined built-in functions and their combinations.
 
-        The supported functions:
+        Supported functions:
            Numerical:   +, -, *, /, rand(), avg(), count(), func(),
                         greatest(), least(), max(), min(), sum()
            String:      length(), split(), replace(), regexp_replace()
@@ -1229,13 +1225,20 @@ class DataChain:
         ```
 
         This method can be also used to rename signals. If the Column("name") provided
-        as value for the new signal - the old column will be dropped. Otherwise a new
-        column is created.
+        as value for the new signal - the old signal will be dropped. Otherwise a new
+        signal is created. Exception, if the old signal is nested one (e.g.
+        `C("file.path")`), it will be kept to keep the object intact.
 
         Example:
         ```py
          dc.mutate(
-            newkey=Column("oldkey")
+            newkey=Column("oldkey") # drops oldkey
+        )
+        ```
+
+        ```py
+         dc.mutate(
+            size=Column("file.size") # keeps `file.size`
         )
         ```
         """
@@ -1270,8 +1273,10 @@ class DataChain:
                 # adding new signal
                 mutated[name] = value
 
+        new_schema = schema.mutate(kwargs)
         return self._evolve(
-            query=self._query.mutate(**mutated), signal_schema=schema.mutate(kwargs)
+            query=self._query.mutate(new_schema=new_schema, **mutated),
+            signal_schema=new_schema,
         )
 
     @property

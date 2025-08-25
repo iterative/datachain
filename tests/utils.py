@@ -100,27 +100,15 @@ def write_tar(tree, archive, curr_dir=""):
 TARRED_TREE: dict[str, Any] = {"animals.tar": make_tar(DEFAULT_TREE)}
 
 
-def create_tar_dataset_with_legacy_columns(
-    session, uri: str, ds_name: str
-) -> dc.DataChain:
+def create_tar_dataset(session, uri: str, ds_name: str) -> dc.DataChain:
     """
     Create a dataset from a storage location containing tar archives and other files.
-
     The resulting dataset contains both the original files (as regular objects)
     and the tar members (as v-objects).
     """
     chain = dc.read_storage(uri, session=session)
     tar_entries = chain.filter(C("file.path").glob("*.tar")).gen(file=process_tar)
-    return (
-        chain.union(tar_entries)
-        .mutate(
-            path=C("file.path"),
-            source=C("file.source"),
-            location=C("file.location"),
-            version=C("file.version"),
-        )
-        .save(ds_name)
-    )
+    return chain.union(tar_entries).save(ds_name)
 
 
 skip_if_not_sqlite = pytest.mark.skipif(
