@@ -107,6 +107,12 @@ nav:
                   - cancel: commands/job/cancel.md
                   - ls: commands/job/ls.md
                   - clusters: commands/job/clusters.md
+      - 🔗 Studio:
+          - API:
+              - Overview: references/studio/api/index.md
+              - Datasets: references/studio/api/datasets.md
+              - Jobs: references/studio/api/jobs.md
+          - Client: references/studio/client.md
       - 📚 User Guide:
           - Overview: guide/index.md
           - 📡 Interacting with remote storage: guide/remotes.md
