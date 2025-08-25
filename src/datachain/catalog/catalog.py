@@ -113,6 +113,11 @@ else:
     SIGINT = signal.SIGINT
 
 
+def _is_namespace_local(namespace_name) -> bool:
+    """Checks if namespace is from local environment, i.e. is `local`"""
+    return namespace_name == "local"
+
+
 def shutdown_process(
     proc: subprocess.Popen,
     interrupt_timeout: Optional[int] = None,
@@ -1132,11 +1137,9 @@ class Catalog:
             update = False
 
         # we don't do Studio fallback is script is already ran in Studio, or if we try
-        # to fetch dataset with local.local namespace & project as that one cannot
+        # to fetch dataset with local namespace as that one cannot
         # exist in Studio in the first place
-        no_fallback = (
-            is_studio() or namespace_name == self.metastore.default_namespace_name
-        )
+        no_fallback = is_studio() or _is_namespace_local(namespace_name)
 
         if no_fallback or not update:
             try:
