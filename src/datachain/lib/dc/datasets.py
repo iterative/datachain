@@ -82,8 +82,7 @@ def read_dataset(
             some version of the dataset exists locally already. If False (default), it
             will only fetch the dataset from Studio if it is not found locally.
         delta_unsafe: Allow restricted ops in delta: merge, agg, union, group_by,
-            distinct. Caller must ensure datasets are consistent and not partially
-            updated.
+            distinct.
 
 
     Example:
