@@ -28,7 +28,9 @@ def create(
     """
     session = Session.get(session)
 
-    if not session.catalog.metastore.namespace_allowed_to_create:
+    from datachain.lib.dc.utils import is_studio
+
+    if not is_studio():
         raise NamespaceCreateNotAllowedError("Creating namespace is not allowed")
 
     Namespace.validate_name(name)

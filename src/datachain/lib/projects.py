@@ -32,7 +32,9 @@ def create(
     """
     session = Session.get(session)
 
-    if not session.catalog.metastore.project_allowed_to_create:
+    from datachain.lib.dc.utils import is_studio
+
+    if not is_studio():
         raise ProjectCreateNotAllowedError("Creating project is not allowed")
 
     Project.validate_name(name)

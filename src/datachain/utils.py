@@ -531,3 +531,10 @@ def safe_closing(thing: T) -> Iterator[T]:
     finally:
         if hasattr(thing, "close"):
             thing.close()
+
+
+def getenv_bool(name: str, default: bool = False) -> bool:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    return val.lower() in ("1", "true", "yes", "on")
