@@ -2549,6 +2549,7 @@ class DataChain:
         num_threads: Optional[int] = EXPORT_FILES_MAX_THREADS,
         anon: Optional[bool] = None,
         client_config: Optional[dict] = None,
+        relative_to: Optional[str] = None,
     ) -> None:
         """Export files from a specified signal to a directory. Files can be
         exported to a local or cloud directory.
@@ -2604,6 +2605,7 @@ class DataChain:
             link_type,
             max_threads=num_threads or 1,
             client_config=client_config,
+            relative_to=relative_to,
         )
         file_exporter.run(
             (rows[0] for rows in chain.to_iter(signal)),

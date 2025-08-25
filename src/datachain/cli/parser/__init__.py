@@ -6,7 +6,7 @@ import shtab
 from datachain.cli.utils import BooleanOptionalAction, KeyValueArgs
 
 from .job import add_jobs_parser
-from .studio import add_auth_parser
+from .studio import add_auth_parser, add_storage_parser
 from .utils import (
     FIND_COLUMNS,
     CustomHelpFormatter,
@@ -62,39 +62,6 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
         dest="command",
         help=f"Use `{parser.prog} command --help` for command-specific help",
     )
-    parse_cp = subp.add_parser(
-        "cp",
-        parents=[parent_parser],
-        description="Copy data files from the cloud.",
-        formatter_class=CustomHelpFormatter,
-    )
-    add_sources_arg(parse_cp).complete = shtab.DIR  # type: ignore[attr-defined]
-    parse_cp.add_argument(
-        "output", type=str, help="Path to a directory or file to put data to"
-    )
-    parse_cp.add_argument(
-        "-f",
-        "--force",
-        default=False,
-        action="store_true",
-        help="Force creating files even if they already exist",
-    )
-    parse_cp.add_argument(
-        "-r",
-        "-R",
-        "--recursive",
-        default=False,
-        action="store_true",
-        help="Copy directories recursively",
-    )
-    parse_cp.add_argument(
-        "--no-glob",
-        default=False,
-        action="store_true",
-        help="Do not expand globs (such as * or ?)",
-    )
-    add_anon_arg(parse_cp)
-    add_update_arg(parse_cp)
 
     parse_clone = subp.add_parser(
         "clone",
@@ -137,6 +104,7 @@ def get_parser() -> ArgumentParser:  # noqa: PLR0915
     add_update_arg(parse_clone)
 
     add_auth_parser(subp, parent_parser)
+    add_storage_parser(subp, parent_parser)
     add_jobs_parser(subp, parent_parser)
 
     datasets_parser = subp.add_parser(
