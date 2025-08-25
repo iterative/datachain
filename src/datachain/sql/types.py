@@ -12,12 +12,12 @@ for sqlite we can use `sqlite.register_converter`
 ( https://docs.python.org/3/library/sqlite3.html#sqlite3.register_converter )
 """
 
-import json as jsonlib
 from datetime import datetime
 from types import MappingProxyType
 from typing import Any, Union
 
 import sqlalchemy as sa
+import ujson as jsonlib
 from sqlalchemy import TypeDecorator, types
 
 from datachain.lib.data_model import StandardType

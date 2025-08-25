@@ -1,6 +1,6 @@
-import json
 import sqlite3
 
+import ujson as json
 from sqlalchemy import types
 
 from datachain.sql.types import TypeConverter, TypeReadConverter
@@ -28,11 +28,11 @@ class Array(types.UserDefinedType):
 
 
 def adapt_array(arr):
-    return json.dumps(arr, ensure_ascii=False, separators=(",", ":"))
+    return json.dumps(arr, ensure_ascii=False)
 
 
 def adapt_dict(dct):
-    return json.dumps(dct, ensure_ascii=False, separators=(",", ":"))
+    return json.dumps(dct, ensure_ascii=False)
 
 
 def convert_array(arr):
@@ -41,8 +41,8 @@ def convert_array(arr):
 
 def adapt_np_array(arr):
     # Primarily needed for UDF numpy results (e.g. WDS)
-    # tolist() gives nested Python lists + native scalars; json.dumps handles NaN/Inf.
-    return json.dumps(arr.tolist(), ensure_ascii=False, separators=(",", ":"))
+    # tolist() gives nested Python lists + native scalars; ujson.dumps handles NaN/Inf.
+    return json.dumps(arr.tolist(), ensure_ascii=False)
 
 
 def adapt_np_generic(val):

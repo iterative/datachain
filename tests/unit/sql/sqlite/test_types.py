@@ -1,7 +1,6 @@
-import json
-
 import numpy as np
 import pytest
+import ujson as json
 
 from datachain.sql.sqlite.types import adapt_np_array
 

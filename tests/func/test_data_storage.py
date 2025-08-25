@@ -135,8 +135,8 @@ def test_convert_type(cloud_test_catalog):
 
     # JSON Tests
     assert run_convert_type('{"a": 1}', JSON()) == '{"a": 1}'
-    assert run_convert_type({"a": 1}, JSON()) == '{"a": 1}'
-    assert run_convert_type([{"a": 1}], JSON()) == '[{"a": 1}]'
+    assert run_convert_type({"a": 1}, JSON()) == '{"a":1}'
+    assert run_convert_type([{"a": 1}], JSON()) == '[{"a":1}]'
     with pytest.raises(ValueError):
         run_convert_type(0.5, JSON())
 
