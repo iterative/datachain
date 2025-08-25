@@ -1,5 +1,4 @@
 import glob
-import json
 import logging
 import posixpath
 import random
@@ -11,6 +10,7 @@ from urllib.parse import urlparse
 
 import attrs
 import sqlalchemy as sa
+import ujson as json
 from sqlalchemy.sql.expression import true
 
 from datachain.client import Client

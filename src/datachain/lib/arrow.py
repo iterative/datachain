@@ -1,9 +1,9 @@
-import json
 from collections.abc import Sequence
 from itertools import islice
 from typing import TYPE_CHECKING, Any, Optional
 
 import pyarrow as pa
+import ujson as json
 from pyarrow._csv import ParseOptions
 from pyarrow.dataset import CsvFileFormat, dataset
 from tqdm.auto import tqdm

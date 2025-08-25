@@ -1,5 +1,4 @@
 import copy
-import json
 import os
 import os.path
 import sys
@@ -21,6 +20,7 @@ from typing import (
 )
 
 import sqlalchemy
+import ujson as json
 from pydantic import BaseModel
 from sqlalchemy.sql.elements import ColumnElement
 from tqdm import tqdm

@@ -1,4 +1,3 @@
-import json
 import logging
 import re
 import sqlite3
@@ -10,6 +9,7 @@ from types import MappingProxyType
 from typing import Callable, Optional
 
 import sqlalchemy as sa
+import ujson as json
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql.elements import literal

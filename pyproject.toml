@@ -26,6 +26,7 @@ dependencies = [
   "tqdm",
   "numpy>=1,<3",
   "pandas>=2.0.0",
+  "ujson>=5.10.0",
   "packaging",
   "pyarrow",
   "typing-extensions",
