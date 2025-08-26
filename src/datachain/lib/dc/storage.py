@@ -27,106 +27,105 @@ if TYPE_CHECKING:
 def split_uri_pattern(uri: str) -> tuple[str, str | None]:
     """
     Split a URI into base path and glob pattern.
-    
+
     Args:
         uri: URI that may contain glob patterns (*, **, ?, {})
-        
+
     Returns:
         Tuple of (base_uri, pattern) where pattern is None if no glob pattern found
-        
+
     Examples:
         "s3://bucket/dir/*.mp3" -> ("s3://bucket/dir", "*.mp3")
         "s3://bucket/**/*.mp3" -> ("s3://bucket", "**/*.mp3")
         "s3://bucket/dir" -> ("s3://bucket/dir", None)
     """
     # Check if URI contains any glob patterns
-    if not any(char in uri for char in ['*', '?', '[', '{', '}']):
+    if not any(char in uri for char in ["*", "?", "[", "{", "}"]):
         return uri, None
-    
+
     # Handle different URI schemes
-    if '://' in uri:
+    if "://" in uri:
         # Split into scheme and path
-        scheme_end = uri.index('://') + 3
+        scheme_end = uri.index("://") + 3
         scheme_part = uri[:scheme_end]
         path_part = uri[scheme_end:]
-        
+
         # Find where the glob pattern starts
-        path_segments = path_part.split('/')
-        
+        path_segments = path_part.split("/")
+
         # Find first segment with glob pattern
         pattern_start_idx = None
         for i, segment in enumerate(path_segments):
             if glob.has_magic(segment):
                 pattern_start_idx = i
                 break
-        
+
         if pattern_start_idx is None:
             return uri, None
-        
+
         # Split into base and pattern
         if pattern_start_idx == 0:
             # Pattern at root of bucket
             base = scheme_part + path_segments[0]
-            pattern = '/'.join(path_segments[1:]) if len(path_segments) > 1 else '*'
+            pattern = "/".join(path_segments[1:]) if len(path_segments) > 1 else "*"
         else:
-            base = scheme_part + '/'.join(path_segments[:pattern_start_idx])
-            pattern = '/'.join(path_segments[pattern_start_idx:])
-        
+            base = scheme_part + "/".join(path_segments[:pattern_start_idx])
+            pattern = "/".join(path_segments[pattern_start_idx:])
+
         return base, pattern
-    else:
-        # Local path
-        path_segments = uri.split('/')
-        
-        # Find first segment with glob pattern
-        pattern_start_idx = None
-        for i, segment in enumerate(path_segments):
-            if glob.has_magic(segment):
-                pattern_start_idx = i
-                break
-        
-        if pattern_start_idx is None:
-            return uri, None
-        
-        # Split into base and pattern
-        base = '/'.join(path_segments[:pattern_start_idx]) if pattern_start_idx > 0 else '/'
-        pattern = '/'.join(path_segments[pattern_start_idx:])
-        
-        return base, pattern
+    # Local path
+    path_segments = uri.split("/")
+
+    # Find first segment with glob pattern
+    pattern_start_idx = None
+    for i, segment in enumerate(path_segments):
+        if glob.has_magic(segment):
+            pattern_start_idx = i
+            break
+
+    if pattern_start_idx is None:
+        return uri, None
+
+    # Split into base and pattern
+    base = "/".join(path_segments[:pattern_start_idx]) if pattern_start_idx > 0 else "/"
+    pattern = "/".join(path_segments[pattern_start_idx:])
+
+    return base, pattern
 
 
 def expand_brace_pattern(pattern: str) -> list[str]:
     """
     Expand brace patterns like *.{mp3,wav} into multiple glob patterns.
-    
+
     Args:
         pattern: Pattern that may contain brace expansion
-        
+
     Returns:
         List of expanded patterns
-        
+
     Examples:
         "*.{mp3,wav}" -> ["*.mp3", "*.wav"]
         "*.txt" -> ["*.txt"]
     """
-    if '{' not in pattern or '}' not in pattern:
+    if "{" not in pattern or "}" not in pattern:
         return [pattern]
-    
+
     # Find brace pattern
-    start = pattern.index('{')
-    end = pattern.index('}')
-    
+    start = pattern.index("{")
+    end = pattern.index("}")
+
     if start >= end:
         return [pattern]
-    
+
     prefix = pattern[:start]
-    suffix = pattern[end + 1:]
-    options = pattern[start + 1:end].split(',')
-    
+    suffix = pattern[end + 1 :]
+    options = pattern[start + 1 : end].split(",")
+
     # Generate all combinations
     expanded = []
     for option in options:
         expanded.append(prefix + option.strip() + suffix)
-    
+
     return expanded
 
 
@@ -252,11 +251,11 @@ def read_storage(
     for single_uri in uris:
         # Check if URI contains glob patterns and split them
         base_uri, glob_pattern = split_uri_pattern(str(single_uri))
-        
+
         # If a pattern is found, use the base_uri for listing
         # The pattern will be used for filtering later
         list_uri_to_use = base_uri if glob_pattern else single_uri
-        
+
         list_ds_name, list_uri, list_path, list_ds_exists = get_listing(
             list_uri_to_use, session, update=update
         )
@@ -312,9 +311,10 @@ def read_storage(
         if glob_pattern:
             # Handle brace expansion patterns
             patterns = expand_brace_pattern(glob_pattern)
-            
+
             # Apply glob filter(s)
             from datachain.query.schema import Column
+
             chain = dc
             if len(patterns) == 1:
                 # Single pattern - use direct glob filter
@@ -326,13 +326,17 @@ def read_storage(
                 filter_expr = None
                 for pattern in patterns:
                     pattern_filter = Column(f"{column}.path").glob(pattern)
-                    filter_expr = pattern_filter if filter_expr is None else filter_expr | pattern_filter
+                    filter_expr = (
+                        pattern_filter
+                        if filter_expr is None
+                        else filter_expr | pattern_filter
+                    )
                 chain = chain.filter(filter_expr)
             chains.append(chain)
         else:
             # No glob pattern detected, use normal ls behavior
             chains.append(ls(dc, list_path, recursive=recursive, column=column))
-        
+
         listed_ds_name.add(list_ds_name)
 
     storage_chain = None if not chains else reduce(lambda x, y: x.union(y), chains)
