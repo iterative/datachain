@@ -31,7 +31,7 @@ def read_records(
 
     Parameters:
         to_insert : records (or a single record) to insert. Each record is
-                    a dictionary of signals and theirs values.
+                    a dictionary of signals and their values.
         schema : describes chain signals and their corresponding types
 
     Example:

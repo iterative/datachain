@@ -723,14 +723,10 @@ class SQLiteWarehouse(AbstractWarehouse):
         rows: Iterable[dict[str, Any]],
         batch_size: int = INSERT_BATCH_SIZE,
     ) -> None:
-        rows = list(rows)
-        if not rows:
-            return
-
-        with self.db.transaction() as conn:
-            # transactions speeds up inserts significantly as there is no separate
-            # transaction created for each insert row
-            for row_chunk in batched(rows, batch_size):
+        for row_chunk in batched(rows, batch_size):
+            with self.db.transaction() as conn:
+                # transactions speeds up inserts significantly as there is no separate
+                # transaction created for each insert row
                 self.db.executemany(
                     table.insert().values({f: bindparam(f) for f in row_chunk[0]}),
                     row_chunk,
@@ -808,7 +804,7 @@ class SQLiteWarehouse(AbstractWarehouse):
             .limit(None)
         )
 
-        for batch in batched_it(ids, 10_000):
+        for batch in batched_it(ids, INSERT_BATCH_SIZE):
             batch_ids = [row[0] for row in batch]
             select_q._where_criteria = (col_id.in_(batch_ids),)
             q = table.insert().from_select(list(select_q.selected_columns), select_q)

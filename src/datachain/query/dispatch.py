@@ -113,6 +113,7 @@ class UDFDispatcher:
         self.is_batching = udf_info["batching"].is_batching
         self.processes = udf_info["processes"]
         self.rows_total = udf_info["rows_total"]
+        self.batch_size = udf_info["batch_size"]
         self.buffer_size = buffer_size
         self.task_queue = None
         self.done_queue = None
@@ -139,6 +140,7 @@ class UDFDispatcher:
             self.table,
             self.cache,
             self.is_batching,
+            self.batch_size,
             self.udf_fields,
         )
 
@@ -227,6 +229,7 @@ class UDFDispatcher:
                     udf_results,
                     udf,
                     cb=generated_cb,
+                    batch_size=self.batch_size,
                 )
 
     def input_batch_size(self, n_workers: int) -> int:
@@ -380,6 +383,7 @@ class UDFWorker:
         table: "Table",
         cache: bool,
         is_batching: bool,
+        batch_size: int,
         udf_fields: Sequence[str],
     ) -> None:
         self.catalog = catalog
@@ -390,6 +394,7 @@ class UDFWorker:
         self.table = table
         self.cache = cache
         self.is_batching = is_batching
+        self.batch_size = batch_size
         self.udf_fields = udf_fields
 
         self.download_cb = DownloadCallback(self.done_queue)
@@ -415,6 +420,7 @@ class UDFWorker:
                     self.notify_and_process(udf_results),
                     self.udf,
                     cb=self.generated_cb,
+                    batch_size=self.batch_size,
                 )
         put_into_queue(self.done_queue, {"status": FINISHED_STATUS})
 

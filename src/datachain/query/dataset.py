@@ -333,10 +333,10 @@ def process_udf_outputs(
     udf_results: Iterator[Iterable["UDFResult"]],
     udf: "UDFAdapter",
     cb: Callback = DEFAULT_CALLBACK,
+    batch_size: int = INSERT_BATCH_SIZE,
 ) -> None:
     # Optimization: Compute row types once, rather than for every row.
     udf_col_types = get_col_types(warehouse, udf.output)
-    batch_size = udf.batch_rows or INSERT_BATCH_SIZE
 
     def _insert_rows():
         for udf_output in udf_results:
@@ -385,12 +385,13 @@ class UDFStep(Step, ABC):
     udf: "UDFAdapter"
     catalog: "Catalog"
     partition_by: Optional[PartitionByType] = None
+    is_generator = False
+    # Parameters from Settings
+    cache: bool = False
     parallel: Optional[int] = None
     workers: Union[bool, int] = False
     min_task_size: Optional[int] = None
-    is_generator = False
-    cache: bool = False
-    batch_rows: Optional[int] = None
+    batch_size: Optional[int] = None
 
     @abstractmethod
     def create_udf_table(self, query: Select) -> "Table":
@@ -483,6 +484,7 @@ class UDFStep(Step, ABC):
                         is_generator=self.is_generator,
                         cache=self.cache,
                         rows_total=rows_total,
+                        batch_size=self.batch_size or INSERT_BATCH_SIZE,
                     )
 
                     # Run the UDFDispatcher in another process to avoid needing
@@ -531,6 +533,7 @@ class UDFStep(Step, ABC):
                                 udf_results,
                                 self.udf,
                                 cb=generated_cb,
+                                batch_size=self.batch_size or INSERT_BATCH_SIZE,
                             )
                     finally:
                         download_cb.close()
@@ -592,7 +595,7 @@ class UDFStep(Step, ABC):
                 parallel=self.parallel,
                 workers=self.workers,
                 min_task_size=self.min_task_size,
-                batch_rows=self.batch_rows,
+                batch_size=self.batch_size,
             )
         return self.__class__(self.udf, self.catalog)
 
@@ -638,7 +641,16 @@ class UDFStep(Step, ABC):
 
 @frozen
 class UDFSignal(UDFStep):
+    udf: "UDFAdapter"
+    catalog: "Catalog"
+    partition_by: Optional[PartitionByType] = None
     is_generator = False
+    # Parameters from Settings
+    cache: bool = False
+    parallel: Optional[int] = None
+    workers: Union[bool, int] = False
+    min_task_size: Optional[int] = None
+    batch_size: Optional[int] = None
 
     def create_udf_table(self, query: Select) -> "Table":
         udf_output_columns: list[sqlalchemy.Column[Any]] = [
@@ -708,7 +720,16 @@ class UDFSignal(UDFStep):
 class RowGenerator(UDFStep):
     """Extend dataset with new rows."""
 
+    udf: "UDFAdapter"
+    catalog: "Catalog"
+    partition_by: Optional[PartitionByType] = None
     is_generator = True
+    # Parameters from Settings
+    cache: bool = False
+    parallel: Optional[int] = None
+    workers: Union[bool, int] = False
+    min_task_size: Optional[int] = None
+    batch_size: Optional[int] = None
 
     def create_udf_table(self, query: Select) -> "Table":
         warehouse = self.catalog.warehouse
@@ -1623,12 +1644,17 @@ class DatasetQuery:
     def add_signals(
         self,
         udf: "UDFAdapter",
+        partition_by: Optional[PartitionByType] = None,
+        # Parameters from Settings
+        cache: bool = False,
         parallel: Optional[int] = None,
         workers: Union[bool, int] = False,
         min_task_size: Optional[int] = None,
-        partition_by: Optional[PartitionByType] = None,
-        cache: bool = False,
-        batch_rows: Optional[int] = None,
+        batch_size: Optional[int] = None,
+        # Parameters are unused, kept only to match the signature of Settings.to_dict
+        prefetch: Optional[int] = None,
+        namespace: Optional[str] = None,
+        project: Optional[str] = None,
     ) -> "Self":
         """
         Adds one or more signals based on the results from the provided UDF.
@@ -1654,7 +1680,7 @@ class DatasetQuery:
                 workers=workers,
                 min_task_size=min_task_size,
                 cache=cache,
-                batch_rows=batch_rows,
+                batch_size=batch_size,
             )
         )
         return query
@@ -1669,14 +1695,17 @@ class DatasetQuery:
     def generate(
         self,
         udf: "UDFAdapter",
+        partition_by: Optional[PartitionByType] = None,
+        # Parameters from Settings
+        cache: bool = False,
         parallel: Optional[int] = None,
         workers: Union[bool, int] = False,
         min_task_size: Optional[int] = None,
-        partition_by: Optional[PartitionByType] = None,
+        batch_size: Optional[int] = None,
+        # Parameters are unused, kept only to match the signature of Settings.to_dict:
+        prefetch: Optional[int] = None,
         namespace: Optional[str] = None,
         project: Optional[str] = None,
-        cache: bool = False,
-        batch_rows: Optional[int] = None,
     ) -> "Self":
         query = self.clone()
         steps = query.steps
@@ -1689,7 +1718,7 @@ class DatasetQuery:
                 workers=workers,
                 min_task_size=min_task_size,
                 cache=cache,
-                batch_rows=batch_rows,
+                batch_size=batch_size,
             )
         )
         return query
