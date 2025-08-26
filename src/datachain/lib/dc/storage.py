@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from .datachain import DataChain
 
 
-def split_uri_pattern(uri: str) -> tuple[str, str | None]:
+def split_uri_pattern(uri: str) -> tuple[str, Union[str, None]]:
     """
     Split a URI into base path and glob pattern.
 
