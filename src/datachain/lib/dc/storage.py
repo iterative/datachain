@@ -123,6 +123,46 @@ def _should_use_recursion(pattern: str, user_recursive: bool) -> bool:
     return "/" in pattern
 
 
+def _apply_glob_filter(
+    dc: "DataChain",
+    patterns: list[str],
+    list_path: str,
+    use_recursive: bool,
+    column: str,
+) -> "DataChain":
+    """Apply glob filter to a DataChain based on patterns."""
+    from datachain.query.schema import Column
+
+    chain = ls(dc, list_path, recursive=use_recursive, column=column)
+
+    if len(patterns) == 1:
+        # Single pattern - use direct glob filter
+        # If pattern doesn't contain path separator and list_path is not empty,
+        # prepend the list_path to make the pattern match correctly
+        if list_path and "/" not in patterns[0]:
+            filter_pattern = f"{list_path.rstrip('/')}/{patterns[0]}"
+        else:
+            filter_pattern = patterns[0]
+        return chain.filter(Column(f"{column}.path").glob(filter_pattern))
+
+    # Multiple patterns (from brace expansion) - use OR filter
+    filter_expr = None
+    for pattern in patterns:
+        # If pattern doesn't contain path separator and list_path is
+        # not empty, prepend the list_path to make pattern match correctly
+        if list_path and "/" not in pattern:
+            filter_pattern = f"{list_path.rstrip('/')}/{pattern}"
+        else:
+            filter_pattern = pattern
+        pattern_filter = Column(f"{column}.path").glob(filter_pattern)
+        filter_expr = (
+            pattern_filter
+            if filter_expr is None
+            else filter_expr | pattern_filter
+        )
+    return chain.filter(filter_expr)
+
+
 def expand_brace_pattern(pattern: str) -> list[str]:
     """
     Expand brace patterns like *.{mp3,wav} into multiple glob patterns.
@@ -346,37 +386,7 @@ def read_storage(
             use_recursive = _should_use_recursion(glob_pattern, recursive or False)
 
             # Apply glob filter(s)
-            from datachain.query.schema import Column
-
-            chain = dc
-            if len(patterns) == 1:
-                # Single pattern - use direct glob filter
-                chain = ls(chain, list_path, recursive=use_recursive, column=column)
-                # If pattern doesn't contain path separator and list_path is not empty,
-                # prepend the list_path to make the pattern match correctly
-                if list_path and "/" not in patterns[0]:
-                    filter_pattern = f"{list_path.rstrip('/')}/{patterns[0]}"
-                else:
-                    filter_pattern = patterns[0]
-                chain = chain.filter(Column(f"{column}.path").glob(filter_pattern))
-            else:
-                # Multiple patterns (from brace expansion) - use OR filter
-                chain = ls(chain, list_path, recursive=use_recursive, column=column)
-                filter_expr = None
-                for pattern in patterns:
-                    # If pattern doesn't contain path separator and list_path is not empty,
-                    # prepend the list_path to make the pattern match correctly
-                    if list_path and "/" not in pattern:
-                        filter_pattern = f"{list_path.rstrip('/')}/{pattern}"
-                    else:
-                        filter_pattern = pattern
-                    pattern_filter = Column(f"{column}.path").glob(filter_pattern)
-                    filter_expr = (
-                        pattern_filter
-                        if filter_expr is None
-                        else filter_expr | pattern_filter
-                    )
-                chain = chain.filter(filter_expr)
+            chain = _apply_glob_filter(dc, patterns, list_path, use_recursive, column)
             chains.append(chain)
         else:
             # No glob pattern detected, use normal ls behavior
