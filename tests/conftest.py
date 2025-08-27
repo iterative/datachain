@@ -613,7 +613,7 @@ def dogs_dataset(listed_bucket, cloud_test_catalog):
     src_uri = cloud_test_catalog.src_uri
     dataset = catalog.create_dataset_from_sources(
         name,
-        [f"{src_uri}/dogs/dog*"],
+        [f"{src_uri}/dogs/dogs/"],
         catalog.metastore.default_project,
         recursive=True,
     )

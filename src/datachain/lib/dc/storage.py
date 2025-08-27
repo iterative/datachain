@@ -343,7 +343,7 @@ def read_storage(
             patterns = expand_brace_pattern(glob_pattern)
 
             # Determine if we should use recursive listing based on the pattern
-            use_recursive = _should_use_recursion(glob_pattern, recursive)
+            use_recursive = _should_use_recursion(glob_pattern, recursive or False)
 
             # Apply glob filter(s)
             from datachain.query.schema import Column
