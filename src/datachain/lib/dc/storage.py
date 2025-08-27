@@ -156,9 +156,7 @@ def _apply_glob_filter(
             filter_pattern = pattern
         pattern_filter = Column(f"{column}.path").glob(filter_pattern)
         filter_expr = (
-            pattern_filter
-            if filter_expr is None
-            else filter_expr | pattern_filter
+            pattern_filter if filter_expr is None else filter_expr | pattern_filter
         )
     return chain.filter(filter_expr)
 

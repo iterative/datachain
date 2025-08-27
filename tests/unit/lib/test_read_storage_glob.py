@@ -157,9 +157,7 @@ def test_read_storage_wildcard_pattern(
     mock_query = MagicMock()
     mock_chain._query = mock_query
     mock_chain.signals_schema = MagicMock()
-    mock_chain.signals_schema.mutate = MagicMock(
-        return_value=mock_chain.signals_schema
-    )
+    mock_chain.signals_schema.mutate = MagicMock(return_value=mock_chain.signals_schema)
     mock_chain.filter = MagicMock(return_value=mock_chain)
     mock_chain.union = MagicMock(return_value=mock_chain)
     mock_read_dataset.return_value = mock_chain
@@ -187,9 +185,7 @@ def test_read_storage_globstar_pattern(
     mock_query = MagicMock()
     mock_chain._query = mock_query
     mock_chain.signals_schema = MagicMock()
-    mock_chain.signals_schema.mutate = MagicMock(
-        return_value=mock_chain.signals_schema
-    )
+    mock_chain.signals_schema.mutate = MagicMock(return_value=mock_chain.signals_schema)
     mock_chain.filter = MagicMock(return_value=mock_chain)
     mock_chain.union = MagicMock(return_value=mock_chain)
     mock_read_dataset.return_value = mock_chain
@@ -222,18 +218,14 @@ def test_read_storage_brace_expansion_pattern(
     mock_query = MagicMock()
     mock_chain._query = mock_query
     mock_chain.signals_schema = MagicMock()
-    mock_chain.signals_schema.mutate = MagicMock(
-        return_value=mock_chain.signals_schema
-    )
+    mock_chain.signals_schema.mutate = MagicMock(return_value=mock_chain.signals_schema)
     mock_chain.filter = MagicMock(return_value=mock_chain)
     mock_chain.union = MagicMock(return_value=mock_chain)
     mock_read_dataset.return_value = mock_chain
     mock_ls.return_value = mock_chain
 
     # Test with brace expansion
-    _ = dc.read_storage(
-        f"{tmp_dir.as_uri()}/audio/*.{{mp3,wav}}", session=mock_session
-    )
+    _ = dc.read_storage(f"{tmp_dir.as_uri()}/audio/*.{{mp3,wav}}", session=mock_session)
 
     # Verify filtering includes both extensions
     assert mock_chain.filter.called or mock_ls.called
@@ -259,9 +251,7 @@ def test_read_storage_question_mark_pattern(
     mock_query = MagicMock()
     mock_chain._query = mock_query
     mock_chain.signals_schema = MagicMock()
-    mock_chain.signals_schema.mutate = MagicMock(
-        return_value=mock_chain.signals_schema
-    )
+    mock_chain.signals_schema.mutate = MagicMock(return_value=mock_chain.signals_schema)
     mock_chain.filter = MagicMock(return_value=mock_chain)
     mock_chain.union = MagicMock(return_value=mock_chain)
     mock_read_dataset.return_value = mock_chain
@@ -333,9 +323,7 @@ def test_read_storage_no_pattern_unchanged(
     mock_query = MagicMock()
     mock_chain._query = mock_query
     mock_chain.signals_schema = MagicMock()
-    mock_chain.signals_schema.mutate = MagicMock(
-        return_value=mock_chain.signals_schema
-    )
+    mock_chain.signals_schema.mutate = MagicMock(return_value=mock_chain.signals_schema)
     mock_read_dataset.return_value = mock_chain
     mock_ls.return_value = mock_chain
 
@@ -367,9 +355,7 @@ def test_read_storage_filename_pattern_with_directory_path(
     mock_query = MagicMock()
     mock_chain._query = mock_query
     mock_chain.signals_schema = MagicMock()
-    mock_chain.signals_schema.mutate = MagicMock(
-        return_value=mock_chain.signals_schema
-    )
+    mock_chain.signals_schema.mutate = MagicMock(return_value=mock_chain.signals_schema)
     mock_chain.filter = MagicMock(return_value=mock_chain)
     mock_read_dataset.return_value = mock_chain
     mock_ls.return_value = mock_chain
