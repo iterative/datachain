@@ -467,7 +467,7 @@ def test_read_storage_multiple_uris_cache(cloud_test_catalog):
             session=session,
             update=True,
         ).exec()
-        assert chain.count() == 11
+        assert chain.count() == 12
 
         files = chain.to_values("file")
         assert {f.name for f in files} == {
