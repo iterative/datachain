@@ -88,8 +88,8 @@ def test_read_storage_non_recursive(cloud_test_catalog):
 
 def test_read_storage_glob(cloud_test_catalog):
     ctc = cloud_test_catalog
-    chain = dc.read_storage(f"{ctc.src_uri}/dogs*", session=ctc.session)
-    assert chain.count() == 4
+    chain = dc.read_storage(f"{ctc.src_uri}/dogs/*", session=ctc.session)
+    assert chain.count() == 3
 
 
 def test_read_storage_as_image(cloud_test_catalog):
@@ -467,7 +467,8 @@ def test_read_storage_multiple_uris_cache(cloud_test_catalog):
             session=session,
             update=True,
         ).exec()
-        assert chain.count() == 12
+
+        assert chain.count() == 11
 
         files = chain.to_values("file")
         assert {f.name for f in files} == {

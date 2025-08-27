@@ -93,6 +93,36 @@ def split_uri_pattern(uri: str) -> tuple[str, Union[str, None]]:
     return base, pattern
 
 
+def _should_use_recursion(pattern: str, user_recursive: bool) -> bool:
+    """
+    Determine if we should use recursive listing based on the pattern.
+
+    Args:
+        pattern: The glob pattern extracted from URI
+        user_recursive: User's recursive preference
+
+    Returns:
+        True if recursive listing should be used
+
+    Examples:
+        "*" -> False (single level only)
+        "*.mp3" -> False (single level only)
+        "**/*.mp3" -> True (globstar requires recursion)
+        "dir/*/file.txt" -> True (multi-level pattern)
+    """
+    if not user_recursive:
+        # If user explicitly wants non-recursive, respect that
+        return False
+
+    # If pattern contains globstar, definitely need recursion
+    if "**" in pattern:
+        return True
+
+    # If pattern contains path separators, it needs recursion
+    # Single-level patterns like "*", "*.txt", "file?" should not be recursive
+    return "/" in pattern
+
+
 def expand_brace_pattern(pattern: str) -> list[str]:
     """
     Expand brace patterns like *.{mp3,wav} into multiple glob patterns.
@@ -312,17 +342,20 @@ def read_storage(
             # Handle brace expansion patterns
             patterns = expand_brace_pattern(glob_pattern)
 
+            # Determine if we should use recursive listing based on the pattern
+            use_recursive = _should_use_recursion(glob_pattern, recursive)
+
             # Apply glob filter(s)
             from datachain.query.schema import Column
 
             chain = dc
             if len(patterns) == 1:
                 # Single pattern - use direct glob filter
-                chain = ls(chain, "", recursive=recursive, column=column)
+                chain = ls(chain, list_path, recursive=use_recursive, column=column)
                 chain = chain.filter(Column(f"{column}.path").glob(patterns[0]))
             else:
                 # Multiple patterns (from brace expansion) - use OR filter
-                chain = ls(chain, "", recursive=recursive, column=column)
+                chain = ls(chain, list_path, recursive=use_recursive, column=column)
                 filter_expr = None
                 for pattern in patterns:
                     pattern_filter = Column(f"{column}.path").glob(pattern)
