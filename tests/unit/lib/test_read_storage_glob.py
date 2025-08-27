@@ -1,5 +1,6 @@
 """Tests for glob pattern support in read_storage()"""
 
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -7,6 +8,9 @@ import pytest
 import datachain as dc
 from datachain.lib.dc.storage import expand_brace_pattern, split_uri_pattern
 from datachain.lib.file import File
+
+# Ensure the datasets module is loaded before we try to patch it
+import datachain.lib.dc.datasets as _datasets_module
 
 
 class TestSplitUriPattern:
@@ -141,7 +145,7 @@ class TestReadStorageGlobPatterns:
 
     @patch("datachain.lib.dc.storage.get_listing")
     @patch("datachain.lib.dc.storage.ls")
-    @patch("datachain.lib.dc.datasets.read_dataset")
+    @patch.object(sys.modules["datachain.lib.dc.datasets"], "read_dataset")
     def test_wildcard_pattern(
         self, mock_read_dataset, mock_ls, mock_get_listing, mock_session, mock_listing
     ):
@@ -170,7 +174,7 @@ class TestReadStorageGlobPatterns:
 
     @patch("datachain.lib.dc.storage.get_listing")
     @patch("datachain.lib.dc.storage.ls")
-    @patch("datachain.lib.dc.datasets.read_dataset")
+    @patch.object(sys.modules["datachain.lib.dc.datasets"], "read_dataset")
     def test_globstar_pattern(
         self, mock_read_dataset, mock_ls, mock_get_listing, mock_session, mock_listing
     ):
@@ -199,7 +203,7 @@ class TestReadStorageGlobPatterns:
 
     @patch("datachain.lib.dc.storage.get_listing")
     @patch("datachain.lib.dc.storage.ls")
-    @patch("datachain.lib.dc.datasets.read_dataset")
+    @patch.object(sys.modules["datachain.lib.dc.datasets"], "read_dataset")
     def test_brace_expansion_pattern(
         self, mock_read_dataset, mock_ls, mock_get_listing, mock_session, mock_listing
     ):
@@ -235,7 +239,7 @@ class TestReadStorageGlobPatterns:
 
     @patch("datachain.lib.dc.storage.get_listing")
     @patch("datachain.lib.dc.storage.ls")
-    @patch("datachain.lib.dc.datasets.read_dataset")
+    @patch.object(sys.modules["datachain.lib.dc.datasets"], "read_dataset")
     def test_question_mark_pattern(
         self, mock_read_dataset, mock_ls, mock_get_listing, mock_session, mock_listing
     ):
@@ -269,7 +273,7 @@ class TestReadStorageGlobPatterns:
 
     @patch("datachain.lib.dc.storage.get_listing")
     @patch("datachain.lib.dc.storage.ls")
-    @patch("datachain.lib.dc.datasets.read_dataset")
+    @patch.object(sys.modules["datachain.lib.dc.datasets"], "read_dataset")
     def test_multiple_patterns(
         self, mock_read_dataset, mock_ls, mock_get_listing, mock_session, mock_listing
     ):
@@ -312,7 +316,7 @@ class TestReadStorageGlobPatterns:
 
     @patch("datachain.lib.dc.storage.get_listing")
     @patch("datachain.lib.dc.storage.ls")
-    @patch("datachain.lib.dc.datasets.read_dataset")
+    @patch.object(sys.modules["datachain.lib.dc.datasets"], "read_dataset")
     def test_no_pattern_unchanged(
         self, mock_read_dataset, mock_ls, mock_get_listing, mock_session, mock_listing
     ):
