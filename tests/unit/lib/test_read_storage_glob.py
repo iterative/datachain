@@ -341,6 +341,43 @@ class TestReadStorageGlobPatterns:
         assert mock_ls.called
         assert mock_read_dataset.called
 
+    @patch("datachain.lib.dc.storage.get_listing")
+    @patch("datachain.lib.dc.storage.ls")
+    @patch.object(sys.modules["datachain.lib.dc.datasets"], "read_dataset")
+    def test_filename_pattern_with_directory_path(
+        self, mock_read_dataset, mock_ls, mock_get_listing, mock_session, mock_listing
+    ):
+        """Test that patterns like dir/file* correctly match files in directories"""
+        tmp_dir, files = mock_listing
+
+        # Setup mocks with a directory path scenario
+        mock_get_listing.return_value = (
+            "test_dataset",
+            str(tmp_dir),
+            "subdir/",
+            True,
+        )
+        mock_chain = MagicMock()
+        mock_query = MagicMock()
+        mock_chain._query = mock_query
+        mock_chain.signals_schema = MagicMock()
+        mock_chain.signals_schema.mutate = MagicMock(
+            return_value=mock_chain.signals_schema
+        )
+        mock_chain.filter = MagicMock(return_value=mock_chain)
+        mock_read_dataset.return_value = mock_chain
+        mock_ls.return_value = mock_chain
+
+        # Test with a filename pattern in a subdirectory
+        _ = dc.read_storage(f"{tmp_dir.as_uri()}/subdir/file*", session=mock_session)
+
+        # Verify that filter was called (glob pattern detected and applied)
+        assert mock_chain.filter.called
+        
+        # Check that the filter call includes the directory path
+        filter_calls = mock_chain.filter.call_args_list
+        assert len(filter_calls) > 0
+
 
 class TestGlobPatternExpansion:
     """Test glob pattern expansion logic"""

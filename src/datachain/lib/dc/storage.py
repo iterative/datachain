@@ -352,13 +352,25 @@ def read_storage(
             if len(patterns) == 1:
                 # Single pattern - use direct glob filter
                 chain = ls(chain, list_path, recursive=use_recursive, column=column)
-                chain = chain.filter(Column(f"{column}.path").glob(patterns[0]))
+                # If pattern doesn't contain path separator and list_path is not empty,
+                # prepend the list_path to make the pattern match correctly
+                if list_path and "/" not in patterns[0]:
+                    filter_pattern = f"{list_path.rstrip('/')}/{patterns[0]}"
+                else:
+                    filter_pattern = patterns[0]
+                chain = chain.filter(Column(f"{column}.path").glob(filter_pattern))
             else:
                 # Multiple patterns (from brace expansion) - use OR filter
                 chain = ls(chain, list_path, recursive=use_recursive, column=column)
                 filter_expr = None
                 for pattern in patterns:
-                    pattern_filter = Column(f"{column}.path").glob(pattern)
+                    # If pattern doesn't contain path separator and list_path is not empty,
+                    # prepend the list_path to make the pattern match correctly
+                    if list_path and "/" not in pattern:
+                        filter_pattern = f"{list_path.rstrip('/')}/{pattern}"
+                    else:
+                        filter_pattern = pattern
+                    pattern_filter = Column(f"{column}.path").glob(filter_pattern)
                     filter_expr = (
                         pattern_filter
                         if filter_expr is None
