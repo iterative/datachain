@@ -163,9 +163,7 @@ class TestReadStorageGlobPatterns:
         mock_ls.return_value = mock_chain
 
         # Test with wildcard pattern
-        result = dc.read_storage(
-            f"{tmp_dir.as_uri()}/audio/*.mp3", session=mock_session
-        )
+        _ = dc.read_storage(f"{tmp_dir.as_uri()}/audio/*.mp3", session=mock_session)
 
         # Verify filter was called with glob pattern
         assert mock_chain.filter.called or mock_ls.called
@@ -194,7 +192,7 @@ class TestReadStorageGlobPatterns:
         mock_ls.return_value = mock_chain
 
         # Test with globstar pattern
-        result = dc.read_storage(f"{tmp_dir.as_uri()}/**/*.mp3", session=mock_session)
+        _ = dc.read_storage(f"{tmp_dir.as_uri()}/**/*.mp3", session=mock_session)
 
         # Verify appropriate filtering
         assert mock_chain.filter.called or mock_ls.called
@@ -228,7 +226,7 @@ class TestReadStorageGlobPatterns:
         mock_ls.return_value = mock_chain
 
         # Test with brace expansion
-        result = dc.read_storage(
+        _ = dc.read_storage(
             f"{tmp_dir.as_uri()}/audio/*.{{mp3,wav}}", session=mock_session
         )
 
@@ -264,7 +262,7 @@ class TestReadStorageGlobPatterns:
         mock_ls.return_value = mock_chain
 
         # Test with question mark pattern
-        result = dc.read_storage(f"{tmp_dir.as_uri()}/file?.txt", session=mock_session)
+        _ = dc.read_storage(f"{tmp_dir.as_uri()}/file?.txt", session=mock_session)
 
         # Verify filtering with single character wildcard
         assert mock_chain.filter.called or mock_ls.called
@@ -307,7 +305,7 @@ class TestReadStorageGlobPatterns:
 
         # Test with multiple pattern URIs
         uris = [f"{tmp_dir.as_uri()}/audio/*.mp3", f"{tmp_dir.as_uri()}/docs/*.json"]
-        result = dc.read_storage(uris, session=mock_session)
+        _ = dc.read_storage(uris, session=mock_session)
 
         # Verify both patterns were processed
         assert mock_get_listing.call_count == 2
@@ -334,7 +332,7 @@ class TestReadStorageGlobPatterns:
         mock_ls.return_value = mock_chain
 
         # Test without pattern - should work as before
-        result = dc.read_storage(f"{tmp_dir.as_uri()}/audio", session=mock_session)
+        _ = dc.read_storage(f"{tmp_dir.as_uri()}/audio", session=mock_session)
 
         # Verify normal flow without extra filtering
         assert mock_ls.called
