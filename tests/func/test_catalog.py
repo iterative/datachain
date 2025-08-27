@@ -674,6 +674,7 @@ def gcs_fake_credentials(monkeypatch):
     )
 
 
+@pytest.mark.parametrize("is_studio", (False,))
 @pytest.mark.parametrize("tree", [{"test-signed-file": "original"}], indirect=True)
 @pytest.mark.parametrize(
     "cloud_type, version_aware",
@@ -688,6 +689,7 @@ def test_signed_url(cloud_test_catalog, gcs_fake_credentials):
     assert content == "original"
 
 
+@pytest.mark.parametrize("is_studio", (False,))
 @pytest.mark.parametrize(
     "tree", [{"test-signed-file-versioned": "original"}], indirect=True
 )

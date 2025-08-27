@@ -6,6 +6,7 @@ from multiprocessing import freeze_support
 from typing import Optional
 
 from datachain.cli.utils import get_logging_level
+from datachain.error import DataChainError as DataChainError
 
 from .commands import (
     clear_cache,
