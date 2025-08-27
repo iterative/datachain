@@ -432,12 +432,12 @@ def test_read_storage_multiple_uris_files(test_session, tmp_dir, tmp_path, use_c
         [
             f"file://{tmp_path}/img1.jpg",
             f"file://{tmp_path}/img2.jpg",
-            f"file://{tmp_dir}/output/*",
+            f"file://{tmp_dir}/output/",
         ]
     )
     assert chain.count() == 4
 
-    chain = dc.read_storage([f"file://{tmp_dir}/output/*"])
+    chain = dc.read_storage([f"file://{tmp_dir}/output/"])
     assert chain.count() == 2
 
 
