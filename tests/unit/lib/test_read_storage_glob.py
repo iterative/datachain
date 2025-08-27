@@ -373,7 +373,7 @@ class TestReadStorageGlobPatterns:
 
         # Verify that filter was called (glob pattern detected and applied)
         assert mock_chain.filter.called
-        
+
         # Check that the filter call includes the directory path
         filter_calls = mock_chain.filter.call_args_list
         assert len(filter_calls) > 0
