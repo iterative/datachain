@@ -6,11 +6,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import datachain as dc
-from datachain.lib.dc.storage import expand_brace_pattern, split_uri_pattern
-from datachain.lib.file import File
 
 # Ensure the datasets module is loaded before we try to patch it
-import datachain.lib.dc.datasets as _datasets_module
+from datachain.lib.dc.storage import expand_brace_pattern, split_uri_pattern
+from datachain.lib.file import File
 
 
 class TestSplitUriPattern:
