@@ -425,3 +425,45 @@ def test_delta_and_delta_retry_no_duplicates(test_session):
     assert len(ids_in_result) == 4
     assert len(set(ids_in_result)) == 4  # No duplicate IDs
     assert set(ids_in_result) == {1, 2, 3, 4}
+
+
+def test_repeating_errors(test_session):
+    from collections.abc import Iterator
+
+    def create_input(num_values):
+        (
+            dc.read_values(
+                id=[i + 1 for i in range(num_values)],
+                name=[str(i + 1) for i in range(num_values)],
+                session=test_session,
+            ).save("input")
+        )
+
+    def run_delta():
+        def func(id) -> Iterator[tuple[int, str, str]]:
+            yield id, "name1", "error"
+            yield id, "name2", "error"
+
+        return (
+            dc.read_dataset(
+                "input",
+                delta=True,
+                delta_on="id",
+                delta_result_on="id",
+                delta_retry="error",
+                session=test_session,
+            )
+            .gen(func, output={"id": int, "name": str, "error": str})
+            .save("processed_data")
+        )
+        return dc.read_dataset("processed_data")
+
+    create_input(1)
+    ch1 = run_delta()
+    assert sorted(ch1.collect("id")) == [1, 1]
+    create_input(2)
+    ch2 = run_delta()
+    assert sorted(ch2.collect("id")) == [1, 1, 1, 1, 2, 2]
+    create_input(3)
+    ch3 = run_delta()
+    assert sorted(ch3.collect("id")) == [1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3]

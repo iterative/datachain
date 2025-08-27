@@ -124,7 +124,13 @@ def _get_retry_chain(
     # Subtract also diff chain since some items might be picked
     # up by `delta=True` itself (e.g. records got modified AND are missing in the
     # result dataset atm)
-    return retry_chain.subtract(diff_chain, on=on) if retry_chain else None
+    return (
+        retry_chain.diff(
+            diff_chain, on="id", added=True, same=True, modified=False, deleted=False
+        )
+        if retry_chain
+        else None
+    )
 
 
 def _get_source_info(
