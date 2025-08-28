@@ -417,9 +417,7 @@ class JSONSerialize(json.JSONEncoder):
 
 def inside_colab() -> bool:
     try:
-        from google import (
-            colab,  # type: ignore[import-not-found, attr-defined]  # noqa: F401
-        )
+        from google import colab  # type: ignore[attr-defined]  # noqa: F401
     except ImportError:
         return False
     return True
