@@ -83,15 +83,19 @@ def test_simple_wildcard(tmp_dir):
     assert names == {"temp1.tmp", "temp2.tmp"}
 
 
-def test_globstar_recursive_patterns(tmp_dir):
+def test_recursive(tmp_dir):
     result = dc.read_storage(f"{tmp_dir}/deep/**/*.mp3")
     files = {f.name for f in result.to_values("file")}
     assert files == {"audio.mp3", "song1.mp3", "track2.mp3"}
 
+
+def test_recursive_patterns_ext(tmp_dir):
     result = dc.read_storage(f"{tmp_dir}/deep/level1/**/level4/*")
     files = {f.name for f in result.to_values("file")}
     assert files == {"config.yaml", "data.json", "info.txt"}
 
+
+def test_recursive_double(tmp_dir):
     result = dc.read_storage(f"{tmp_dir}/deep/**/music/**/*.mp3")
     files = {f.name for f in result.to_values("file")}
     assert files == {"song1.mp3", "track2.mp3"}
