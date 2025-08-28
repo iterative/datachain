@@ -15,6 +15,7 @@ from datachain.func.base import Function
 from datachain.lib.data_model import DataModel, DataType
 from datachain.lib.utils import DataChainParamsError
 from datachain.query.schema import DEFAULT_DELIMITER
+from datachain.utils import getenv_bool
 
 if TYPE_CHECKING:
     from typing_extensions import Concatenate, ParamSpec
@@ -24,6 +25,10 @@ if TYPE_CHECKING:
     P = ParamSpec("P")
 
 D = TypeVar("D", bound="DataChain")
+
+
+def is_studio() -> bool:
+    return getenv_bool("DATACHAIN_IS_STUDIO", default=False)
 
 
 def resolve_columns(
