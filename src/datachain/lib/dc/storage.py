@@ -64,7 +64,6 @@ def _apply_glob_filter(
     return chain.filter(Column(f"{column}.path").glob(sqlite_pattern))
 
 
-
 def read_storage(
     uri: Union[str, os.PathLike[str], list[str], list[os.PathLike[str]]],
     *,
