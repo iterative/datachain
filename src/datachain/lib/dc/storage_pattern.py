@@ -233,11 +233,11 @@ def convert_globstar_to_sqlite(filter_pattern: str) -> str:
         # Special case: pattern like **/* means zero or more directories
         # This is tricky because SQLite GLOB can't express "zero or more"
         # We need different handling based on the pattern structure
-        
+
         if filter_pattern == "**/*":
             # Match everything
             return "*"
-        elif filter_pattern.startswith("**/"):
+        if filter_pattern.startswith("**/"):
             remaining = filter_pattern[3:]
             if "/" not in remaining:
                 # Pattern like **/*.ext or **/temp?.*
@@ -249,11 +249,11 @@ def convert_globstar_to_sqlite(filter_pattern: str) -> str:
                 # Special handling: if it's a simple extension pattern, match broadly
                 if remaining.startswith("*."):
                     # Pattern like **/*.ext - match any file with this extension
-                    return remaining  # This matches *.ext at current level and deeper with recursion
-                else:
-                    # Pattern like **/temp?.* - match as filename in subdirs
-                    return f"*/{remaining}"
-        
+                    # This matches *.ext at current level and deeper with recursion:
+                    return remaining
+                # Pattern like **/temp?.* - match as filename in subdirs
+                return f"*/{remaining}"
+
         # Default: Zero or one globstar - simple replacement
         return filter_pattern.replace("**", "*")
 
