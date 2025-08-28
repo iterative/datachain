@@ -90,12 +90,16 @@ def read_storage(
     It returns the chain itself as usual.
 
     Parameters:
-        uri : storage URI with directory or list of URIs.
-            URIs must start with storage prefix such
-            as `s3://`, `gs://`, `az://` or "file:///"
+        uri : Storage path(s) or URI(s). Can be a local path or start with a
+            storage prefix like `s3://`, `gs://`, `az://` or "file:///".
+            Supports glob patterns:
+              - `*` : wildcard
+              - `**` : recursive wildcard
+              - `?` : single character
+              - `{a,b}` : brace expansion
         type : read file as "binary", "text", or "image" data. Default is "binary".
         recursive : search recursively for the given path.
-        column : Created column name.
+        column : Column name that will contain File objects. Default is "file".
         update : force storage reindexing. Default is False.
         anon : If True, we will treat cloud bucket as public one
         client_config : Optional client configuration for the storage client.
@@ -129,12 +133,19 @@ def read_storage(
         chain = dc.read_storage("s3://my-bucket/my-dir")
         ```
 
+        Match all .json files recursively using glob pattern
+        ```py
+        chain = dc.read_storage("gs://bucket/meta/**/*.json")
+        ```
+
+        Match image file extensions for directories with pattern
+        ```py
+        chain = dc.read_storage("s3://bucket/202?/**/*.{jpg,jpeg,png}")
+        ```
+
         Multiple URIs:
         ```python
-        chain = dc.read_storage([
-            "s3://bucket1/dir1",
-            "s3://bucket2/dir2"
-        ])
+        chain = dc.read_storage(["s3://my-bkt/dir1", "s3://bucket2/dir2/dir3"])
         ```
 
         With AWS S3-compatible storage:
@@ -144,19 +155,6 @@ def read_storage(
             client_config = {"aws_endpoint_url": "<minio-endpoint-url>"}
         )
         ```
-
-        Pass existing session
-        ```py
-        session = Session.get()
-        chain = dc.read_storage([
-            "path/to/dir1",
-            "path/to/dir2"
-        ], session=session, recursive=True)
-        ```
-
-    Note:
-        When using multiple URIs with `update=True`, the function optimizes by
-        avoiding redundant updates for URIs pointing to the same storage location.
     """
     from .datachain import DataChain
     from .datasets import read_dataset
