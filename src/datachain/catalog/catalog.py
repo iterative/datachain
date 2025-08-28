@@ -113,6 +113,11 @@ else:
     SIGINT = signal.SIGINT
 
 
+def is_namespace_local(namespace_name) -> bool:
+    """Checks if namespace is from local environment, i.e. is `local`"""
+    return namespace_name == "local"
+
+
 def shutdown_process(
     proc: subprocess.Popen,
     interrupt_timeout: Optional[int] = None,
@@ -1128,6 +1133,8 @@ class Catalog:
         pull_dataset: bool = False,
         update: bool = False,
     ) -> DatasetRecord:
+        from datachain.lib.dc.utils import is_studio
+
         # Intentionally ignore update flag is version is provided. Here only exact
         # version can be provided and update then doesn't make sense.
         # It corresponds to a query like this for example:
@@ -1136,7 +1143,12 @@ class Catalog:
         if version:
             update = False
 
-        if self.metastore.is_local_dataset(namespace_name) or not update:
+        # we don't do Studio fallback is script is already ran in Studio, or if we try
+        # to fetch dataset with local namespace as that one cannot
+        # exist in Studio in the first place
+        no_fallback = is_studio() or is_namespace_local(namespace_name)
+
+        if no_fallback or not update:
             try:
                 ds = self.get_dataset(
                     name,
@@ -1148,7 +1160,7 @@ class Catalog:
             except (NamespaceNotFoundError, ProjectNotFoundError, DatasetNotFoundError):
                 pass
 
-        if self.metastore.is_local_dataset(namespace_name):
+        if no_fallback:
             raise DatasetNotFoundError(
                 f"Dataset {name}"
                 + (f" version {version} " if version else " ")
