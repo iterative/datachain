@@ -69,6 +69,7 @@ def count_dict_items(d):
         count += count_dict_items(value)
     return count
 
+
 @pytest.fixture
 def tmp_dir(tmp_path):
     instantiate_tree(tmp_path, DEEP_TREE)
@@ -90,7 +91,7 @@ def test_globstar_recursive_patterns(tmp_dir):
     result = dc.read_storage(f"{tmp_dir}/deep/level1/**/level4/*")
     files = {f.name for f in result.to_values("file")}
     assert files == {"config.yaml", "data.json", "info.txt"}
-    
+
     result = dc.read_storage(f"{tmp_dir}/deep/**/music/**/*.mp3")
     files = {f.name for f in result.to_values("file")}
     assert files == {"song1.mp3", "track2.mp3"}
@@ -100,11 +101,11 @@ def test_question_mark_patterns(tmp_dir):
     result = dc.read_storage(f"{tmp_dir}/deep/media/videos/movie?.mp4")
     files = {f.name for f in result.to_values("file")}
     assert files == {"movie1.mp4"}
-    
+
     result = dc.read_storage(f"{tmp_dir}/deep/level1/temp/temp?.tmp")
     files = {f.name for f in result.to_values("file")}
     assert files == {"temp1.tmp", "temp2.tmp"}
-    
+
     result = dc.read_storage(f"{tmp_dir}/deep/media/videos/movie?.avi")
     files = {f.name for f in result.to_values("file")}
     assert files == {"movie2.avi"}
@@ -120,7 +121,7 @@ def test_brace_expansion_patterns(tmp_dir):
     result = dc.read_storage(f"{tmp_dir}/deep/level1/level2/{{documents,images}}/*")
     files = {f.name for f in result.to_values("file")}
     assert files == {"notes.md", "photo1.jpg", "photo2.png", "report.pdf"}
-    
+
     # Brace expansion for extension without globstar
     result = dc.read_storage(f"{tmp_dir}/deep/media/videos/*.{{mp4,avi,mkv}}")
     files = {f.name for f in result.to_values("file")}
@@ -164,20 +165,22 @@ def test_very_deep_nesting_patterns(tmp_dir):
 
 def test_edge_cases_and_empty_results(tmp_dir):
     result = dc.read_storage(f"{tmp_dir}/deep/**/*.nonexistent")
-    assert  [f.name for f in result.to_values("file")] == []
-    
+    assert [f.name for f in result.to_values("file")] == []
+
     result = dc.read_storage(f"{tmp_dir}/deep/nonexistent/*.txt")
-    assert  [f.name for f in result.to_values("file")] == []
-    
+    assert [f.name for f in result.to_values("file")] == []
+
     result = dc.read_storage(f"{tmp_dir}/deep/media/*.mp3")
-    assert  [f.name for f in result.to_values("file")] == []
-    
+    assert [f.name for f in result.to_values("file")] == []
+
     result = dc.read_storage(f"{tmp_dir}/deep/**/level5/*.txt")
-    assert  [f.name for f in result.to_values("file")] == []
+    assert [f.name for f in result.to_values("file")] == []
 
 
 def test_pattern_performance_with_large_structure(tmp_dir):
-    assert dc.read_storage(f"{tmp_dir}/deep/**/*").count() == count_dict_items(DEEP_TREE)
+    assert dc.read_storage(f"{tmp_dir}/deep/**/*").count() == count_dict_items(
+        DEEP_TREE
+    )
 
     result = dc.read_storage(f"{tmp_dir}/deep/**/*.txt")
     assert [f.name for f in result.to_values("file")] == ["info.txt"]
@@ -205,6 +208,8 @@ def test_mixed_pattern_types(tmp_dir):
     assert files == {"temp1.tmp", "temp2.tmp"}
 
     # Complex pattern with all types
-    result = dc.read_storage(f"{tmp_dir}/deep/**/level?/{{backup,temp}}/**/*.{{tmp,zip,tar}}")
+    result = dc.read_storage(
+        f"{tmp_dir}/deep/**/level?/{{backup,temp}}/**/*.{{tmp,zip,tar}}"
+    )
     files = {f.name for f in result.to_values("file")}
     assert files == {"archive.zip", "current.tar", "temp1.tmp", "temp2.tmp"}
