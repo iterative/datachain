@@ -5,7 +5,12 @@ and converting patterns to SQLite-compatible formats.
 """
 
 import glob
-from typing import Union
+from typing import TYPE_CHECKING, Union
+
+from datachain.lib.listing import ls
+
+if TYPE_CHECKING:
+    from .datachain import DataChain
 
 
 def split_uri_pattern(uri: str) -> tuple[str, Union[str, None]]:
@@ -286,3 +291,38 @@ def convert_globstar_to_sqlite(filter_pattern: str) -> str:
             result = f"*{middle_pattern}*"
 
     return result
+
+
+def apply_glob_filter(
+    dc: "DataChain",
+    patterns: list[str],
+    list_path: str,
+    use_recursive: bool,
+    column: str,
+) -> "DataChain":
+    """Apply glob filter to a DataChain based on a single pattern.
+
+    Since brace expansion now happens at URI level, this function
+    only needs to handle single patterns.
+    """
+    from datachain.query.schema import Column
+
+    chain = ls(dc, list_path, recursive=use_recursive, column=column)
+
+    # Should only receive single patterns now (brace expansion happens earlier)
+    if len(patterns) != 1:
+        raise ValueError(f"Expected single pattern, got {len(patterns)}")
+
+    pattern = patterns[0]
+
+    # If pattern doesn't contain path separator and list_path is not empty,
+    # prepend the list_path to make the pattern match correctly
+    if list_path and "/" not in pattern:
+        filter_pattern = f"{list_path.rstrip('/')}/{pattern}"
+    else:
+        filter_pattern = pattern
+
+    # Convert globstar patterns to SQLite-compatible patterns
+    sqlite_pattern = convert_globstar_to_sqlite(filter_pattern)
+
+    return chain.filter(Column(f"{column}.path").glob(sqlite_pattern))

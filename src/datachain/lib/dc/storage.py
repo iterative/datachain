@@ -8,7 +8,7 @@ from typing import (
 )
 
 from datachain.lib.dc.storage_pattern import (
-    convert_globstar_to_sqlite,
+    apply_glob_filter,
     expand_uri_braces,
     should_use_recursion,
     split_uri_pattern,
@@ -27,41 +27,6 @@ from datachain.query import Session
 
 if TYPE_CHECKING:
     from .datachain import DataChain
-
-
-def _apply_glob_filter(
-    dc: "DataChain",
-    patterns: list[str],
-    list_path: str,
-    use_recursive: bool,
-    column: str,
-) -> "DataChain":
-    """Apply glob filter to a DataChain based on a single pattern.
-
-    Since brace expansion now happens at URI level, this function
-    only needs to handle single patterns.
-    """
-    from datachain.query.schema import Column
-
-    chain = ls(dc, list_path, recursive=use_recursive, column=column)
-
-    # Should only receive single patterns now (brace expansion happens earlier)
-    if len(patterns) != 1:
-        raise ValueError(f"Expected single pattern, got {len(patterns)}")
-
-    pattern = patterns[0]
-
-    # If pattern doesn't contain path separator and list_path is not empty,
-    # prepend the list_path to make the pattern match correctly
-    if list_path and "/" not in pattern:
-        filter_pattern = f"{list_path.rstrip('/')}/{pattern}"
-    else:
-        filter_pattern = pattern
-
-    # Convert globstar patterns to SQLite-compatible patterns
-    sqlite_pattern = convert_globstar_to_sqlite(filter_pattern)
-
-    return chain.filter(Column(f"{column}.path").glob(sqlite_pattern))
 
 
 def read_storage(
@@ -257,7 +222,7 @@ def read_storage(
             use_recursive = should_use_recursion(glob_pattern, recursive or False)
 
             # Apply glob filter - no need for brace expansion here as it's done above
-            chain = _apply_glob_filter(
+            chain = apply_glob_filter(
                 dc, [glob_pattern], list_path, use_recursive, column
             )
             chains.append(chain)
