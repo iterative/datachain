@@ -82,7 +82,7 @@ def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
     create_delta_dataset(ds_name)
 
 
-def test_delta_update_unsafe(test_session, tmp_dir, tmp_path):
+def test_delta_update_unsafe(test_session):
     catalog = test_session.catalog
 
     starting_ds_name = "starting_ds"
