@@ -8,7 +8,7 @@ import pytest
 import datachain as dc
 
 # Ensure the datasets module is loaded before we try to patch it
-from datachain.lib.dc.storage import expand_brace_pattern, split_uri_pattern
+from datachain.lib.dc.storage_pattern import expand_brace_pattern, split_uri_pattern
 from datachain.lib.file import File
 
 
