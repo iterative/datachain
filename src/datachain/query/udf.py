@@ -40,6 +40,7 @@ class AbstractUDFDistributor(ABC):
         use_cache: bool,
         is_generator: bool = False,
         min_task_size: Optional[Union[str, int]] = None,
+        batch_size: Optional[int] = None,
     ) -> None: ...
 
     @abstractmethod

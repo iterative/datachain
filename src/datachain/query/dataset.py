@@ -448,6 +448,7 @@ class UDFStep(Step, ABC):
                         use_cache=self.cache,
                         is_generator=self.is_generator,
                         min_task_size=self.min_task_size,
+                        batch_size=self.batch_size,
                     )
                     udf_distributor()
                     return
