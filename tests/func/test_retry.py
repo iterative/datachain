@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
@@ -428,17 +429,6 @@ def test_delta_and_delta_retry_no_duplicates(test_session):
 
 
 def test_repeating_errors(test_session):
-    from collections.abc import Iterator
-
-    def create_input(num_values):
-        (
-            dc.read_values(
-                id=[i + 1 for i in range(num_values)],
-                name=[str(i + 1) for i in range(num_values)],
-                session=test_session,
-            ).save("input")
-        )
-
     def run_delta():
         def func(id) -> Iterator[tuple[int, str, str]]:
             yield id, "name1", "error"
@@ -446,7 +436,7 @@ def test_repeating_errors(test_session):
 
         return (
             dc.read_dataset(
-                "input",
+                "sample_data",
                 delta=True,
                 delta_on="id",
                 delta_result_on="id",
@@ -458,12 +448,20 @@ def test_repeating_errors(test_session):
         )
         return dc.read_dataset("processed_data")
 
-    create_input(1)
+    _create_sample_data(
+        test_session, ids=list(range(1)), contents=[str(i) for i in range(1)]
+    )
     ch1 = run_delta()
-    assert sorted(ch1.collect("id")) == [1, 1]
-    create_input(2)
+    assert sorted(ch1.collect("id")) == [0, 0]
+
+    _create_sample_data(
+        test_session, ids=list(range(2)), contents=[str(i) for i in range(2)]
+    )
     ch2 = run_delta()
-    assert sorted(ch2.collect("id")) == [1, 1, 1, 1, 2, 2]
-    create_input(3)
+    assert sorted(ch2.collect("id")) == [0, 0, 0, 0, 1, 1]
+
+    _create_sample_data(
+        test_session, ids=list(range(3)), contents=[str(i) for i in range(3)]
+    )
     ch3 = run_delta()
-    assert sorted(ch3.collect("id")) == [1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3]
+    assert sorted(ch3.collect("id")) == [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2]
