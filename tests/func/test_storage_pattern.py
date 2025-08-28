@@ -115,28 +115,31 @@ def test_question_mark_patterns(tmp_dir):
     assert files == {"movie2.avi"}
 
 
-def test_brace_expansion_patterns(tmp_dir):
-    # Brace expansion for file extensions
+def test_brace_file_extension(tmp_dir):
     result = dc.read_storage(f"{tmp_dir}/deep/**/*.{{mp3,wav,flac}}")
     files = {f.name for f in result.to_values("file")}
     assert files == {"audio.mp3", "song1.mp3", "song2.flac", "track1.wav", "track2.mp3"}
 
-    # Brace expansion with directory names
+
+def test_brace_dir(tmp_dir):
     result = dc.read_storage(f"{tmp_dir}/deep/level1/level2/{{documents,images}}/*")
     files = {f.name for f in result.to_values("file")}
     assert files == {"notes.md", "photo1.jpg", "photo2.png", "report.pdf"}
 
-    # Brace expansion for extension without globstar
+
+def test_brace_file_extension_no_globstar(tmp_dir):
     result = dc.read_storage(f"{tmp_dir}/deep/media/videos/*.{{mp4,avi,mkv}}")
     files = {f.name for f in result.to_values("file")}
     assert files == {"movie1.mp4", "movie2.avi"}
 
 
-def test_combined_complex_patterns(tmp_dir):
+def test_combined_complex_patterns_file(tmp_dir):
     result = dc.read_storage(f"{tmp_dir}/deep/**/level?/**/*.{{json,yaml,txt}}")
     files = {f.name for f in result.to_values("file")}
     assert files == {"config.yaml", "data.json", "info.txt"}
 
+
+def test_combined_complex_patterns_dir(tmp_dir):
     result = dc.read_storage(f"{tmp_dir}/deep/level1/{{backup,temp}}/**/*.*")
     files = {f.name for f in result.to_values("file")}
     assert files == {"archive.zip", "current.tar", "temp1.tmp", "temp2.tmp", "log1.log"}
