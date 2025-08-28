@@ -1,7 +1,7 @@
 """Pattern matching utilities for storage operations.
 
 This module contains functions for handling glob patterns, brace expansion,
-and converting patterns to SQLite-compatible formats.
+and converting patterns to GLOB-compatible formats.
 """
 
 import glob
@@ -213,17 +213,17 @@ def expand_uri_braces(uri: str) -> list[str]:
     return expand_brace_pattern(uri)
 
 
-def convert_globstar_to_sqlite(filter_pattern: str) -> str:
-    """Convert globstar patterns to SQLite GLOB patterns.
+def convert_globstar_to_glob(filter_pattern: str) -> str:
+    """Convert globstar patterns to GLOB patterns.
 
-    SQLite's GLOB doesn't understand ** as recursive wildcard,
+    Standard GLOB doesn't understand ** as recursive wildcard,
     so we need to convert patterns appropriately.
 
     Args:
         filter_pattern: Pattern that may contain globstars (**)
 
     Returns:
-        SQLite-compatible GLOB pattern
+        GLOB-compatible pattern
     """
     if "**" not in filter_pattern:
         return filter_pattern
@@ -236,7 +236,7 @@ def convert_globstar_to_sqlite(filter_pattern: str) -> str:
 
     if num_globstars <= 1:
         # Special case: pattern like **/* means zero or more directories
-        # This is tricky because SQLite GLOB can't express "zero or more"
+        # This is tricky because GLOB can't express "zero or more"
         # We need different handling based on the pattern structure
 
         if filter_pattern == "**/*":
@@ -249,7 +249,7 @@ def convert_globstar_to_sqlite(filter_pattern: str) -> str:
                 # The ** means zero or more directories
                 # For zero directories: pattern should be just the filename pattern
                 # For one or more: pattern should be */filename
-                # Since we can't OR in SQLite, we choose the more permissive option
+                # Since we can't OR in GLOB, we choose the more permissive option
                 # that works with recursive listing
                 # Special handling: if it's a simple extension pattern, match broadly
                 if remaining.startswith("*."):
@@ -322,7 +322,7 @@ def apply_glob_filter(
     else:
         filter_pattern = pattern
 
-    # Convert globstar patterns to SQLite-compatible patterns
-    sqlite_pattern = convert_globstar_to_sqlite(filter_pattern)
+    # Convert globstar patterns to GLOB-compatible patterns
+    glob_pattern = convert_globstar_to_glob(filter_pattern)
 
-    return chain.filter(Column(f"{column}.path").glob(sqlite_pattern))
+    return chain.filter(Column(f"{column}.path").glob(glob_pattern))
