@@ -130,40 +130,88 @@ def _apply_glob_filter(
     use_recursive: bool,
     column: str,
 ) -> "DataChain":
-    """Apply glob filter to a DataChain based on patterns."""
+    """Apply glob filter to a DataChain based on a single pattern.
+
+    Since brace expansion now happens at URI level, this function
+    only needs to handle single patterns.
+    """
     from datachain.query.schema import Column
 
     chain = ls(dc, list_path, recursive=use_recursive, column=column)
 
-    if len(patterns) == 1:
-        # Single pattern - use direct glob filter
-        # If pattern doesn't contain path separator and list_path is not empty,
-        # prepend the list_path to make the pattern match correctly
-        if list_path and "/" not in patterns[0]:
-            filter_pattern = f"{list_path.rstrip('/')}/{patterns[0]}"
-        else:
-            filter_pattern = patterns[0]
-        return chain.filter(Column(f"{column}.path").glob(filter_pattern))
+    # Should only receive single patterns now (brace expansion happens earlier)
+    if len(patterns) != 1:
+        raise ValueError(f"Expected single pattern, got {len(patterns)}")
 
-    # Multiple patterns (from brace expansion) - use OR filter
-    filter_expr = None
-    for pattern in patterns:
-        # If pattern doesn't contain path separator and list_path is
-        # not empty, prepend the list_path to make pattern match correctly
-        if list_path and "/" not in pattern:
-            filter_pattern = f"{list_path.rstrip('/')}/{pattern}"
+    pattern = patterns[0]
+
+    # If pattern doesn't contain path separator and list_path is not empty,
+    # prepend the list_path to make the pattern match correctly
+    if list_path and "/" not in pattern:
+        filter_pattern = f"{list_path.rstrip('/')}/{pattern}"
+    else:
+        filter_pattern = pattern
+
+    # Convert globstar patterns to SQLite-compatible patterns
+    sqlite_pattern = _convert_globstar_to_sqlite(filter_pattern)
+
+    return chain.filter(Column(f"{column}.path").glob(sqlite_pattern))
+
+
+def _convert_globstar_to_sqlite(filter_pattern: str) -> str:
+    """Convert globstar patterns to SQLite GLOB patterns.
+
+    SQLite's GLOB doesn't understand ** as recursive wildcard,
+    so we need to convert patterns appropriately.
+    """
+    if "**" not in filter_pattern:
+        return filter_pattern
+
+    parts = filter_pattern.split("/")
+    globstar_positions = [i for i, p in enumerate(parts) if p == "**"]
+
+    # Handle different cases based on number of globstars
+    num_globstars = len(globstar_positions)
+
+    if num_globstars <= 1:
+        # Zero or one globstar - simple replacement
+        return filter_pattern.replace("**", "*")
+
+    # Multiple globstars - need more careful handling
+    # For patterns like **/level?/backup/**/*.ext
+    # We want to match any path containing /level?/backup/ and ending with .ext
+
+    # Find middle directories (between first and last **)
+    middle_parts = []
+    start_idx = globstar_positions[0] + 1
+    end_idx = globstar_positions[-1]
+    for i in range(start_idx, end_idx):
+        if parts[i] != "**":
+            middle_parts.append(parts[i])
+
+    if not middle_parts:
+        # No fixed middle parts, just use wildcards
+        result = filter_pattern.replace("**", "*")
+    else:
+        # Create pattern that matches the middle parts
+        middle_pattern = "/".join(middle_parts)
+        # Get the file pattern at the end if any
+        last_part = parts[-1] if parts[-1] != "**" else "*"
+
+        # Match any path containing this pattern
+        if last_part != "*":
+            # Has specific file pattern
+            result = f"*{middle_pattern}*{last_part}"
         else:
-            filter_pattern = pattern
-        pattern_filter = Column(f"{column}.path").glob(filter_pattern)
-        filter_expr = (
-            pattern_filter if filter_expr is None else filter_expr | pattern_filter
-        )
-    return chain.filter(filter_expr)
+            result = f"*{middle_pattern}*"
+
+    return result
 
 
 def expand_brace_pattern(pattern: str) -> list[str]:
     """
-    Expand brace patterns like *.{mp3,wav} into multiple glob patterns.
+    Recursively expand brace patterns like *.{mp3,wav} into multiple glob patterns.
+    Handles nested and multiple brace patterns.
 
     Args:
         pattern: Pattern that may contain brace expansion
@@ -173,14 +221,57 @@ def expand_brace_pattern(pattern: str) -> list[str]:
 
     Examples:
         "*.{mp3,wav}" -> ["*.mp3", "*.wav"]
+        "{a,b}/{c,d}" -> ["a/c", "a/d", "b/c", "b/d"]
         "*.txt" -> ["*.txt"]
+        "{{a,b}}" -> ["{a}", "{b}"]  # Handle double braces
     """
     if "{" not in pattern or "}" not in pattern:
         return [pattern]
 
-    # Find brace pattern
+    # Handle double braces {{...}} by treating them as single braces
+    # Replace {{ with a placeholder, expand, then restore
+    if "{{" in pattern:
+        # Replace {{ and }} with placeholders temporarily
+        pattern = pattern.replace("{{", "\x00OPENBRACE\x00")
+        pattern = pattern.replace("}}", "\x00CLOSEBRACE\x00")
+
+        # Find and expand single braces
+        expanded = _expand_single_braces(pattern)
+
+        # Restore the double braces as single braces
+        result = []
+        for p in expanded:
+            p = p.replace("\x00OPENBRACE\x00", "{")
+            p = p.replace("\x00CLOSEBRACE\x00", "}")
+            result.append(p)
+
+        # Now recursively expand any remaining braces
+        final_result = []
+        for p in result:
+            final_result.extend(expand_brace_pattern(p))
+
+        return final_result
+
+    return _expand_single_braces(pattern)
+
+
+def _expand_single_braces(pattern: str) -> list[str]:
+    """Helper to expand single-level braces."""
+    if "{" not in pattern or "}" not in pattern:
+        return [pattern]
+
+    # Find the first complete brace pattern
     start = pattern.index("{")
-    end = pattern.index("}")
+    end = start
+    depth = 0
+    for i in range(start, len(pattern)):
+        if pattern[i] == "{":
+            depth += 1
+        elif pattern[i] == "}":
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
 
     if start >= end:
         return [pattern]
@@ -189,12 +280,33 @@ def expand_brace_pattern(pattern: str) -> list[str]:
     suffix = pattern[end + 1 :]
     options = pattern[start + 1 : end].split(",")
 
-    # Generate all combinations
+    # Generate all combinations and recursively expand
     expanded = []
     for option in options:
-        expanded.append(prefix + option.strip() + suffix)
+        combined = prefix + option.strip() + suffix
+        # Recursively expand any remaining braces
+        expanded.extend(_expand_single_braces(combined))
 
     return expanded
+
+
+def _expand_uri_braces(uri: str) -> list[str]:
+    """
+    Expand a URI that may contain brace patterns into multiple URIs.
+
+    Args:
+        uri: URI that may contain brace patterns
+
+    Returns:
+        List of URIs with all brace patterns expanded
+
+    Examples:
+        "s3://bucket/{a,b}/*.txt" -> ["s3://bucket/a/*.txt", "s3://bucket/b/*.txt"]
+        "file:///root/{dir1,dir2}/**/*.{mp3,wav}" ->
+            ["file:///root/dir1/**/*.mp3", "file:///root/dir1/**/*.wav",
+             "file:///root/dir2/**/*.mp3", "file:///root/dir2/**/*.wav"]
+    """
+    return expand_brace_pattern(uri)
 
 
 def read_storage(
@@ -312,13 +424,24 @@ def read_storage(
     if not uris:
         raise ValueError("No URIs provided")
 
+    # First, expand all URIs that contain brace patterns
+    expanded_uris = []
+    for single_uri in uris:
+        uri_str = str(single_uri)
+        # Check if URI contains braces and expand them
+        if "{" in uri_str and "}" in uri_str:
+            expanded_uris.extend(_expand_uri_braces(uri_str))
+        else:
+            expanded_uris.append(uri_str)
+
+    # Now process each expanded URI
     chains = []
     listed_ds_name = set()
     file_values = []
 
-    for single_uri in uris:
+    for single_uri in expanded_uris:
         # Check if URI contains glob patterns and split them
-        base_uri, glob_pattern = split_uri_pattern(str(single_uri))
+        base_uri, glob_pattern = split_uri_pattern(single_uri)
 
         # If a pattern is found, use the base_uri for listing
         # The pattern will be used for filtering later
@@ -377,14 +500,13 @@ def read_storage(
         # If a glob pattern was detected, use it for filtering
         # Otherwise, use the original list_path from get_listing
         if glob_pattern:
-            # Handle brace expansion patterns
-            patterns = expand_brace_pattern(glob_pattern)
-
             # Determine if we should use recursive listing based on the pattern
             use_recursive = _should_use_recursion(glob_pattern, recursive or False)
 
-            # Apply glob filter(s)
-            chain = _apply_glob_filter(dc, patterns, list_path, use_recursive, column)
+            # Apply glob filter - no need for brace expansion here as it's done above
+            chain = _apply_glob_filter(
+                dc, [glob_pattern], list_path, use_recursive, column
+            )
             chains.append(chain)
         else:
             # No glob pattern detected, use normal ls behavior
