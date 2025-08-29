@@ -8,7 +8,6 @@ from datetime import datetime
 from pathlib import PosixPath
 from time import sleep
 from typing import NamedTuple
-from unittest.mock import PropertyMock, patch
 
 import attrs
 import pytest
@@ -21,7 +20,6 @@ from datachain.catalog import Catalog
 from datachain.catalog.loader import get_metastore, get_warehouse
 from datachain.cli.utils import CommaSeparatedArgs
 from datachain.config import Config, ConfigLevel
-from datachain.data_storage.metastore import AbstractMetastore
 from datachain.data_storage.sqlite import (
     SQLiteDatabaseEngine,
     SQLiteMetastore,
@@ -543,43 +541,15 @@ def cloud_test_catalog_tmpfile(
 
 
 @pytest.fixture
-def allow_create_project():
-    return True
-
-
-@pytest.fixture
-def allow_create_namespace():
+def is_studio():
     return True
 
 
 @pytest.fixture(autouse=True)
-def mock_allowed_to_create_project(allow_create_project):
-    if not allow_create_project:
-        yield
-    else:
-        with patch.object(
-            AbstractMetastore, "project_allowed_to_create", new_callable=PropertyMock
-        ) as mock_metastore:
-            mock_metastore.return_value = True
-            yield
-
-
-@pytest.fixture(autouse=True)
-def mock_allowed_to_create_namespace(allow_create_namespace):
-    if not allow_create_namespace:
-        yield
-    else:
-        with patch.object(
-            AbstractMetastore, "namespace_allowed_to_create", new_callable=PropertyMock
-        ) as mock_metastore:
-            mock_metastore.return_value = True
-            yield
-
-
-@pytest.fixture
-def mock_is_local_dataset():
-    with patch.object(AbstractMetastore, "is_local_dataset", return_value=True):
-        yield
+def mock_is_studio(monkeypatch, is_studio):
+    if is_studio:
+        monkeypatch.setenv("DATACHAIN_IS_STUDIO", "True")
+    yield
 
 
 @pytest.fixture

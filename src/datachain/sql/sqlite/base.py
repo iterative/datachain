@@ -8,8 +8,8 @@ from functools import cache
 from types import MappingProxyType
 from typing import Callable, Optional
 
-import orjson
 import sqlalchemy as sa
+import ujson as json
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql.elements import literal
@@ -182,7 +182,7 @@ def missing_vector_function(name, exc):
 
 
 def sqlite_string_split(string: str, sep: str, maxsplit: int = -1) -> str:
-    return orjson.dumps(string.split(sep, maxsplit)).decode("utf-8")
+    return json.dumps(string.split(sep, maxsplit), ensure_ascii=False)
 
 
 def sqlite_int_hash_64(x: int) -> int:
@@ -453,17 +453,17 @@ def compile_byte_hamming_distance(element, compiler, **kwargs):
 
 
 def py_json_array_length(arr):
-    return len(orjson.loads(arr))
+    return len(json.loads(arr))
 
 
 def py_json_array_contains(arr, value, is_json):
     if is_json:
-        value = orjson.loads(value)
-    return value in orjson.loads(arr)
+        value = json.loads(value)
+    return value in json.loads(arr)
 
 
 def py_json_array_get_element(val, idx):
-    arr = orjson.loads(val)
+    arr = json.loads(val)
     try:
         return arr[idx]
     except IndexError:
@@ -471,17 +471,18 @@ def py_json_array_get_element(val, idx):
 
 
 def py_json_array_slice(val, offset: int, length: Optional[int] = None):
-    arr = orjson.loads(val)
+    arr = json.loads(val)
     try:
-        return orjson.dumps(
-            list(arr[offset : offset + length] if length is not None else arr[offset:])
-        ).decode("utf-8")
+        return json.dumps(
+            list(arr[offset : offset + length] if length is not None else arr[offset:]),
+            ensure_ascii=False,
+        )
     except IndexError:
         return None
 
 
 def py_json_array_join(val, sep: str):
-    return sep.join(orjson.loads(val))
+    return sep.join(json.loads(val))
 
 
 def compile_array_get_element(element, compiler, **kwargs):

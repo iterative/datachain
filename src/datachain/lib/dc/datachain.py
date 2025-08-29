@@ -19,8 +19,8 @@ from typing import (
     overload,
 )
 
-import orjson
 import sqlalchemy
+import ujson as json
 from pydantic import BaseModel
 from sqlalchemy.sql.elements import ColumnElement
 from tqdm import tqdm
@@ -67,6 +67,7 @@ from .utils import (
     Sys,
     _get_merge_error_str,
     _validate_merge_on,
+    is_studio,
     resolve_columns,
 )
 
@@ -192,6 +193,7 @@ class DataChain:
         self._setup: dict = setup or {}
         self._sys = _sys
         self._delta = False
+        self._delta_unsafe = False
         self._delta_on: Optional[Union[str, Sequence[str]]] = None
         self._delta_result_on: Optional[Union[str, Sequence[str]]] = None
         self._delta_compare: Optional[Union[str, Sequence[str]]] = None
@@ -215,6 +217,7 @@ class DataChain:
         right_on: Optional[Union[str, Sequence[str]]] = None,
         compare: Optional[Union[str, Sequence[str]]] = None,
         delta_retry: Optional[Union[bool, str]] = None,
+        delta_unsafe: bool = False,
     ) -> "Self":
         """Marks this chain as delta, which means special delta process will be
         called on saving dataset for optimization"""
@@ -225,6 +228,7 @@ class DataChain:
         self._delta_result_on = right_on
         self._delta_compare = compare
         self._delta_retry = delta_retry
+        self._delta_unsafe = delta_unsafe
         return self
 
     @property
@@ -236,6 +240,10 @@ class DataChain:
     def delta(self) -> bool:
         """Returns True if this chain is ran in "delta" update mode"""
         return self._delta
+
+    @property
+    def delta_unsafe(self) -> bool:
+        return self._delta_unsafe
 
     @property
     def schema(self) -> dict[str, DataType]:
@@ -327,6 +335,7 @@ class DataChain:
                 right_on=self._delta_result_on,
                 compare=self._delta_compare,
                 delta_retry=self._delta_retry,
+                delta_unsafe=self._delta_unsafe,
             )
 
         return chain
@@ -461,8 +470,6 @@ class DataChain:
         Returns:
             DataChain: A new DataChain instance with the new set of columns.
         """
-        import json
-
         import pyarrow as pa
 
         from datachain.lib.arrow import schema_to_output
@@ -609,7 +616,7 @@ class DataChain:
             project = self.session.catalog.metastore.get_project(
                 project_name,
                 namespace_name,
-                create=self.session.catalog.metastore.project_allowed_to_create,
+                create=is_studio(),
             )
         except ProjectNotFoundError as e:
             # not being able to create it as creation is not allowed
@@ -2128,9 +2135,9 @@ class DataChain:
             fsspec_fs = client.create_fs(**fs_kwargs)
 
         _partition_cols = list(partition_cols) if partition_cols else None
-        signal_schema_metadata = orjson.dumps(
-            self._effective_signals_schema.serialize()
-        )
+        signal_schema_metadata = json.dumps(
+            self._effective_signals_schema.serialize(), ensure_ascii=False
+        ).encode("utf-8")
 
         column_names, column_chunks = self.to_columnar_data_with_names(chunk_size)
 
@@ -2277,7 +2284,11 @@ class DataChain:
                         f.write(b"\n")
                 else:
                     is_first = False
-                f.write(orjson.dumps(row_to_nested_dict(headers, row)))
+                f.write(
+                    json.dumps(
+                        row_to_nested_dict(headers, row), ensure_ascii=False
+                    ).encode("utf-8")
+                )
             if include_outer_list:
                 # This makes the file JSON instead of JSON lines.
                 f.write(b"\n]\n")

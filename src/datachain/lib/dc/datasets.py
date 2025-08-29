@@ -13,7 +13,7 @@ from datachain.lib.signal_schema import SignalSchema
 from datachain.query import Session
 from datachain.query.dataset import DatasetQuery
 
-from .utils import Sys
+from .utils import Sys, is_studio
 from .values import read_values
 
 if TYPE_CHECKING:
@@ -40,6 +40,7 @@ def read_dataset(
     delta_result_on: Optional[Union[str, Sequence[str]]] = None,
     delta_compare: Optional[Union[str, Sequence[str]]] = None,
     delta_retry: Optional[Union[bool, str]] = None,
+    delta_unsafe: bool = False,
     update: bool = False,
 ) -> "DataChain":
     """Get data from a saved Dataset. It returns the chain itself.
@@ -80,6 +81,8 @@ def read_dataset(
         update: If True always checks for newer versions available on Studio, even if
             some version of the dataset exists locally already. If False (default), it
             will only fetch the dataset from Studio if it is not found locally.
+        delta_unsafe: Allow restricted ops in delta: merge, agg, union, group_by,
+            distinct.
 
 
     Example:
@@ -205,6 +208,7 @@ def read_dataset(
             right_on=delta_result_on,
             compare=delta_compare,
             delta_retry=delta_retry,
+            delta_unsafe=delta_unsafe,
         )
 
     return chain
@@ -343,7 +347,7 @@ def delete_dataset(
         namespace_name=namespace,
     )
 
-    if not catalog.metastore.is_local_dataset(namespace_name) and studio:
+    if not is_studio() and studio:
         return remove_studio_dataset(
             None, name, namespace_name, project_name, version=version, force=force
         )
@@ -418,6 +422,6 @@ def move_dataset(
         project_id=catalog.metastore.get_project(
             dest_project,
             dest_namespace,
-            create=catalog.metastore.project_allowed_to_create,
+            create=is_studio(),
         ).id,
     )

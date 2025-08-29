@@ -417,7 +417,7 @@ class JSONSerialize(json.JSONEncoder):
 
 def inside_colab() -> bool:
     try:
-        from google import colab  # noqa: F401
+        from google import colab  # type: ignore[attr-defined]  # noqa: F401
     except ImportError:
         return False
     return True
@@ -531,3 +531,10 @@ def safe_closing(thing: T) -> Iterator[T]:
     finally:
         if hasattr(thing, "close"):
             thing.close()
+
+
+def getenv_bool(name: str, default: bool = False) -> bool:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    return val.lower() in ("1", "true", "yes", "on")

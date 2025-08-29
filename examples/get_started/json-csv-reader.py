@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 
 import datachain as dc
@@ -39,7 +40,7 @@ def main():
     uri = "gs://datachain-demo/coco2017/annotations_captions/"
 
     # Print JSON schema in Pydantic format from main COCO annotation
-    chain = dc.read_storage(uri, anon="True").filter(dc.C("file.path").glob("*.json"))
+    chain = dc.read_storage(uri, anon=True).filter(dc.C("file.path").glob("*.json"))
     file = chain.limit(1).to_values("file")[0]
     print(gen_datamodel_code(file, jmespath="@", model_name="Coco"))
 
@@ -65,11 +66,12 @@ def main():
     dynamic_csv_ds.print_schema()
     dynamic_csv_ds.show()
 
-    print(
-        "Note: script might hang at the end due to https://github.com/apache/arrow/issues/43497"
-    )
-    print("Just press Ctrl+C to exit.")
-
 
 if __name__ == "__main__":
     main()
+
+    # Force exit without cleanup to avoid hanging due to arrow issue
+    print(
+        "Note: script might warn about leaked semaphore at the end due to https://github.com/apache/arrow/issues/43497"
+    )
+    os._exit(0)

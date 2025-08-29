@@ -89,3 +89,15 @@ class ModelStore:
             and ModelStore.is_pydantic(parent_type)
             and "@" in ModelStore.get_name(parent_type)
         )
+
+    @classmethod
+    def rebuild_all(cls) -> None:
+        """Ensure pydantic schemas are (re)built for all registered models.
+
+        Uses ``force=True`` to avoid subtle cases where a deserialized class
+        (e.g. from by-value cloudpickle in workers) reports built state but
+        nested model field schemas aren't fully resolved yet.
+        """
+        for versions in cls.store.values():
+            for model in versions.values():
+                model.model_rebuild(force=True)
