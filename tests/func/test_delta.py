@@ -14,26 +14,16 @@ from datachain.lib.file import File, ImageFile
 def _get_dependencies(catalog, name, version) -> list[tuple[str, str]]:
     return sorted(
         [
-            (f"{d.namespace}.{d.project}.{d.name}", d.version)
+            (d.name, d.version)
             for d in catalog.get_dataset_dependencies(name, version, indirect=False)
         ]
     )
 
 
-@pytest.mark.parametrize("project", ("global.dev", ""))
-def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path, project):
+def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
     catalog = test_session.catalog
-    default_namespace_name = catalog.metastore.default_namespace_name
-    default_project_name = catalog.metastore.default_project_name
 
-    if project:
-        starting_ds_name = f"{project}.starting_ds"
-        dependency_ds_name = starting_ds_name
-    else:
-        starting_ds_name = "starting_ds"
-        dependency_ds_name = (
-            f"{default_namespace_name}.{default_project_name}.{starting_ds_name}"
-        )
+    starting_ds_name = "starting_ds"
     ds_name = "delta_ds"
 
     images = [
@@ -66,16 +56,12 @@ def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path, project):
     create_image_dataset(starting_ds_name, images[:2])
     # first version of delta dataset
     create_delta_dataset(ds_name)
-    assert _get_dependencies(catalog, ds_name, "1.0.0") == [
-        (dependency_ds_name, "1.0.0")
-    ]
+    assert _get_dependencies(catalog, ds_name, "1.0.0") == [(starting_ds_name, "1.0.0")]
     # second version of starting dataset
     create_image_dataset(starting_ds_name, images[2:])
     # second version of delta dataset
     create_delta_dataset(ds_name)
-    assert _get_dependencies(catalog, ds_name, "1.0.1") == [
-        (dependency_ds_name, "1.0.1")
-    ]
+    assert _get_dependencies(catalog, ds_name, "1.0.1") == [(starting_ds_name, "1.0.1")]
 
     assert (dc.read_dataset(ds_name, version="1.0.0").order_by("file.path")).to_values(
         "file.path"
@@ -94,6 +80,66 @@ def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path, project):
     ]
 
     create_delta_dataset(ds_name)
+
+
+def test_delta_update_unsafe(test_session):
+    catalog = test_session.catalog
+
+    starting_ds_name = "starting_ds"
+    merge_ds_name = "merge_ds"
+    ds_name = "delta_ds"
+
+    # create dataset which will be merged to delta one
+    merge_ds = dc.read_values(
+        id=[1, 2, 3, 4, 5, 6], value=[1, 2, 3, 4, 5, 6], session=test_session
+    ).save(merge_ds_name)
+
+    # first version of starting dataset
+    dc.read_values(id=[1, 2, 3], session=test_session).save(starting_ds_name)
+    # first version of delta dataset
+    dc.read_dataset(
+        starting_ds_name,
+        session=test_session,
+        delta_on="id",
+        delta=True,
+        delta_unsafe=True,
+    ).merge(merge_ds, on="id", inner=True).save(ds_name)
+
+    assert set(_get_dependencies(catalog, ds_name, "1.0.0")) == {
+        (starting_ds_name, "1.0.0"),
+        (merge_ds_name, "1.0.0"),
+    }
+
+    # second version of starting dataset
+    dc.read_values(id=[1, 2, 3, 4, 5, 6], session=test_session).save(starting_ds_name)
+    # second version of delta dataset
+    dc.read_dataset(
+        starting_ds_name,
+        session=test_session,
+        delta_on="id",
+        delta=True,
+        delta_unsafe=True,
+    ).merge(merge_ds, on="id", inner=True).save(ds_name)
+
+    assert set(_get_dependencies(catalog, ds_name, "1.0.1")) == {
+        (starting_ds_name, "1.0.1"),
+        (merge_ds_name, "1.0.0"),
+    }
+
+    assert set((dc.read_dataset(ds_name, version="1.0.0")).to_list("id", "value")) == {
+        (1, 1),
+        (2, 2),
+        (3, 3),
+    }
+
+    assert set((dc.read_dataset(ds_name, version="1.0.1")).to_list("id", "value")) == {
+        (1, 1),
+        (2, 2),
+        (3, 3),
+        (4, 4),
+        (5, 5),
+        (6, 6),
+    }
 
 
 def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
@@ -249,8 +295,6 @@ def test_delta_update_check_num_calls(test_session, tmp_dir, tmp_path, capsys):
 
 def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
     catalog = test_session.catalog
-    default_namespace_name = catalog.metastore.default_namespace_name
-    default_project_name = catalog.metastore.default_project_name
     ds_name = "delta_ds"
     path = tmp_dir.as_uri()
     tmp_dir = tmp_dir / "images"
@@ -301,7 +345,8 @@ def test_delta_update_no_diff(test_session, tmp_dir, tmp_path):
 
     assert str(exc_info.value) == (
         f"Dataset {ds_name} version 1.0.1 not found in namespace "
-        f"{default_namespace_name} and project {default_project_name}"
+        f"{catalog.metastore.default_namespace_name}"
+        f" and project {catalog.metastore.default_project_name}"
     )
 
 
@@ -325,11 +370,13 @@ def test_delta_update_union(test_session, file_dataset):
                 file_dataset.name,
                 session=test_session,
                 delta=True,
-                delta_on=["file.source", "file.path"],
             ).union(dc.read_dataset("numbers"), session=test_session)
         )
 
-    assert str(excinfo.value) == "Delta update cannot be used with union"
+    assert str(excinfo.value) == (
+        "Cannot use union with delta datasets - may cause inconsistency."
+        " Use delta_unsafe flag to allow this operation."
+    )
 
 
 def test_delta_update_merge(test_session, file_dataset):
@@ -341,11 +388,13 @@ def test_delta_update_merge(test_session, file_dataset):
                 file_dataset.name,
                 session=test_session,
                 delta=True,
-                delta_on=["file.source", "file.path"],
             ).merge(dc.read_dataset("numbers"), on="id", session=test_session)
         )
 
-    assert str(excinfo.value) == "Delta update cannot be used with merge"
+    assert str(excinfo.value) == (
+        "Cannot use merge with delta datasets - may cause inconsistency."
+        " Use delta_unsafe flag to allow this operation."
+    )
 
 
 def test_delta_update_distinct(test_session, file_dataset):
@@ -355,11 +404,13 @@ def test_delta_update_distinct(test_session, file_dataset):
                 file_dataset.name,
                 session=test_session,
                 delta=True,
-                delta_on=["file.source", "file.path"],
             ).distinct("file.path")
         )
 
-    assert str(excinfo.value) == "Delta update cannot be used with distinct"
+    assert str(excinfo.value) == (
+        "Cannot use distinct with delta datasets - may cause inconsistency."
+        " Use delta_unsafe flag to allow this operation."
+    )
 
 
 def test_delta_update_group_by(test_session, file_dataset):
@@ -369,11 +420,13 @@ def test_delta_update_group_by(test_session, file_dataset):
                 file_dataset.name,
                 session=test_session,
                 delta=True,
-                delta_on=["file.source", "file.path"],
             ).group_by(cnt=func.count(), partition_by="file.path")
         )
 
-    assert str(excinfo.value) == "Delta update cannot be used with group_by"
+    assert str(excinfo.value) == (
+        "Cannot use group_by with delta datasets - may cause inconsistency."
+        " Use delta_unsafe flag to allow this operation."
+    )
 
 
 def test_delta_update_agg(test_session, file_dataset):
@@ -383,8 +436,10 @@ def test_delta_update_agg(test_session, file_dataset):
                 file_dataset.name,
                 session=test_session,
                 delta=True,
-                delta_on=["file.source", "file.path"],
             ).agg(cnt=func.count(), partition_by="file.path")
         )
 
-    assert str(excinfo.value) == "Delta update cannot be used with agg"
+    assert str(excinfo.value) == (
+        "Cannot use agg with delta datasets - may cause inconsistency."
+        " Use delta_unsafe flag to allow this operation."
+    )
