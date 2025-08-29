@@ -550,7 +550,7 @@ def mock_is_studio(monkeypatch, is_studio):
     if not is_studio:
         yield
     else:
-        monkeypatch.setenv("DATACHAIN_IS_STUDIO", True)
+        monkeypatch.setenv("DATACHAIN_IS_STUDIO", "True")
         yield
 
 
