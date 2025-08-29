@@ -458,10 +458,10 @@ def test_repeating_errors(test_session):
         test_session, ids=list(range(2)), contents=[str(i) for i in range(2)]
     )
     ch2 = run_delta()
-    assert sorted(ch2.collect("id")) == [0, 0, 0, 0, 1, 1]
+    assert sorted(ch2.collect("id")) == [0, 0, 1, 1]
 
     _create_sample_data(
         test_session, ids=list(range(3)), contents=[str(i) for i in range(3)]
     )
     ch3 = run_delta()
-    assert sorted(ch3.collect("id")) == [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2]
+    assert sorted(ch3.collect("id")) == [0, 0, 1, 1, 2, 2]

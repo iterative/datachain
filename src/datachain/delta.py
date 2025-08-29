@@ -125,10 +125,12 @@ def _get_retry_chain(
     # Subtract also diff chain since some items might be picked
     # up by `delta=True` itself (e.g. records got modified AND are missing in the
     # result dataset atm)
+    on = [on] if isinstance(on, str) else on
+
     return (
         retry_chain.diff(
-            diff_chain, on="id", added=True, same=True, modified=False, deleted=False
-        )
+            diff_chain, on=on, added=True, same=True, modified=False, deleted=False
+        ).distinct(*on)
         if retry_chain
         else None
     )
