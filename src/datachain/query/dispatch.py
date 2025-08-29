@@ -13,6 +13,7 @@ from multiprocess import get_context
 from datachain.catalog import Catalog
 from datachain.catalog.catalog import clone_catalog_with_cache
 from datachain.catalog.loader import DISTRIBUTED_IMPORT_PATH, get_udf_distributor_class
+from datachain.lib.model_store import ModelStore
 from datachain.lib.udf import _get_cache
 from datachain.query.dataset import (
     get_download_callback,
@@ -131,6 +132,8 @@ class UDFDispatcher:
 
     def _create_worker(self) -> "UDFWorker":
         udf: UDFAdapter = loads(self.udf_data)
+        # Ensure all registered DataModels have rebuilt schemas in worker processes.
+        ModelStore.rebuild_all()
         return UDFWorker(
             self.catalog,
             udf,
@@ -198,6 +201,8 @@ class UDFDispatcher:
         generated_cb: Callback = DEFAULT_CALLBACK,
     ) -> None:
         udf: UDFAdapter = loads(self.udf_data)
+        # Rebuild schemas in single process too for consistency (cheap, idempotent).
+        ModelStore.rebuild_all()
 
         if ids_only and not self.is_batching:
             input_rows = flatten(input_rows)
