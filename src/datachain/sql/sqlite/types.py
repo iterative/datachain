@@ -1,6 +1,6 @@
 import sqlite3
 
-import orjson
+import ujson as json
 from sqlalchemy import types
 
 from datachain.sql.types import TypeConverter, TypeReadConverter
@@ -28,26 +28,21 @@ class Array(types.UserDefinedType):
 
 
 def adapt_array(arr):
-    return orjson.dumps(arr).decode("utf-8")
+    return json.dumps(arr, ensure_ascii=False)
 
 
 def adapt_dict(dct):
-    return orjson.dumps(dct).decode("utf-8")
+    return json.dumps(dct, ensure_ascii=False)
 
 
 def convert_array(arr):
-    return orjson.loads(arr)
+    return json.loads(arr)
 
 
 def adapt_np_array(arr):
-    def _json_serialize(obj):
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return obj
-
-    return orjson.dumps(
-        arr, option=orjson.OPT_SERIALIZE_NUMPY, default=_json_serialize
-    ).decode("utf-8")
+    # Primarily needed for UDF numpy results (e.g. WDS)
+    # tolist() gives nested Python lists + native scalars; ujson.dumps handles NaN/Inf.
+    return json.dumps(arr.tolist(), ensure_ascii=False)
 
 
 def adapt_np_generic(val):
@@ -74,5 +69,5 @@ class SQLiteTypeConverter(TypeConverter):
 class SQLiteTypeReadConverter(TypeReadConverter):
     def array(self, value, item_type, dialect):
         if isinstance(value, str):
-            value = orjson.loads(value)
+            value = json.loads(value)
         return super().array(value, item_type, dialect)
