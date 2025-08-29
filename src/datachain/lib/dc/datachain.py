@@ -19,8 +19,8 @@ from typing import (
     overload,
 )
 
-import orjson
 import sqlalchemy
+import ujson as json
 from pydantic import BaseModel
 from sqlalchemy.sql.elements import ColumnElement
 from tqdm import tqdm
@@ -462,8 +462,6 @@ class DataChain:
         Returns:
             DataChain: A new DataChain instance with the new set of columns.
         """
-        import json
-
         import pyarrow as pa
 
         from datachain.lib.arrow import schema_to_output
@@ -2129,9 +2127,9 @@ class DataChain:
             fsspec_fs = client.create_fs(**fs_kwargs)
 
         _partition_cols = list(partition_cols) if partition_cols else None
-        signal_schema_metadata = orjson.dumps(
-            self._effective_signals_schema.serialize()
-        )
+        signal_schema_metadata = json.dumps(
+            self._effective_signals_schema.serialize(), ensure_ascii=False
+        ).encode("utf-8")
 
         column_names, column_chunks = self.to_columnar_data_with_names(chunk_size)
 
@@ -2278,7 +2276,11 @@ class DataChain:
                         f.write(b"\n")
                 else:
                     is_first = False
-                f.write(orjson.dumps(row_to_nested_dict(headers, row)))
+                f.write(
+                    json.dumps(
+                        row_to_nested_dict(headers, row), ensure_ascii=False
+                    ).encode("utf-8")
+                )
             if include_outer_list:
                 # This makes the file JSON instead of JSON lines.
                 f.write(b"\n]\n")

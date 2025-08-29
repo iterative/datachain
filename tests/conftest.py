@@ -547,11 +547,9 @@ def is_studio():
 
 @pytest.fixture(autouse=True)
 def mock_is_studio(monkeypatch, is_studio):
-    if not is_studio:
-        yield
-    else:
-        monkeypatch.setenv("DATACHAIN_IS_STUDIO", True)
-        yield
+    if is_studio:
+        monkeypatch.setenv("DATACHAIN_IS_STUDIO", "True")
+    yield
 
 
 @pytest.fixture
