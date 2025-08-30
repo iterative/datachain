@@ -150,11 +150,7 @@ def read_storage(
     expanded_uris = []
     for single_uri in uris:
         uri_str = str(single_uri)
-        # Check if URI contains braces and expand them
-        if "{" in uri_str and "}" in uri_str:
-            expanded_uris.extend(expand_uri_braces(uri_str))
-        else:
-            expanded_uris.append(uri_str)
+        expanded_uris.extend(expand_uri_braces(uri_str))
 
     # Now process each expanded URI
     chains = []
