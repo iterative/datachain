@@ -1,9 +1,3 @@
-"""Pattern matching utilities for storage operations.
-
-This module contains functions for handling glob patterns, brace expansion,
-and converting patterns to GLOB-compatible formats.
-"""
-
 import glob
 from typing import TYPE_CHECKING, Union
 
@@ -28,7 +22,6 @@ def split_uri_pattern(uri: str) -> tuple[str, Union[str, None]]:
         "s3://bucket/**/*.mp3" -> ("s3://bucket", "**/*.mp3")
         "s3://bucket/dir" -> ("s3://bucket/dir", None)
     """
-    # Check if URI contains any glob patterns
     if not any(char in uri for char in ["*", "?", "[", "{", "}"]):
         return uri, None
 
@@ -192,25 +185,6 @@ def _expand_single_braces(pattern: str) -> list[str]:
         expanded.extend(_expand_single_braces(combined))
 
     return expanded
-
-
-def expand_uri_braces(uri: str) -> list[str]:
-    """
-    Expand a URI that may contain brace patterns into multiple URIs.
-
-    Args:
-        uri: URI that may contain brace patterns
-
-    Returns:
-        List of URIs with all brace patterns expanded
-
-    Examples:
-        "s3://bucket/{a,b}/*.txt" -> ["s3://bucket/a/*.txt", "s3://bucket/b/*.txt"]
-        "file:///root/{dir1,dir2}/**/*.{mp3,wav}" ->
-            ["file:///root/dir1/**/*.mp3", "file:///root/dir1/**/*.wav",
-             "file:///root/dir2/**/*.mp3", "file:///root/dir2/**/*.wav"]
-    """
-    return expand_brace_pattern(uri)
 
 
 def convert_globstar_to_glob(filter_pattern: str) -> str:

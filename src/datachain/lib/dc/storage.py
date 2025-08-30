@@ -9,7 +9,7 @@ from typing import (
 
 from datachain.lib.dc.storage_pattern import (
     apply_glob_filter,
-    expand_uri_braces,
+    expand_brace_pattern,
     should_use_recursion,
     split_uri_pattern,
 )
@@ -150,7 +150,7 @@ def read_storage(
     expanded_uris = []
     for single_uri in uris:
         uri_str = str(single_uri)
-        expanded_uris.extend(expand_uri_braces(uri_str))
+        expanded_uris.extend(expand_brace_pattern(uri_str))
 
     # Now process each expanded URI
     chains = []
