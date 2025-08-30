@@ -13,7 +13,7 @@ from datetime import datetime
 from functools import partial
 from io import BytesIO
 from pathlib import Path, PurePath, PurePosixPath
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Union, IO
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
@@ -322,8 +322,18 @@ class File(DataModel):
 
     @classmethod
     def upload(
-        cls, data: bytes, path: str, catalog: Optional["Catalog"] = None
+        cls,
+        data: Union[bytes, bytearray, memoryview, Iterator[bytes], IO[bytes]],
+        path: str,
+        catalog: Optional["Catalog"] = None,
+        *,
+        chunk_size: int = 1024 * 1024,
     ) -> "Self":
+        """Upload data to storage and return a `File`.
+
+        Supports both in-memory bytes and streaming sources (file-like or
+        iterator of byte chunks) to avoid large temporary buffers.
+        """
         if catalog is None:
             from datachain.catalog.loader import get_catalog
 
@@ -333,9 +343,46 @@ class File(DataModel):
 
         client_cls = Client.get_implementation(path)
         source, rel_path = client_cls.split_url(path)
-
         client = catalog.get_client(client_cls.get_uri(source))
-        file = client.upload(data, rel_path)
+
+        # Fast path for contiguous bytes-like input.
+        if isinstance(data, (bytes, bytearray, memoryview)):
+            file = client.upload(bytes(data), rel_path)  # type: ignore[arg-type]
+            if not isinstance(file, cls):
+                file = cls(**file.model_dump())
+            file._set_stream(catalog)
+            return file
+
+        # Streaming path. Always derive full path from rel_path for consistency.
+        full_path = client.get_full_path(rel_path)
+        parent = posixpath.dirname(full_path)
+        client.fs.makedirs(parent, exist_ok=True)
+
+        def _is_file_like(obj: object) -> bool:
+            return hasattr(obj, "read") and callable(obj.read)  # type: ignore[attr-defined]
+
+        with client.fs.open(full_path, "wb") as dst:  # type: ignore[assignment]
+            if _is_file_like(data):
+                reader = data  # type: ignore[assignment]
+                while True:
+                    chunk = reader.read(chunk_size)  # type: ignore[attr-defined]
+                    if not chunk:
+                        break
+                    dst.write(chunk)
+            elif isinstance(data, Iterator):
+                for chunk in data:  # type: ignore[assignment]
+                    if not isinstance(chunk, (bytes, bytearray, memoryview)):
+                        raise TypeError(
+                            "Iterator for File.upload must yield bytes-like objects"
+                        )
+                    dst.write(chunk)
+            else:  # pragma: no cover - defensive
+                raise TypeError(
+                    "Unsupported type; need bytes, file-like, or iterator of bytes"
+                )
+
+        info = client.fs.info(full_path)
+        file = client.info_to_file(info, rel_path)
         if not isinstance(file, cls):
             file = cls(**file.model_dump())
         file._set_stream(catalog)
