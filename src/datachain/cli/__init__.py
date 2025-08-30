@@ -3,7 +3,7 @@ import os
 import sys
 import traceback
 from multiprocessing import freeze_support
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from datachain.cli.utils import get_logging_level
 from datachain.error import DataChainError as DataChainError
@@ -24,6 +24,11 @@ from .commands import (
 from .parser import get_parser
 
 logger = logging.getLogger("datachain")
+
+if TYPE_CHECKING:
+    from argparse import Namespace
+
+    from datachain.catalog import Catalog as Catalog
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -97,6 +102,8 @@ def handle_command(args, catalog, client_config) -> int:
         "gc": lambda: garbage_collect(catalog),
         "auth": lambda: process_auth_cli_args(args),
         "job": lambda: process_jobs_args(args),
+        "mv": lambda: handle_mv_command(args, catalog),
+        "rm": lambda: handle_rm_command(args, catalog),
     }
 
     handler = command_handlers.get(args.command)
@@ -109,15 +116,53 @@ def handle_command(args, catalog, client_config) -> int:
     return 1
 
 
-def handle_cp_command(args, catalog):
-    catalog.cp(
-        args.sources,
-        args.output,
-        force=bool(args.force),
-        update=bool(args.update),
-        recursive=bool(args.recursive),
-        no_glob=args.no_glob,
+def _get_file_handler(args: "Namespace"):
+    from datachain.cli.commands.storage import (
+        LocalCredentialsBasedFileHandler,
+        StudioAuthenticatedFileHandler,
     )
+    from datachain.config import Config
+
+    config = Config().read().get("studio", {})
+    token = config.get("token")
+    studio = False if not token else args.studio_cloud_auth
+    return (
+        StudioAuthenticatedFileHandler if studio else LocalCredentialsBasedFileHandler
+    )
+
+
+def handle_cp_command(args, catalog):
+    file_handler = _get_file_handler(args)
+    return file_handler(
+        catalog=catalog,
+        team=args.team,
+        source_path=args.source_path,
+        destination_path=args.destination_path,
+        update=args.update,
+        recursive=args.recursive,
+        anon=args.anon,
+    ).cp()
+
+
+def handle_mv_command(args, catalog):
+    file_handler = _get_file_handler(args)
+    return file_handler(
+        catalog=catalog,
+        team=args.team,
+        path=args.path,
+        new_path=args.new_path,
+        recursive=args.recursive,
+    ).mv()
+
+
+def handle_rm_command(args, catalog):
+    file_handler = _get_file_handler(args)
+    return file_handler(
+        catalog=catalog,
+        team=args.team,
+        path=args.path,
+        recursive=args.recursive,
+    ).rm()
 
 
 def handle_clone_command(args, catalog):
