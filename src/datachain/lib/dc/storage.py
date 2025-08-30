@@ -157,6 +157,8 @@ def read_storage(
     listed_ds_name = set()
     file_values = []
 
+    updated_uris = set()
+
     for single_uri in expanded_uris:
         # Check if URI contains glob patterns and split them
         base_uri, glob_pattern = split_uri_pattern(single_uri)
@@ -165,8 +167,14 @@ def read_storage(
         # The pattern will be used for filtering later
         list_uri_to_use = base_uri if glob_pattern else single_uri
 
+        # Avoid double updates for the same URI
+        update_single_uri = False
+        if update and (list_uri_to_use not in updated_uris):
+            updated_uris.add(list_uri_to_use)
+            update_single_uri = True
+
         list_ds_name, list_uri, list_path, list_ds_exists = get_listing(
-            list_uri_to_use, session, update=update
+            list_uri_to_use, session, update=update_single_uri
         )
 
         # list_ds_name is None if object is a file, we don't want to use cache
