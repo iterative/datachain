@@ -7,6 +7,12 @@ from typing import (
     Union,
 )
 
+from datachain.lib.dc.storage_pattern import (
+    apply_glob_filter,
+    expand_uri_braces,
+    should_use_recursion,
+    split_uri_pattern,
+)
 from datachain.lib.file import (
     FileType,
     get_file_type,
@@ -50,12 +56,16 @@ def read_storage(
     It returns the chain itself as usual.
 
     Parameters:
-        uri : storage URI with directory or list of URIs.
-            URIs must start with storage prefix such
-            as `s3://`, `gs://`, `az://` or "file:///"
+        uri : Storage path(s) or URI(s). Can be a local path or start with a
+            storage prefix like `s3://`, `gs://`, `az://` or "file:///".
+            Supports glob patterns:
+              - `*` : wildcard
+              - `**` : recursive wildcard
+              - `?` : single character
+              - `{a,b}` : brace expansion
         type : read file as "binary", "text", or "image" data. Default is "binary".
         recursive : search recursively for the given path.
-        column : Created column name.
+        column : Column name that will contain File objects. Default is "file".
         update : force storage reindexing. Default is False.
         anon : If True, we will treat cloud bucket as public one
         client_config : Optional client configuration for the storage client.
@@ -92,12 +102,19 @@ def read_storage(
         chain = dc.read_storage("s3://my-bucket/my-dir")
         ```
 
+        Match all .json files recursively using glob pattern
+        ```py
+        chain = dc.read_storage("gs://bucket/meta/**/*.json")
+        ```
+
+        Match image file extensions for directories with pattern
+        ```py
+        chain = dc.read_storage("s3://bucket/202?/**/*.{jpg,jpeg,png}")
+        ```
+
         Multiple URIs:
         ```python
-        chain = dc.read_storage([
-            "s3://bucket1/dir1",
-            "s3://bucket2/dir2"
-        ])
+        chain = dc.read_storage(["s3://my-bkt/dir1", "s3://bucket2/dir2/dir3"])
         ```
 
         With AWS S3-compatible storage:
@@ -107,19 +124,6 @@ def read_storage(
             client_config = {"aws_endpoint_url": "<minio-endpoint-url>"}
         )
         ```
-
-        Pass existing session
-        ```py
-        session = Session.get()
-        chain = dc.read_storage([
-            "path/to/dir1",
-            "path/to/dir2"
-        ], session=session, recursive=True)
-        ```
-
-    Note:
-        When using multiple URIs with `update=True`, the function optimizes by
-        avoiding redundant updates for URIs pointing to the same storage location.
     """
     from .datachain import DataChain
     from .datasets import read_dataset
@@ -142,13 +146,31 @@ def read_storage(
     if not uris:
         raise ValueError("No URIs provided")
 
+    # First, expand all URIs that contain brace patterns
+    expanded_uris = []
+    for single_uri in uris:
+        uri_str = str(single_uri)
+        # Check if URI contains braces and expand them
+        if "{" in uri_str and "}" in uri_str:
+            expanded_uris.extend(expand_uri_braces(uri_str))
+        else:
+            expanded_uris.append(uri_str)
+
+    # Now process each expanded URI
     chains = []
     listed_ds_name = set()
     file_values = []
 
-    for single_uri in uris:
+    for single_uri in expanded_uris:
+        # Check if URI contains glob patterns and split them
+        base_uri, glob_pattern = split_uri_pattern(single_uri)
+
+        # If a pattern is found, use the base_uri for listing
+        # The pattern will be used for filtering later
+        list_uri_to_use = base_uri if glob_pattern else single_uri
+
         list_ds_name, list_uri, list_path, list_ds_exists = get_listing(
-            single_uri, session, update=update
+            list_uri_to_use, session, update=update
         )
 
         # list_ds_name is None if object is a file, we don't want to use cache
@@ -197,7 +219,21 @@ def read_storage(
                 lambda ds_name=list_ds_name, lst_uri=list_uri: lst_fn(ds_name, lst_uri)
             )
 
-        chains.append(ls(dc, list_path, recursive=recursive, column=column))
+        # If a glob pattern was detected, use it for filtering
+        # Otherwise, use the original list_path from get_listing
+        if glob_pattern:
+            # Determine if we should use recursive listing based on the pattern
+            use_recursive = should_use_recursion(glob_pattern, recursive or False)
+
+            # Apply glob filter - no need for brace expansion here as it's done above
+            chain = apply_glob_filter(
+                dc, [glob_pattern], list_path, use_recursive, column
+            )
+            chains.append(chain)
+        else:
+            # No glob pattern detected, use normal ls behavior
+            chains.append(ls(dc, list_path, recursive=recursive, column=column))
+
         listed_ds_name.add(list_ds_name)
 
     storage_chain = None if not chains else reduce(lambda x, y: x.union(y), chains)
