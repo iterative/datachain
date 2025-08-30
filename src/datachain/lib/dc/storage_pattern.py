@@ -277,25 +277,14 @@ def convert_globstar_to_glob(filter_pattern: str) -> str:
 
 def apply_glob_filter(
     dc: "DataChain",
-    patterns: list[str],
+    pattern: str,
     list_path: str,
     use_recursive: bool,
     column: str,
 ) -> "DataChain":
-    """Apply glob filter to a DataChain based on a single pattern.
-
-    Since brace expansion now happens at URI level, this function
-    only needs to handle single patterns.
-    """
     from datachain.query.schema import Column
 
     chain = ls(dc, list_path, recursive=use_recursive, column=column)
-
-    # Should only receive single patterns now (brace expansion happens earlier)
-    if len(patterns) != 1:
-        raise ValueError(f"Expected single pattern, got {len(patterns)}")
-
-    pattern = patterns[0]
 
     # If pattern doesn't contain path separator and list_path is not empty,
     # prepend the list_path to make the pattern match correctly

@@ -233,7 +233,7 @@ def read_storage(
 
             # Apply glob filter - no need for brace expansion here as it's done above
             chain = apply_glob_filter(
-                dc, [glob_pattern], list_path, use_recursive, column
+                dc, glob_pattern, list_path, use_recursive, column
             )
             chains.append(chain)
         else:
