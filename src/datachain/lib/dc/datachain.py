@@ -342,15 +342,15 @@ class DataChain:
 
     def settings(
         self,
-        cache=None,
-        parallel=None,
-        workers=None,
-        min_task_size=None,
-        prefetch: Optional[int] = None,
-        sys: Optional[bool] = None,
+        cache: Optional[bool] = None,
+        prefetch: Optional[Union[bool, int]] = None,
+        parallel: Optional[Union[bool, int]] = None,
+        workers: Optional[int] = None,
         namespace: Optional[str] = None,
         project: Optional[str] = None,
-        batch_rows: Optional[int] = None,
+        min_task_size: Optional[int] = None,
+        batch_size: Optional[int] = None,
+        sys: Optional[bool] = None,
     ) -> "Self":
         """Change settings for chain.
 
@@ -359,23 +359,23 @@ class DataChain:
 
         Parameters:
             cache : data caching. (default=False)
+            prefetch : number of workers to use for downloading files in advance.
+                      This is enabled by default and uses 2 workers.
+                      To disable prefetching, set it to 0 or False.
             parallel : number of thread for processors. True is a special value to
                 enable all available CPUs. (default=1)
             workers : number of distributed workers. Only for Studio mode. (default=1)
-            min_task_size : minimum number of tasks. (default=1)
-            prefetch : number of workers to use for downloading files in advance.
-                      This is enabled by default and uses 2 workers.
-                      To disable prefetching, set it to 0.
             namespace : namespace name.
             project : project name.
-            batch_rows : row limit per insert to balance speed and memory usage.
+            min_task_size : minimum number of tasks. (default=1)
+            batch_size : row limit per insert to balance speed and memory usage.
                       (default=2000)
 
         Example:
             ```py
             chain = (
                 chain
-                .settings(cache=True, parallel=8, batch_rows=300)
+                .settings(cache=True, parallel=8, batch_size=300)
                 .map(laion=process_webdataset(spec=WDSLaion), params="file")
             )
             ```
@@ -385,14 +385,14 @@ class DataChain:
         settings = copy.copy(self._settings)
         settings.add(
             Settings(
-                cache,
-                parallel,
-                workers,
-                min_task_size,
-                prefetch,
-                namespace,
-                project,
-                batch_rows,
+                cache=cache,
+                prefetch=prefetch,
+                parallel=parallel,
+                workers=workers,
+                namespace=namespace,
+                project=project,
+                min_task_size=min_task_size,
+                batch_size=batch_size,
             )
         )
         return self._evolve(settings=settings, _sys=sys)
@@ -745,7 +745,7 @@ class DataChain:
 
         return self._evolve(
             query=self._query.add_signals(
-                udf_obj.to_udf_wrapper(self._settings.batch_rows),
+                udf_obj.to_udf_wrapper(self._settings.batch_size),
                 **self._settings.to_dict(),
             ),
             signal_schema=self.signals_schema | udf_obj.output,
@@ -783,7 +783,7 @@ class DataChain:
             udf_obj.prefetch = prefetch
         return self._evolve(
             query=self._query.generate(
-                udf_obj.to_udf_wrapper(self._settings.batch_rows),
+                udf_obj.to_udf_wrapper(self._settings.batch_size),
                 **self._settings.to_dict(),
             ),
             signal_schema=udf_obj.output,
@@ -919,7 +919,7 @@ class DataChain:
         udf_obj = self._udf_to_obj(Aggregator, func, params, output, signal_map)
         return self._evolve(
             query=self._query.generate(
-                udf_obj.to_udf_wrapper(self._settings.batch_rows),
+                udf_obj.to_udf_wrapper(self._settings.batch_size),
                 partition_by=processed_partition_by,
                 **self._settings.to_dict(),
             ),
@@ -968,7 +968,7 @@ class DataChain:
 
         return self._evolve(
             query=self._query.add_signals(
-                udf_obj.to_udf_wrapper(self._settings.batch_rows, batch=batch),
+                udf_obj.to_udf_wrapper(self._settings.batch_size, batch=batch),
                 **self._settings.to_dict(),
             ),
             signal_schema=self.signals_schema | udf_obj.output,
@@ -2314,7 +2314,7 @@ class DataChain:
         table_name: str,
         connection: "ConnectionType",
         *,
-        batch_rows: int = DEFAULT_DATABASE_BATCH_SIZE,
+        batch_size: int = DEFAULT_DATABASE_BATCH_SIZE,
         on_conflict: Optional[str] = None,
         conflict_columns: Optional[list[str]] = None,
         column_mapping: Optional[dict[str, Optional[str]]] = None,
@@ -2336,7 +2336,7 @@ class DataChain:
                 library. If a DBAPI2 object, only sqlite3 is supported. The user is
                 responsible for engine disposal and connection closure for the
                 SQLAlchemy connectable; str connections are closed automatically.
-            batch_rows: Number of rows to insert per batch for optimal performance.
+            batch_size: Number of rows to insert per batch for optimal performance.
                 Larger batches are faster but use more memory. Default: 10,000.
             on_conflict: Strategy for handling duplicate rows (requires table
                 constraints):
@@ -2417,7 +2417,7 @@ class DataChain:
             self,
             table_name,
             connection,
-            batch_rows=batch_rows,
+            batch_size=batch_size,
             on_conflict=on_conflict,
             conflict_columns=conflict_columns,
             column_mapping=column_mapping,

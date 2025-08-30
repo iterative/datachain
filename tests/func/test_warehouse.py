@@ -1,4 +1,6 @@
+from collections.abc import Iterator
 from types import GeneratorType
+from unittest.mock import patch
 
 import sqlalchemy as sa
 
@@ -33,3 +35,53 @@ def test_dataset_select_paginated_dataset_larger_than_batch_size(test_session):
     assert len(rows) == 10_000
     (values,) = zip(*rows)
     assert set(values) == set(db_values)
+
+
+def test_dataset_insert_batch_size(test_session, warehouse):
+    def udf_map(value: int) -> int:
+        return value + 100
+
+    def udf_gen(value: int) -> Iterator[int]:
+        yield value
+        yield value + 100
+
+    with patch.object(
+        warehouse.db,
+        attribute="executemany",
+        wraps=warehouse.db.executemany,
+    ) as mock_executemany:
+        dc.read_values(value=list(range(100)), session=test_session).save("values")
+        assert mock_executemany.call_count == 2  # 1 for read_values, 1 for save
+        mock_executemany.reset_mock()
+
+        # Mapper
+
+        dc.read_dataset("values", session=test_session).map(x2=udf_map).save("large")
+        assert mock_executemany.call_count == 1
+        mock_executemany.reset_mock()
+
+        chain = (
+            dc.read_dataset("values", session=test_session)
+            .settings(batch_size=10)
+            .map(x2=udf_map)
+            .save("large")
+        )
+        assert mock_executemany.call_count == 10
+        mock_executemany.reset_mock()
+        assert set(chain.to_values("x2")) == set(range(100, 200))
+
+        # Generator
+
+        dc.read_dataset("values", session=test_session).gen(x2=udf_gen).save("large")
+        assert mock_executemany.call_count == 1
+        mock_executemany.reset_mock()
+
+        chain = (
+            dc.read_dataset("values", session=test_session)
+            .settings(batch_size=10)
+            .gen(x2=udf_gen)
+            .save("large")
+        )
+        assert mock_executemany.call_count == 20
+        mock_executemany.reset_mock()
+        assert set(chain.to_values("x2")) == set(range(200))
