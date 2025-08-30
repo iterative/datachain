@@ -4,7 +4,7 @@ from functools import wraps
 from typing import TYPE_CHECKING, Callable, Optional, TypeVar, Union
 
 import datachain
-from datachain.dataset import DatasetDependency
+from datachain.dataset import DatasetDependency, DatasetRecord
 from datachain.error import DatasetNotFoundError
 from datachain.project import Project
 
@@ -30,9 +30,10 @@ def delta_disabled(
 
     @wraps(method)
     def _inner(self: T, *args: "P.args", **kwargs: "P.kwargs") -> T:
-        if self.delta:
+        if self.delta and not self._delta_unsafe:
             raise NotImplementedError(
-                f"Delta update cannot be used with {method.__name__}"
+                f"Cannot use {method.__name__} with delta datasets - may cause"
+                " inconsistency. Use delta_unsafe flag to allow this operation."
             )
         return method(self, *args, **kwargs)
 
@@ -124,10 +125,19 @@ def _get_retry_chain(
     # Subtract also diff chain since some items might be picked
     # up by `delta=True` itself (e.g. records got modified AND are missing in the
     # result dataset atm)
-    return retry_chain.subtract(diff_chain, on=on) if retry_chain else None
+    on = [on] if isinstance(on, str) else on
+
+    return (
+        retry_chain.diff(
+            diff_chain, on=on, added=True, same=True, modified=False, deleted=False
+        ).distinct(*on)
+        if retry_chain
+        else None
+    )
 
 
 def _get_source_info(
+    source_ds: DatasetRecord,
     name: str,
     namespace_name: str,
     project_name: str,
@@ -154,25 +164,23 @@ def _get_source_info(
         indirect=False,
     )
 
-    dep = dependencies[0]
-    if not dep:
+    source_ds_dep = next((d for d in dependencies if d.name == source_ds.name), None)
+    if not source_ds_dep:
         # Starting dataset was removed, back off to normal dataset creation
         return None, None, None, None, None
 
-    source_ds_project = catalog.metastore.get_project(dep.project, dep.namespace)
-    source_ds_name = dep.name
-    source_ds_version = dep.version
-    source_ds_latest_version = catalog.get_dataset(
-        source_ds_name,
-        namespace_name=source_ds_project.namespace.name,
-        project_name=source_ds_project.name,
-    ).latest_version
+    # Refresh starting dataset to have new versions if they are created
+    source_ds = catalog.get_dataset(
+        source_ds.name,
+        namespace_name=source_ds.project.namespace.name,
+        project_name=source_ds.project.name,
+    )
 
     return (
-        source_ds_name,
-        source_ds_project,
-        source_ds_version,
-        source_ds_latest_version,
+        source_ds.name,
+        source_ds.project,
+        source_ds_dep.version,
+        source_ds.latest_version,
         dependencies,
     )
 
@@ -244,7 +252,14 @@ def delta_retry_update(
         source_ds_version,
         source_ds_latest_version,
         dependencies,
-    ) = _get_source_info(name, namespace_name, project_name, latest_version, catalog)
+    ) = _get_source_info(
+        dc._query.starting_step.dataset,  # type: ignore[union-attr]
+        name,
+        namespace_name,
+        project_name,
+        latest_version,
+        catalog,
+    )
 
     # If source_ds_name is None, starting dataset was removed
     if source_ds_name is None:
@@ -267,8 +282,9 @@ def delta_retry_update(
     if dependencies:
         dependencies = copy(dependencies)
         dependencies = [d for d in dependencies if d is not None]
+        source_ds_dep = next(d for d in dependencies if d.name == source_ds_name)
         # Update to latest version
-        dependencies[0].version = source_ds_latest_version  # type: ignore[union-attr]
+        source_ds_dep.version = source_ds_latest_version  # type: ignore[union-attr]
 
     # Handle retry functionality if enabled
     if delta_retry:
