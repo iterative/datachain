@@ -12,6 +12,7 @@ from datachain.lib.dc.storage_pattern import (
     expand_brace_pattern,
     should_use_recursion,
     split_uri_pattern,
+    validate_cloud_bucket_name,
 )
 from datachain.lib.file import (
     FileType,
@@ -146,10 +147,11 @@ def read_storage(
     if not uris:
         raise ValueError("No URIs provided")
 
-    # First, expand all URIs that contain brace patterns
+    # Then expand all URIs that contain brace patterns
     expanded_uris = []
     for single_uri in uris:
         uri_str = str(single_uri)
+        validate_cloud_bucket_name(uri_str)
         expanded_uris.extend(expand_brace_pattern(uri_str))
 
     # Now process each expanded URI

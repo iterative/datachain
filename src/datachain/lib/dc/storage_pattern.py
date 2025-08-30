@@ -7,6 +7,36 @@ if TYPE_CHECKING:
     from .datachain import DataChain
 
 
+def validate_cloud_bucket_name(uri: str) -> None:
+    """
+    Validate that cloud storage bucket names don't contain glob patterns.
+
+    Args:
+        uri: URI to validate
+
+    Raises:
+        ValueError: If a cloud storage bucket name contains glob patterns
+    """
+    if not any(uri.startswith(scheme) for scheme in ["s3://", "gs://", "az://"]):
+        return
+
+    # Extract bucket name (everything between :// and first /)
+    if "://" in uri:
+        scheme_end = uri.index("://") + 3
+        path_part = uri[scheme_end:]
+
+        # Get the bucket name (first segment)
+        if "/" in path_part:
+            bucket_name = path_part.split("/")[0]
+        else:
+            bucket_name = path_part
+
+        # Check if bucket name contains glob patterns
+        glob_chars = ["*", "?", "[", "]", "{", "}"]
+        if any(char in bucket_name for char in glob_chars):
+            raise ValueError(f"Glob patterns in bucket names are not supported: {uri}")
+
+
 def split_uri_pattern(uri: str) -> tuple[str, Union[str, None]]:
     """
     Split a URI into base path and glob pattern.
@@ -38,7 +68,8 @@ def split_uri_pattern(uri: str) -> tuple[str, Union[str, None]]:
         # Find first segment with glob pattern
         pattern_start_idx = None
         for i, segment in enumerate(path_segments):
-            if glob.has_magic(segment):
+            # Check for glob patterns including brace expansion
+            if glob.has_magic(segment) or "{" in segment:
                 pattern_start_idx = i
                 break
 
@@ -61,7 +92,8 @@ def split_uri_pattern(uri: str) -> tuple[str, Union[str, None]]:
     # Find first segment with glob pattern
     pattern_start_idx = None
     for i, segment in enumerate(path_segments):
-        if glob.has_magic(segment):
+        # Check for glob patterns including brace expansion
+        if glob.has_magic(segment) or "{" in segment:
             pattern_start_idx = i
             break
 

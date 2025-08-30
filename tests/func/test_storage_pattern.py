@@ -220,3 +220,21 @@ def test_mixed_pattern_types(tmp_dir):
     )
     files = {f.name for f in result.to_values("file")}
     assert files == {"archive.zip", "current.tar", "temp1.tmp", "temp2.tmp"}
+
+
+def test_glob_pattern_in_bucket_name_raises_error():
+    with pytest.raises(
+        ValueError, match="Glob patterns in bucket names are not supported.*bucket-\\*"
+    ):
+        dc.read_storage("s3://bucket-*/data/file.txt")
+
+    with pytest.raises(
+        ValueError, match="Glob patterns in bucket names are not supported.*bucket-\\?"
+    ):
+        dc.read_storage("s3://bucket-?/files/*.txt")
+
+    with pytest.raises(
+        ValueError,
+        match="Glob patterns in bucket names are not supported.*bucket-\\{dev,prod\\}",
+    ):
+        dc.read_storage("s3://bucket-{dev,prod}/logs/*.log")
