@@ -157,30 +157,6 @@ def expand_brace_pattern(pattern: str) -> list[str]:
     if "{" not in pattern or "}" not in pattern:
         return [pattern]
 
-    # Handle double braces {{...}} by treating them as single braces
-    # Replace {{ with a placeholder, expand, then restore
-    if "{{" in pattern:
-        # Replace {{ and }} with placeholders temporarily
-        pattern = pattern.replace("{{", "\x00OPENBRACE\x00")
-        pattern = pattern.replace("}}", "\x00CLOSEBRACE\x00")
-
-        # Find and expand single braces
-        expanded = _expand_single_braces(pattern)
-
-        # Restore the double braces as single braces
-        result = []
-        for p in expanded:
-            p = p.replace("\x00OPENBRACE\x00", "{")
-            p = p.replace("\x00CLOSEBRACE\x00", "}")
-            result.append(p)
-
-        # Now recursively expand any remaining braces
-        final_result = []
-        for p in result:
-            final_result.extend(expand_brace_pattern(p))
-
-        return final_result
-
     return _expand_single_braces(pattern)
 
 
