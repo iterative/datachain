@@ -1,9 +1,12 @@
+import io
+
 import pytest
 import pytz
 
 import datachain as dc
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.lib.file import File, FileError
+from datachain.query import C
 from datachain.utils import TIME_ZERO
 
 
@@ -91,3 +94,68 @@ def test_upload(cloud_test_catalog):
     assert f.read() == img_bytes
 
     client.fs.rm(dest, recursive=True)
+
+
+def test_open_write_binary(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    catalog = ctc.catalog
+    src_uri = ctc.src_uri
+    data = b"hello via open()"
+    file_path = f"{src_uri}/test-open-write-bytes.bin"
+
+    file = File.at(file_path, catalog)
+    with file.open("wb") as f:
+        f.write(data)
+
+    assert file.size == len(data)
+    assert file.read() == data
+
+    # Query storage for exactly that relative path.
+    # Metadata already refreshed by open() write path.
+    rel_path = file.path
+    chain = dc.read_storage(src_uri, session=ctc.session).filter(
+        C("file.path") == rel_path
+    )
+    results = list(chain.to_values("file"))
+    assert len(results) == 1
+    match = results[0]
+    for field_name in File.model_fields:
+        if field_name == "last_modified":
+            # Allow up to 1s difference across backends
+            # (some backends don't keep microsecond precision, we keep it simple here)
+            assert match.last_modified.timestamp() == pytest.approx(
+                file.last_modified.timestamp(), abs=1
+            )
+        else:
+            assert getattr(match, field_name) == getattr(file, field_name), (
+                f"Mismatch in field '{field_name}'"
+            )
+
+    catalog.get_client(src_uri).fs.rm(file_path)
+
+
+def test_open_write_text(cloud_test_catalog):
+    ctc = cloud_test_catalog
+    catalog = ctc.catalog
+    src_uri = ctc.src_uri
+    file_path = f"{src_uri}/test-open-write-text.txt"
+    # Unicode content to exercise non-default (utf-16) encoding round trip
+    content = "Привет Мир\nSecond line"
+
+    file = File.at(file_path, catalog)
+    with file.open("w", encoding="utf-16-le") as f:
+        written_chars = f.write(content)
+
+    assert written_chars == len(content)
+    assert file.read_text(encoding="utf-16-le") == content
+
+    # Compute expected byte size using identical TextIOWrapper logic
+    buf = io.BytesIO()
+    tw = io.TextIOWrapper(buf, encoding="utf-16-le")
+    tw.write(content)
+    tw.flush()
+    expected_size = len(buf.getvalue())
+    tw.close()
+    assert file.size == expected_size
+
+    catalog.get_client(src_uri).fs.rm(file_path)
