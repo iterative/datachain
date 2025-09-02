@@ -240,7 +240,6 @@ class StudioClient:
 
         return Response(data, ok, message, response.status_code)
 
-    @retry_with_backoff(retries=3, errors=(HTTPError, Timeout))
     def _send_multipart_request(
         self, route: str, files: dict[str, Any], params: Optional[dict[str, Any]] = None
     ) -> Response[Any]:
@@ -263,12 +262,6 @@ class StudioClient:
             },
             timeout=self.timeout,
         )
-        try:
-            response.raise_for_status()
-        except HTTPError:
-            if _is_server_error(response.status_code):
-                # going to retry
-                raise
 
         ok = response.ok
         try:
