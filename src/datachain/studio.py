@@ -403,14 +403,14 @@ def create_job(
     if not response.data:
         raise DataChainError("Failed to create job")
 
-    job_id = response.data.get("job", {}).get("id")
+    job_id = response.data.get("id")
 
     if parsed_start_time or cron:
         print(f"Job {job_id} is scheduled as a task in Studio.")
         return 0
 
     print(f"Job {job_id} created")
-    print("Open the job in Studio at", response.data.get("job", {}).get("url"))
+    print("Open the job in Studio at", response.data.get("url"))
     print("=" * 40)
 
     return 0 if no_wait else show_logs_from_client(client, job_id)
@@ -421,15 +421,14 @@ def upload_files(client: StudioClient, files: list[str]) -> list[str]:
     for file in files:
         file_name = os.path.basename(file)
         with open(file, "rb") as f:
-            file_content = f.read()
-        response = client.upload_file(file_content, file_name)
+            response = client.upload_file(f, file_name)
         if not response.ok:
             raise DataChainError(response.message)
 
         if not response.data:
             raise DataChainError(f"Failed to upload file {file_name}")
 
-        file_id = response.data.get("blob", {}).get("id")
+        file_id = response.data.get("id")
         if file_id:
             file_ids.append(str(file_id))
     return file_ids
@@ -456,7 +455,7 @@ def list_jobs(status: Optional[str], team_name: Optional[str], limit: int):
     if not response.ok:
         raise DataChainError(response.message)
 
-    jobs = response.data.get("jobs", [])
+    jobs = response.data if response.data else []
     if not jobs:
         print("No jobs found")
         return
@@ -492,7 +491,7 @@ def list_clusters(team_name: Optional[str]):
     if not response.ok:
         raise DataChainError(response.message)
 
-    clusters = response.data.get("clusters", [])
+    clusters = response.data if response.data else []
     if not clusters:
         print("No clusters found")
         return
@@ -505,6 +504,7 @@ def list_clusters(team_name: Optional[str]):
             "Cloud Provider": cluster.get("cloud_provider"),
             "Cloud Credentials": cluster.get("cloud_credentials"),
             "Is Active": cluster.get("is_active"),
+            "Is Default": cluster.get("default"),
             "Max Workers": cluster.get("max_workers"),
         }
         for cluster in clusters
