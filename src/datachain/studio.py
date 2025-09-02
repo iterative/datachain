@@ -455,7 +455,7 @@ def list_jobs(status: Optional[str], team_name: Optional[str], limit: int):
     if not response.ok:
         raise DataChainError(response.message)
 
-    jobs = response.data if response.data else []
+    jobs = response.data or []
     if not jobs:
         print("No jobs found")
         return
