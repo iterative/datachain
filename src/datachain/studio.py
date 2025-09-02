@@ -491,7 +491,7 @@ def list_clusters(team_name: Optional[str]):
     if not response.ok:
         raise DataChainError(response.message)
 
-    clusters = response.data if response.data else []
+    clusters = response.data or []
     if not clusters:
         print("No clusters found")
         return
