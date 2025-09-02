@@ -428,8 +428,7 @@ def upload_files(client: StudioClient, files: list[str]) -> list[str]:
         if not response.data:
             raise DataChainError(f"Failed to upload file {file_name}")
 
-        file_id = response.data.get("id")
-        if file_id:
+        if file_id := response.data.get("id"):
             file_ids.append(str(file_id))
     return file_ids
 
