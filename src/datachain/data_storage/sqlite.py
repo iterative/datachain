@@ -458,6 +458,8 @@ class SQLiteMetastore(AbstractDBMetastore):
         self.default_table_names.append(self._datasets_dependencies.name)
         self.db.create_table(self._jobs, if_not_exists=True)
         self.default_table_names.append(self._jobs.name)
+        self.db.create_table(self._jobs_query_steps, if_not_exists=True)
+        self.default_table_names.append(self._jobs_query_steps.name)
 
     def _init_namespaces_projects(self) -> None:
         """
@@ -541,6 +543,12 @@ class SQLiteMetastore(AbstractDBMetastore):
 
     def _jobs_insert(self) -> "Insert":
         return sqlite.insert(self._jobs)
+
+    #
+    # Jobs query steps
+    #
+    def _jobs_query_steps_insert(self) -> "Insert":
+        return sqlite.insert(self._jobs_query_steps)
 
     #
     # Namespaces

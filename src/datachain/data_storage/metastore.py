@@ -23,7 +23,7 @@ from sqlalchemy import (
     select,
 )
 
-from datachain.data_storage import JobQueryType, JobStatus
+from datachain.data_storage import JobQueryStepStatus, JobQueryType, JobStatus
 from datachain.data_storage.serializer import Serializable
 from datachain.dataset import (
     DatasetDependency,
@@ -41,7 +41,7 @@ from datachain.error import (
     ProjectNotFoundError,
     TableMissingError,
 )
-from datachain.job import Job
+from datachain.job import Job, JobQueryStep
 from datachain.namespace import Namespace
 from datachain.project import Project
 from datachain.utils import JSONSerialize
@@ -72,6 +72,7 @@ class AbstractMetastore(ABC, Serializable):
     dataset_list_version_class: type[DatasetListVersion] = DatasetListVersion
     dependency_class: type[DatasetDependency] = DatasetDependency
     job_class: type[Job] = Job
+    job_query_step_class: type[JobQueryStep] = JobQueryStep
 
     def __init__(
         self,
@@ -400,6 +401,41 @@ class AbstractMetastore(ABC, Serializable):
     def get_job_status(self, job_id: str) -> Optional[JobStatus]:
         """Returns the status of the given job."""
 
+    #
+    # Jobs query steps
+    #
+
+    @abstractmethod
+    def list_jobs_query_steps(self, job_id: str, conn=None) -> Iterator["JobQueryStep"]:
+        """Returns all jobs queries related to some job"""
+
+    @abstractmethod
+    def get_job_query_step(
+        self, job_query_step_id: str, conn=None
+    ) -> Optional[JobQueryStep]:
+        """Gets single job query step by id"""
+
+    @abstractmethod
+    def create_job_query_step(
+        self,
+        job_id: str,
+        status: JobQueryStepStatus = JobQueryStepStatus.RUNNING,
+        conn: Optional[Any] = None,
+    ) -> str:
+        """Creates new job query step"""
+
+    @abstractmethod
+    def update_job_query_step(
+        self,
+        job_query_step_id: str,
+        status: Optional[JobQueryStepStatus] = None,
+        error_message: Optional[str] = None,
+        error_stack: Optional[str] = None,
+        finished_at: Optional[datetime] = None,
+        conn: Optional[Any] = None,
+    ) -> Optional["JobQueryStep"]:
+        """Updates job query step fields"""
+
 
 class AbstractDBMetastore(AbstractMetastore):
     """
@@ -415,6 +451,7 @@ class AbstractDBMetastore(AbstractMetastore):
     DATASET_VERSION_TABLE = "datasets_versions"
     DATASET_DEPENDENCY_TABLE = "datasets_dependencies"
     JOBS_TABLE = "jobs"
+    JOBS_QUERY_STEPS_TABLE = "jobs_query_steps"
 
     db: "DatabaseEngine"
 
@@ -1607,3 +1644,138 @@ class AbstractDBMetastore(AbstractMetastore):
         if not results:
             return None
         return results[0][0]
+
+    #
+    # Job query step
+    #
+
+    @staticmethod
+    def _jobs_query_steps_columns() -> "list[SchemaItem]":
+        return [
+            Column(
+                "id",
+                Text,
+                default=uuid4,
+                primary_key=True,
+                nullable=False,
+            ),
+            Column("job_id", Text, nullable=True),
+            Column(
+                "status", Integer, nullable=False, default=JobQueryStepStatus.RUNNING
+            ),
+            Column("error_message", Text, nullable=False, default=""),
+            Column("error_stack", Text, nullable=False, default=""),
+            Column("started_at", DateTime(timezone=True), nullable=False),
+            Column("finished_at", DateTime(timezone=True), nullable=True),
+        ]
+
+    @cached_property
+    def _jobs_query_steps_fields(self) -> list[str]:
+        return [c.name for c in self._jobs_query_steps_columns() if c.name]  # type: ignore[attr-defined]
+
+    @cached_property
+    def _jobs_query_steps(self) -> "Table":
+        return Table(
+            self.JOBS_QUERY_STEPS_TABLE,
+            self.db.metadata,
+            *self._jobs_query_steps_columns(),
+        )
+
+    @abstractmethod
+    def _jobs_query_steps_insert(self) -> "Insert": ...
+
+    def _jobs_query_steps_select(self, *columns) -> "Select":
+        if not columns:
+            return self._jobs_query_steps.select()
+        return select(*columns)
+
+    def _jobs_query_steps_update(self, *where) -> "Update":
+        if not where:
+            return self._jobs_query_steps.update()
+        return self._jobs_query_steps.update().where(*where)
+
+    def _parse_job_query_step(self, rows) -> JobQueryStep:
+        return self.job_query_step_class.parse(*rows)
+
+    def _parse_jobs_query_steps(self, rows) -> Iterator["JobQueryStep"]:
+        for _, g in groupby(rows, lambda r: r[1]):
+            yield self._parse_job_query_step(*list(g))
+
+    def _jobs_query_steps_query(self):
+        return self._jobs_query_steps_select(
+            *[
+                getattr(self._jobs_query_steps.c, f)
+                for f in self._jobs_query_steps_fields
+            ]
+        )
+
+    def list_jobs_query_steps(self, job_id: str, conn=None) -> Iterator["JobQueryStep"]:
+        """List jobs query steps by job id."""
+        query = self._jobs_query_steps_query().where(
+            self._jobs_query_steps.c.job_id == job_id
+        )
+        yield from self._parse_jobs_query_steps(self.db.execute(query, conn=conn))
+
+    def create_job_query_step(
+        self,
+        job_id: str,
+        status: JobQueryStepStatus = JobQueryStepStatus.RUNNING,
+        conn: Optional[Any] = None,
+    ) -> str:
+        """
+        Creates a new job query step.
+        """
+        job_query_step_id = str(uuid4())
+        self.db.execute(
+            self._jobs_query_steps_insert().values(
+                id=job_query_step_id,
+                job_id=job_id,
+                status=status,
+                started_at=datetime.now(timezone.utc),
+                error_message="",
+                error_stack="",
+            ),
+            conn=conn,
+        )
+        return job_query_step_id
+
+    def get_job_query_step(
+        self, job_query_step_id: str, conn=None
+    ) -> Optional[JobQueryStep]:
+        """Returns the job with the given ID."""
+        jqs = self._jobs_query_steps
+        query = self._jobs_query_steps_select(jqs).where(jqs.c.id == job_query_step_id)
+        results = list(self.db.execute(query, conn=conn))
+        if not results:
+            return None
+        return self._parse_job_query_step(results[0])
+
+    def update_job_query_step(
+        self,
+        job_query_step_id: str,
+        status: Optional[JobQueryStepStatus] = None,
+        error_message: Optional[str] = None,
+        error_stack: Optional[str] = None,
+        finished_at: Optional[datetime] = None,
+        conn: Optional[Any] = None,
+    ) -> Optional["JobQueryStep"]:
+        values: dict = {}
+        if status is not None:
+            values["status"] = status
+        if error_message is not None:
+            values["error_message"] = error_message
+        if error_stack is not None:
+            values["error_stack"] = error_stack
+        if finished_at is not None:
+            values["finished_at"] = finished_at
+
+        if values:
+            jqs = self._jobs_query_steps
+            self.db.execute(
+                self._jobs_query_steps_update()
+                .where(jqs.c.id == job_query_step_id)
+                .values(**values),
+                conn=conn,
+            )  # type: ignore [attr-defined]
+
+        return self.get_job_query_step(job_query_step_id, conn=conn)
