@@ -150,4 +150,4 @@ cython_debug/
 # test variables, local scripts to try, etc
 local/
 
-docs/openapi.json
+# docs/openapi.json
