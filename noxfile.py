@@ -19,6 +19,9 @@ locations = "src", "tests"
 @nox.session
 def docs(session: nox.Session) -> None:
     session.install(".[docs]")
+    session.run(
+        "wget", "https://studio.datachain.ai/api/openapi.json", "-Odocs/openapi.json"
+    )
     session.run("mkdocs", "build")
 
 
