@@ -73,7 +73,7 @@ def to_database(
     table_name: str,
     connection: "ConnectionType",
     *,
-    batch_rows: int = DEFAULT_DATABASE_BATCH_SIZE,
+    batch_size: int = DEFAULT_DATABASE_BATCH_SIZE,
     on_conflict: Optional[str] = None,
     conflict_columns: Optional[list[str]] = None,
     column_mapping: Optional[dict[str, Optional[str]]] = None,
@@ -124,7 +124,7 @@ def to_database(
                 table.create(conn, checkfirst=True)
 
                 rows_iter = chain._leaf_values()
-                for batch in batched(rows_iter, batch_rows):
+                for batch in batched(rows_iter, batch_size):
                     rows_affected = _process_batch(
                         conn,
                         table,

@@ -1,7 +1,7 @@
 """
 This is a simple UDF to demonstrate local parallel processing with multiprocessing.
 
-In add_signals specify either parallel=-1 to use processes equal to the number
+In add_signals specify either parallel=True to use processes equal to the number
 of CPUs/cores on your current machine, or parallel=N for N processes.
 The default if parallel is not specified is to run single-threaded.
 
@@ -33,7 +33,7 @@ def path_len_benchmark(path: str) -> int:
 (
     dc.read_storage("gs://datachain-demo/dogs-and-cats/", anon=True)
     # Try to disable to see the difference in performance
-    .settings(parallel=-1)
+    .settings(parallel=True)
     .map(path_len=path_len_benchmark, params=["file.path"])
     .show()
 )
