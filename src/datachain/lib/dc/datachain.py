@@ -2,8 +2,10 @@ import copy
 import os
 import os.path
 import sys
+import traceback
 import warnings
 from collections.abc import Iterator, Sequence
+from datetime import datetime, timezone
 from typing import (
     IO,
     TYPE_CHECKING,
@@ -26,6 +28,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from tqdm import tqdm
 
 from datachain import semver
+from datachain.data_storage import JobQueryStepStatus
 from datachain.dataset import DatasetRecord
 from datachain.delta import delta_disabled
 from datachain.error import ProjectCreateNotAllowedError, ProjectNotFoundError
@@ -593,88 +596,118 @@ class DataChain:
                 Available values: `major`, `minor` or `patch`. Default is `patch`.
         """
         catalog = self.session.catalog
-        if version is not None:
-            semver.validate(version)
-
-        if update_version is not None and update_version not in [
-            "patch",
-            "major",
-            "minor",
-        ]:
-            raise ValueError(
-                "update_version can have one of the following values: major, minor or"
-                " patch"
-            )
-
-        namespace_name, project_name, name = catalog.get_full_dataset_name(
-            name,
-            namespace_name=self._settings.namespace,
-            project_name=self._settings.project,
-        )
-
+        error_message = ""
+        error_stack = ""
+        job_query_step_id = None
         try:
-            project = self.session.catalog.metastore.get_project(
-                project_name,
-                namespace_name,
-                create=is_studio(),
-            )
-        except ProjectNotFoundError as e:
-            # not being able to create it as creation is not allowed
-            raise ProjectCreateNotAllowedError("Creating project is not allowed") from e
+            if job_id := os.getenv("DATACHAIN_JOB_ID"):
+                job_query_step_id = catalog.metastore.create_job_query_step(job_id)
 
-        schema = self.signals_schema.clone_without_sys_signals().serialize()
+            if version is not None:
+                semver.validate(version)
 
-        # Handle retry and delta functionality
-        if self.delta and name:
-            from datachain.delta import delta_retry_update
-
-            # Delta chains must have delta_on defined (ensured by _as_delta method)
-            assert self._delta_on is not None, "Delta chain must have delta_on defined"
-
-            result_ds, dependencies, has_changes = delta_retry_update(
-                self,
-                namespace_name,
-                project_name,
-                name,
-                on=self._delta_on,
-                right_on=self._delta_result_on,
-                compare=self._delta_compare,
-                delta_retry=self._delta_retry,
-            )
-
-            if result_ds:
-                return self._evolve(
-                    query=result_ds._query.save(
-                        name=name,
-                        version=version,
-                        project=project,
-                        feature_schema=schema,
-                        dependencies=dependencies,
-                        **kwargs,
-                    )
+            if update_version is not None and update_version not in [
+                "patch",
+                "major",
+                "minor",
+            ]:
+                raise ValueError(
+                    "update_version can have one of the following values: major,"
+                    " minor or patch"
                 )
 
-            if not has_changes:
-                # sources have not been changed so new version of resulting dataset
-                # would be the same as previous one. To avoid duplicating exact
-                # datasets, we won't create new version of it and we will return
-                # current latest version instead.
-                from .datasets import read_dataset
-
-                return read_dataset(name, **kwargs)
-
-        return self._evolve(
-            query=self._query.save(
-                name=name,
-                version=version,
-                project=project,
-                description=description,
-                attrs=attrs,
-                feature_schema=schema,
-                update_version=update_version,
-                **kwargs,
+            namespace_name, project_name, name = catalog.get_full_dataset_name(
+                name,
+                namespace_name=self._settings.namespace,
+                project_name=self._settings.project,
             )
-        )
+
+            try:
+                project = self.session.catalog.metastore.get_project(
+                    project_name,
+                    namespace_name,
+                    create=is_studio(),
+                )
+            except ProjectNotFoundError as e:
+                # not being able to create it as creation is not allowed
+                raise ProjectCreateNotAllowedError(
+                    "Creating project is not allowed"
+                ) from e
+
+            schema = self.signals_schema.clone_without_sys_signals().serialize()
+
+            # Handle retry and delta functionality
+            if self.delta and name:
+                from datachain.delta import delta_retry_update
+
+                # Delta chains must have delta_on defined (ensured by _as_delta method)
+                assert self._delta_on is not None, (
+                    "Delta chain must have delta_on defined"
+                )
+
+                result_ds, dependencies, has_changes = delta_retry_update(
+                    self,
+                    namespace_name,
+                    project_name,
+                    name,
+                    on=self._delta_on,
+                    right_on=self._delta_result_on,
+                    compare=self._delta_compare,
+                    delta_retry=self._delta_retry,
+                )
+
+                if result_ds:
+                    return self._evolve(
+                        query=result_ds._query.save(
+                            name=name,
+                            version=version,
+                            project=project,
+                            feature_schema=schema,
+                            dependencies=dependencies,
+                            **kwargs,
+                        )
+                    )
+
+                if not has_changes:
+                    # sources have not been changed so new version of resulting dataset
+                    # would be the same as previous one. To avoid duplicating exact
+                    # datasets, we won't create new version of it and we will return
+                    # current latest version instead.
+                    from .datasets import read_dataset
+
+                    return read_dataset(name, **kwargs)
+
+            return self._evolve(
+                query=self._query.save(
+                    name=name,
+                    version=version,
+                    project=project,
+                    description=description,
+                    attrs=attrs,
+                    feature_schema=schema,
+                    update_version=update_version,
+                    **kwargs,
+                )
+            )
+        except Exception as e:
+            error_message = str(e)
+            error_stack = traceback.format_exc()
+            raise
+        finally:
+            if job_id:
+                status = JobQueryStepStatus.FINISHED
+                finished_at: Optional[datetime] = datetime.now(timezone.utc)
+                if error_message:
+                    status = JobQueryStepStatus.ERROR
+                    finished_at = None
+
+                catalog.metastore.update_job_query_step(
+                    job_query_step_id,  # type: ignore[arg-type]
+                    status=status,
+                    error_message=error_message,
+                    error_stack=error_stack,
+                    finished_at=finished_at,
+                )
 
     def apply(self, func, *args, **kwargs):
         """Apply any function to the chain.
