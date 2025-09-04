@@ -37,7 +37,3 @@
 		margin-left: calc(var(--permalink-size) * -1 - var(--permalink-spacing)) !important;
 	}
 }
-
-.md-nav__icon {
-	margin-bottom: 0.5rem;
-}
