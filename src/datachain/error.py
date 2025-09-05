@@ -34,6 +34,14 @@ class ProjectCreateNotAllowedError(NotAllowedError):
     pass
 
 
+class ProjectDeleteNotAllowedError(NotAllowedError):
+    pass
+
+
+class NamespaceDeleteNotAllowedError(NotAllowedError):
+    pass
+
+
 class ProjectNotFoundError(NotFoundError):
     pass
 
