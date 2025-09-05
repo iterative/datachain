@@ -38,6 +38,7 @@ from datachain.lib.file import (
 )
 from datachain.lib.model_store import ModelStore
 from datachain.lib.projects import create as create_project
+from datachain.lib.projects import delete as delete_project
 from datachain.lib.udf import Aggregator, Generator, Mapper
 from datachain.lib.utils import AbstractUDF, DataChainError
 from datachain.query import metrics, param
@@ -74,6 +75,7 @@ __all__ = [
     "create_project",
     "datasets",
     "delete_dataset",
+    "delete_project",
     "is_chain_type",
     "is_studio",
     "listings",

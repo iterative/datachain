@@ -1,6 +1,6 @@
 from typing import Optional
 
-from datachain.error import ProjectCreateNotAllowedError
+from datachain.error import ProjectCreateNotAllowedError, ProjectDeleteNotAllowedError
 from datachain.project import Project
 from datachain.query import Session
 
@@ -86,3 +86,46 @@ def ls(
         namespace_id = session.catalog.metastore.get_namespace(namespace).id
 
     return session.catalog.metastore.list_projects(namespace_id)
+
+
+def delete(name: str, namespace: str, session: Optional[Session]) -> None:
+    """
+    Removes a project by name within a namespace.
+
+    Raises:
+        ProjectNotFoundError: If the project does not exist.
+        ProjectDeleteNotAllowedError: If the project is non-empty,
+            is the default project, or is a listing project,
+            as these cannot be removed.
+
+    Parameters:
+        name : The name of the project.
+        namespace : The name of the namespace.
+        session : Session to use for getting project.
+
+    Example:
+        ```py
+        import datachain as dc
+        from datachain.lib.projects import delete as delete_project
+        delete_project("my-project", "local")
+        ```
+    """
+    session = Session.get(session)
+    catalog = session.catalog
+
+    project = catalog.metastore.get_project(name, namespace)
+
+    if catalog.metastore.is_listing_project(name, namespace):
+        raise ProjectDeleteNotAllowedError("Project listing cannot be removed")
+
+    if catalog.metastore.is_default_project(name, namespace):
+        raise ProjectDeleteNotAllowedError("Project default cannot be removed")
+
+    num_datasets = catalog.metastore.count_datasets(project.id)
+    if num_datasets > 0:
+        raise ProjectDeleteNotAllowedError(
+            f"Project cannot be removed. It contains {num_datasets} dataset(s). "
+            "Please remove the dataset(s) first."
+        )
+
+    catalog.metastore.remove_project(project.id)

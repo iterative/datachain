@@ -22,6 +22,7 @@ from sqlalchemy import (
     UniqueConstraint,
     select,
 )
+from sqlalchemy.sql import func as f
 
 from datachain.data_storage import JobQueryType, JobStatus
 from datachain.data_storage.serializer import Serializable
@@ -191,8 +192,20 @@ class AbstractMetastore(ABC, Serializable):
         """
 
     @abstractmethod
+    def is_default_project(self, project_name: str, namespace_name: str) -> bool:
+        """Checks if some project in namespace is default"""
+
+    @abstractmethod
+    def is_listing_project(self, project_name: str, namespace_name: str) -> bool:
+        """Checks if some project in namespace is listing"""
+
+    @abstractmethod
     def get_project_by_id(self, project_id: int, conn=None) -> Project:
         """Gets a single project by id"""
+
+    @abstractmethod
+    def remove_project(self, project_id: int, conn=None) -> None:
+        """Removes a single project by id"""
 
     @abstractmethod
     def list_projects(self, namespace_id: Optional[int], conn=None) -> list[Project]:
@@ -269,6 +282,10 @@ class AbstractMetastore(ABC, Serializable):
         self, project_id: Optional[int] = None
     ) -> Iterator[DatasetListRecord]:
         """Lists all datasets in some project or in all projects."""
+
+    @abstractmethod
+    def count_datasets(self, project_id: Optional[int] = None) -> int:
+        """Counts datasets in some project or in all projects."""
 
     @abstractmethod
     def list_datasets_by_prefix(
@@ -796,13 +813,13 @@ class AbstractDBMetastore(AbstractMetastore):
 
         return self.get_project(name, namespace.name)
 
-    def _is_listing_project(self, project_name: str, namespace_name: str) -> bool:
+    def is_listing_project(self, project_name: str, namespace_name: str) -> bool:
         return (
             project_name == self.listing_project_name
             and namespace_name == self.system_namespace_name
         )
 
-    def _is_default_project(self, project_name: str, namespace_name: str) -> bool:
+    def is_default_project(self, project_name: str, namespace_name: str) -> bool:
         return (
             project_name == self.default_project_name
             and namespace_name == self.default_namespace_name
@@ -816,7 +833,7 @@ class AbstractDBMetastore(AbstractMetastore):
         p = self._projects
         validate = True
 
-        if self._is_listing_project(name, namespace_name) or self._is_default_project(
+        if self.is_listing_project(name, namespace_name) or self.is_default_project(
             name, namespace_name
         ):
             # we are always creating default and listing projects if they don't exist
@@ -857,6 +874,11 @@ class AbstractDBMetastore(AbstractMetastore):
         if not rows:
             raise ProjectNotFoundError(f"Project with id {project_id} not found.")
         return self.project_class.parse(*rows[0])
+
+    def remove_project(self, project_id: int, conn=None) -> None:
+        p = self._projects
+        with self.db.transaction():
+            self.db.execute(self._projects_delete().where(p.c.id == project_id))
 
     def list_projects(self, namespace_id: Optional[int], conn=None) -> list[Project]:
         """
@@ -1189,7 +1211,6 @@ class AbstractDBMetastore(AbstractMetastore):
     def list_datasets(
         self, project_id: Optional[int] = None
     ) -> Iterator["DatasetListRecord"]:
-        """Lists all datasets."""
         d = self._datasets
         query = self._base_list_datasets_query().order_by(
             self._datasets.c.name, self._datasets_versions.c.version
@@ -1197,6 +1218,16 @@ class AbstractDBMetastore(AbstractMetastore):
         if project_id:
             query = query.where(d.c.project_id == project_id)
         yield from self._parse_dataset_list(self.db.execute(query))
+
+    def count_datasets(self, project_id: Optional[int] = None) -> int:
+        d = self._datasets
+        query = self._base_list_datasets_query()
+        if project_id:
+            query = query.where(d.c.project_id == project_id)
+
+        query = select(f.count(1)).select_from(query.subquery())
+
+        return next(self.db.execute(query))[0]
 
     def list_datasets_by_prefix(
         self, prefix: str, project_id: Optional[int] = None, conn=None

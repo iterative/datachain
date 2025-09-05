@@ -4,10 +4,12 @@ import datachain as dc
 from datachain.error import (
     InvalidProjectNameError,
     ProjectCreateNotAllowedError,
+    ProjectDeleteNotAllowedError,
     ProjectNotFoundError,
 )
 from datachain.lib.namespaces import create as create_namespace
 from datachain.lib.namespaces import get as get_namespace
+from datachain.lib.projects import delete as delete_project
 from datachain.lib.projects import get as get_project
 from datachain.lib.projects import ls as ls_projects
 from tests.utils import skip_if_not_sqlite
@@ -155,3 +157,52 @@ def test_ls_projects_empty_in_namespace(test_session):
     create_namespace("ns1")
     projects = ls_projects("ns1", session=test_session)
     assert [(p.namespace.name, p.name) for p in projects] == []
+
+
+def test_delete_project(test_session, chatbot_project, dev_namespace):
+    delete_project(chatbot_project.name, dev_namespace.name, session=test_session)
+    with pytest.raises(ProjectNotFoundError):
+        get_project(chatbot_project.name, dev_namespace.name, session=test_session)
+
+
+def test_delete_project_not_found(test_session, chatbot_project, dev_namespace):
+    with pytest.raises(ProjectNotFoundError):
+        delete_project("missing", dev_namespace.name, session=test_session)
+
+
+def test_delete_project_listing(test_session):
+    metastore = test_session.catalog.metastore
+    with pytest.raises(ProjectDeleteNotAllowedError) as excinfo:
+        delete_project(
+            metastore.listing_project_name,
+            metastore.system_namespace_name,
+            session=test_session,
+        )
+    assert str(excinfo.value) == "Project listing cannot be removed"
+
+
+def test_delete_project_default(test_session):
+    metastore = test_session.catalog.metastore
+    with pytest.raises(ProjectDeleteNotAllowedError) as excinfo:
+        delete_project(
+            metastore.default_project_name,
+            metastore.default_namespace_name,
+            session=test_session,
+        )
+    assert str(excinfo.value) == "Project default cannot be removed"
+
+
+def test_delete_project_non_empty(test_session, chatbot_project, dev_namespace):
+    (
+        dc.read_values(num=[1, 2, 3])
+        .settings(namespace=dev_namespace.name, project=chatbot_project.name)
+        .save("numbers")
+    )
+
+    with pytest.raises(ProjectDeleteNotAllowedError) as excinfo:
+        delete_project(chatbot_project.name, dev_namespace.name, session=test_session)
+
+    assert str(excinfo.value) == (
+        "Project cannot be removed. It contains 1 dataset(s)."
+        " Please remove the dataset(s) first."
+    )
