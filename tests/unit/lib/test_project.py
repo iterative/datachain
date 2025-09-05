@@ -178,7 +178,9 @@ def test_delete_project_listing(test_session):
             metastore.system_namespace_name,
             session=test_session,
         )
-    assert str(excinfo.value) == "Project listing cannot be removed"
+    assert str(excinfo.value) == (
+        f"Project {metastore.listing_project_name} cannot be removed"
+    )
 
 
 def test_delete_project_default(test_session):
@@ -189,7 +191,9 @@ def test_delete_project_default(test_session):
             metastore.default_namespace_name,
             session=test_session,
         )
-    assert str(excinfo.value) == "Project default cannot be removed"
+    assert str(excinfo.value) == (
+        f"Project {metastore.default_project_name} cannot be removed"
+    )
 
 
 def test_delete_project_non_empty(test_session, chatbot_project, dev_namespace):

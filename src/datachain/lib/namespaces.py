@@ -1,6 +1,9 @@
 from typing import Optional
 
-from datachain.error import NamespaceCreateNotAllowedError
+from datachain.error import (
+    NamespaceCreateNotAllowedError,
+    NamespaceDeleteNotAllowedError,
+)
 from datachain.namespace import Namespace
 from datachain.query import Session
 
@@ -71,3 +74,49 @@ def ls(session: Optional[Session] = None) -> list[Namespace]:
         ```
     """
     return Session.get(session).catalog.metastore.list_namespaces()
+
+
+def delete(name: str, session: Optional[Session]) -> None:
+    """
+    Removes a namespace by name.
+
+    Raises:
+        NamespaceNotFoundError: If the namespace does not exist.
+        NamespaceDeleteNotAllowedError: If the namespace is non-empty,
+            is the default namespace, or is a system namespace,
+            as these cannot be removed.
+
+    Parameters:
+        name : The name of the namespace.
+        session : Session to use for getting project.
+
+    Example:
+        ```py
+        import datachain as dc
+        from datachain.lib.namespace import delete as delete_namespace
+        delete_namespace("dev")
+        ```
+    """
+    session = Session.get(session)
+    metastore = session.catalog.metastore
+
+    namespace = metastore.get_namespace(name)
+
+    if name == metastore.system_namespace_name:
+        raise NamespaceDeleteNotAllowedError(
+            f"Namespace {metastore.system_namespace_name} cannot be removed"
+        )
+
+    if name == metastore.default_namespace_name:
+        raise NamespaceDeleteNotAllowedError(
+            f"Namespace {metastore.default_namespace_name} cannot be removed"
+        )
+
+    projects = metastore.list_projects(namespace.id)
+    if len(projects) > 0:
+        raise NamespaceDeleteNotAllowedError(
+            f"Namespace cannot be removed. It contains {len(projects)} project(s). "
+            "Please remove the project(s) first."
+        )
+
+    metastore.remove_namespace(namespace.id)

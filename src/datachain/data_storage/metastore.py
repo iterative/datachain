@@ -143,6 +143,10 @@ class AbstractMetastore(ABC, Serializable):
         """Gets a single namespace by name"""
 
     @abstractmethod
+    def remove_namespace(self, namespace_id: int, conn=None) -> None:
+        """Removes a single namespace by id"""
+
+    @abstractmethod
     def list_namespaces(self, conn=None) -> list[Namespace]:
         """Gets a list of all namespaces"""
 
@@ -751,6 +755,11 @@ class AbstractDBMetastore(AbstractMetastore):
         self.db.execute(query)
 
         return self.get_namespace(name)
+
+    def remove_namespace(self, namespace_id: int, conn=None) -> None:
+        n = self._namespaces
+        with self.db.transaction():
+            self.db.execute(self._namespaces_delete().where(n.c.id == namespace_id))
 
     def get_namespace(self, name: str, conn=None) -> Namespace:
         """Gets a single namespace by name"""

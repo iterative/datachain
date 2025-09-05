@@ -111,21 +111,25 @@ def delete(name: str, namespace: str, session: Optional[Session]) -> None:
         ```
     """
     session = Session.get(session)
-    catalog = session.catalog
+    metastore = session.catalog.metastore
 
-    project = catalog.metastore.get_project(name, namespace)
+    project = metastore.get_project(name, namespace)
 
-    if catalog.metastore.is_listing_project(name, namespace):
-        raise ProjectDeleteNotAllowedError("Project listing cannot be removed")
+    if metastore.is_listing_project(name, namespace):
+        raise ProjectDeleteNotAllowedError(
+            f"Project {metastore.listing_project_name} cannot be removed"
+        )
 
-    if catalog.metastore.is_default_project(name, namespace):
-        raise ProjectDeleteNotAllowedError("Project default cannot be removed")
+    if metastore.is_default_project(name, namespace):
+        raise ProjectDeleteNotAllowedError(
+            f"Project {metastore.default_project_name} cannot be removed"
+        )
 
-    num_datasets = catalog.metastore.count_datasets(project.id)
+    num_datasets = metastore.count_datasets(project.id)
     if num_datasets > 0:
         raise ProjectDeleteNotAllowedError(
             f"Project cannot be removed. It contains {num_datasets} dataset(s). "
             "Please remove the dataset(s) first."
         )
 
-    catalog.metastore.remove_project(project.id)
+    metastore.remove_project(project.id)
