@@ -118,7 +118,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install ffmpeg@7
-          echo 'DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib' >> "$GITHUB_ENV"
+          echo 'DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/opt/ffmpeg@7/lib' >> "$GITHUB_ENV"
 
       - name: Install FFmpeg on Ubuntu
         if: runner.os == 'Linux'
