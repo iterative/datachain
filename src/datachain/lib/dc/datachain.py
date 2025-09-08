@@ -576,7 +576,7 @@ class DataChain:
         """Save to a Dataset. It returns the chain itself.
 
         Parameters:
-            name: The dataset name. This can be either a fully qualified name, including
+            name: dataset name. This can be either a fully qualified name, including
                 the namespace and project, or just a regular dataset name. In the latter
                 case, the namespace and project will be taken from the settings
                 (if specified) or from the default values otherwise.

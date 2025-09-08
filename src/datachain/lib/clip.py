@@ -53,7 +53,7 @@ def clip_similarity_scores(
         prob: Compute softmax probabilities.
         image_to_text: Whether to compute for image-to-text or text-to-image. Ignored
             if only one of the images or text provided.
-        device: Device to use. Default is a None - use model's device.
+        device: Device to use. Default is None - use model's device.
 
 
     Example:
