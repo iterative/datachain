@@ -360,10 +360,10 @@ class DataChain:
                 files from the same or different chains on the same worker node.
                 Defaults to False.
             prefetch: Enable prefetching of files. This will download files in
-                advance using multiple threads. If an integer is provided,
-                it specifies the number of files to prefetch concurrently for each
-                worker. Defaults to 2. Set to 0 or False to disable prefetching.
-            parallel: Number of processes to use for processing user defined functions
+                advance in parallel. If an integer is provided, it specifies the number
+                of files to prefetch concurrently for each worker. Defaults to 2.
+                Set to 0 or False to disable prefetching.
+            parallel: Number of processes to use for processing user-defined functions
                 (UDFs) in parallel. If an integer is provided, it specifies the number
                 of CPUs to use. If True, all available CPUs are used.  Defaults to 1.
             namespace: Namespace to use for the chain by default.
