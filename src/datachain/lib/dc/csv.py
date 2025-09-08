@@ -1,10 +1,6 @@
+import os
 from collections.abc import Sequence
-from typing import (
-    TYPE_CHECKING,
-    Callable,
-    Optional,
-    Union,
-)
+from typing import TYPE_CHECKING, Callable, Optional, Union
 
 from datachain.lib.dc.utils import DatasetPrepareError, OutputType
 from datachain.lib.model_store import ModelStore
@@ -17,14 +13,14 @@ if TYPE_CHECKING:
 
 
 def read_csv(
-    path,
+    path: Union[str, os.PathLike[str], list[str], list[os.PathLike[str]]],
     delimiter: Optional[str] = None,
     header: bool = True,
     output: OutputType = None,
     column: str = "",
     model_name: str = "",
     source: bool = True,
-    nrows=None,
+    nrows: Optional[int] = None,
     session: Optional[Session] = None,
     settings: Optional[dict] = None,
     column_types: Optional[dict[str, "Union[str, ArrowDataType]"]] = None,
@@ -34,21 +30,21 @@ def read_csv(
     """Generate chain from csv files.
 
     Parameters:
-        path : Storage URI with directory. URI must start with storage prefix such
+        path: Storage URI with directory. URI must start with storage prefix such
             as `s3://`, `gs://`, `az://` or "file:///".
-        delimiter : Character for delimiting columns. Takes precedence if also
+        delimiter: Character for delimiting columns. Takes precedence if also
             specified in `parse_options`. Defaults to ",".
-        header : Whether the files include a header row.
-        output : Dictionary or feature class defining column names and their
+        header: Whether the files include a header row.
+        output: Dictionary or feature class defining column names and their
             corresponding types. List of column names is also accepted, in which
             case types will be inferred.
-        column : Created column name.
-        model_name : Generated model name.
-        source : Whether to include info about the source file.
-        nrows : Optional row limit.
-        session : Session to use for the chain.
-        settings : Settings to use for the chain.
-        column_types : Dictionary of column names and their corresponding types.
+        column: Created column name.
+        model_name: Generated model name.
+        source: Whether to include info about the source file.
+        nrows: Optional row limit.
+        session: Session to use for the chain.
+        settings: Settings to use for the chain.
+        column_types: Dictionary of column names and their corresponding types.
             It is passed to CSV reader and for each column specified type auto
             inference is disabled.
         parse_options: Tells the parser how to process lines.

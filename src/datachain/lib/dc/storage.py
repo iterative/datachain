@@ -1,22 +1,10 @@
-import os.path
+import os
 from collections.abc import Sequence
 from functools import reduce
-from typing import (
-    TYPE_CHECKING,
-    Optional,
-    Union,
-)
+from typing import TYPE_CHECKING, Optional, Union
 
-from datachain.lib.file import (
-    FileType,
-    get_file_type,
-)
-from datachain.lib.listing import (
-    get_file_info,
-    get_listing,
-    list_bucket,
-    ls,
-)
+from datachain.lib.file import FileType, get_file_type
+from datachain.lib.listing import get_file_info, get_listing, list_bucket, ls
 from datachain.query import Session
 
 if TYPE_CHECKING:
@@ -50,15 +38,15 @@ def read_storage(
     It returns the chain itself as usual.
 
     Parameters:
-        uri : storage URI with directory or list of URIs.
+        uri: storage URI with directory or list of URIs.
             URIs must start with storage prefix such
             as `s3://`, `gs://`, `az://` or "file:///"
-        type : read file as "binary", "text", or "image" data. Default is "binary".
-        recursive : search recursively for the given path.
-        column : Created column name.
-        update : force storage reindexing. Default is False.
-        anon : If True, we will treat cloud bucket as public one
-        client_config : Optional client configuration for the storage client.
+        type: read file as "binary", "text", or "image" data. Default is "binary".
+        recursive: search recursively for the given path.
+        column: Created column name.
+        update: force storage reindexing. Default is False.
+        anon: If True, we will treat cloud bucket as public one
+        client_config: Optional client configuration for the storage client.
         delta: If True, only process new or changed files instead of reprocessing
             everything. This saves time by skipping files that were already processed in
             previous versions. The optimization is working when a new version of the

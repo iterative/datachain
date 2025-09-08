@@ -1,8 +1,5 @@
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Optional,
-)
+import os
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from datachain.lib.data_model import DataType
 from datachain.query import Session
@@ -16,7 +13,7 @@ if TYPE_CHECKING:
 
 
 def read_parquet(
-    path,
+    path: Union[str, os.PathLike[str], list[str], list[os.PathLike[str]]],
     partitioning: Any = "hive",
     output: Optional[dict[str, DataType]] = None,
     column: str = "",
@@ -29,15 +26,15 @@ def read_parquet(
     """Generate chain from parquet files.
 
     Parameters:
-        path : Storage URI with directory. URI must start with storage prefix such
+        path: Storage URI with directory. URI must start with storage prefix such
             as `s3://`, `gs://`, `az://` or "file:///".
-        partitioning : Any pyarrow partitioning schema.
-        output : Dictionary defining column names and their corresponding types.
-        column : Created column name.
-        model_name : Generated model name.
-        source : Whether to include info about the source file.
-        session : Session to use for the chain.
-        settings : Settings to use for the chain.
+        partitioning: Any pyarrow partitioning schema.
+        output: Dictionary defining column names and their corresponding types.
+        column: Created column name.
+        model_name: Generated model name.
+        source: Whether to include info about the source file.
+        session: Session to use for the chain.
+        settings: Settings to use for the chain.
 
     Example:
         Reading a single file:

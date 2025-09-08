@@ -51,14 +51,14 @@ def read_dataset(
             namespace and project. Alternatively, it can be a regular name, in which
             case the explicitly defined namespace and project will be used if they are
             set; otherwise, default values will be applied.
-        namespace : optional name of namespace in which dataset to read is created
-        project : optional name of project in which dataset to read is created
-        version : dataset version. Supports:
+        namespace: optional name of namespace in which dataset to read is created
+        project: optional name of project in which dataset to read is created
+        version: dataset version. Supports:
             - Exact version strings: "1.2.3"
             - Legacy integer versions: 1, 2, 3 (finds latest major version)
             - Version specifiers (PEP 440): ">=1.0.0,<2.0.0", "~=1.4.2", "==1.2.*", etc.
-        session : Session to use for the chain.
-        settings : Settings to use for the chain.
+        session: Session to use for the chain.
+        settings: Settings to use for the chain.
         delta: If True, only process new or changed files instead of reprocessing
             everything. This saves time by skipping files that were already processed in
             previous versions. The optimization is working when a new version of the
@@ -314,9 +314,9 @@ def delete_dataset(
             namespace and project. Alternatively, it can be a regular name, in which
             case the explicitly defined namespace and project will be used if they are
             set; otherwise, default values will be applied.
-        namespace : optional name of namespace in which dataset to delete is created
-        project : optional name of project in which dataset to delete is created
-        version : Optional dataset version
+        namespace: optional name of namespace in which dataset to delete is created
+        project: optional name of project in which dataset to delete is created
+        version: Optional dataset version
         force: If true, all datasets versions will be removed. Defaults to False.
         studio: If True, removes dataset from Studio only, otherwise removes local
             dataset. Defaults to False.

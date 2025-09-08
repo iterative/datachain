@@ -114,9 +114,12 @@ jobs:
 
       - name: Install FFmpeg on macOS
         if: runner.os == 'macOS'
+        # Using ffmpeg@7 since torchcodec does not support ffmpeg 8 yet
+        # See: https://github.com/pytorch/torchcodec/issues/839
+        # On Windows and Linux ffmpeg < 8 is installed by default
         run: |
-          brew install ffmpeg
-          echo 'DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib' >> "$GITHUB_ENV"
+          brew install ffmpeg@7
+          echo 'DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/opt/ffmpeg@7/lib' >> "$GITHUB_ENV"
 
       - name: Install FFmpeg on Ubuntu
         if: runner.os == 'Linux'
