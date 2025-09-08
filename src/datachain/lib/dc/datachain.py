@@ -207,8 +207,8 @@ class DataChain:
         self.print_schema(file=file)
         return file.getvalue()
 
-    def __hash__(self):
-        return hash(self._query)
+    def hash(self) -> str:
+        return self._query.hash()
 
     def _as_delta(
         self,

@@ -169,7 +169,7 @@ class Step(ABC):
         """Apply the processing step."""
 
     @abstractmethod
-    def __hash__(self):
+    def hash(self) -> str:
         """Calculates hash for this step"""
 
 
@@ -217,7 +217,7 @@ class DatasetDiffOperation(Step):
     def clone(self) -> "Self":
         return self.__class__(self.dq, self.catalog)
 
-    def __hash__(self):
+    def hash(self) -> str:
         raise NotImplementedError
 
     @abstractmethod
@@ -664,7 +664,7 @@ class UDFSignal(UDFStep):
     min_task_size: Optional[int] = None
     batch_size: Optional[int] = None
 
-    def __hash__(self):
+    def hash(self) -> str:
         raise NotImplementedError
 
     def create_udf_table(self, query: Select) -> "Table":
@@ -746,7 +746,7 @@ class RowGenerator(UDFStep):
     min_task_size: Optional[int] = None
     batch_size: Optional[int] = None
 
-    def __hash__(self):
+    def hash(self) -> str:
         raise NotImplementedError
 
     def create_udf_table(self, query: Select) -> "Table":
@@ -807,7 +807,7 @@ class SQLClause(Step, ABC):
 class SQLSelect(SQLClause):
     args: tuple[Union[Function, ColumnElement], ...]
 
-    def __hash__(self):
+    def hash(self) -> str:
         raise NotImplementedError
 
     def apply_sql_clause(self, query) -> Select:
@@ -826,7 +826,7 @@ class SQLSelect(SQLClause):
 class SQLSelectExcept(SQLClause):
     args: tuple[Union[Function, ColumnElement], ...]
 
-    def __hash__(self):
+    def hash(self) -> str:
         raise NotImplementedError
 
     def apply_sql_clause(self, query: Select) -> Select:
@@ -840,7 +840,7 @@ class SQLMutate(SQLClause):
     args: tuple[Label, ...]
     new_schema: SignalSchema
 
-    def __hash__(self):
+    def hash(self) -> str:
         raise NotImplementedError
 
     def apply_sql_clause(self, query: Select) -> Select:
@@ -872,7 +872,7 @@ class SQLMutate(SQLClause):
 class SQLFilter(SQLClause):
     expressions: tuple[Union[Function, ColumnElement], ...]
 
-    def __hash__(self):
+    def hash(self) -> str:
         raise NotImplementedError
 
     def __and__(self, other):
@@ -888,6 +888,9 @@ class SQLFilter(SQLClause):
 class SQLOrderBy(SQLClause):
     args: tuple[Union[Function, ColumnElement], ...]
 
+    def hash(self) -> str:
+        raise NotImplementedError
+
     def apply_sql_clause(self, query: Select) -> Select:
         args = self.parse_cols(self.args)
         return query.order_by(*args)
@@ -897,6 +900,9 @@ class SQLOrderBy(SQLClause):
 class SQLLimit(SQLClause):
     n: int
 
+    def hash(self) -> str:
+        raise NotImplementedError
+
     def apply_sql_clause(self, query: Select) -> Select:
         return query.limit(self.n)
 
@@ -905,7 +911,7 @@ class SQLLimit(SQLClause):
 class SQLOffset(SQLClause):
     offset: int
 
-    def __hash__(self):
+    def hash(self) -> str:
         raise NotImplementedError
 
     def apply_sql_clause(self, query: "GenerativeSelect"):
@@ -914,7 +920,7 @@ class SQLOffset(SQLClause):
 
 @frozen
 class SQLCount(SQLClause):
-    def __hash__(self):
+    def hash(self) -> str:
         raise NotImplementedError
 
     def apply_sql_clause(self, query):
@@ -926,7 +932,7 @@ class SQLDistinct(SQLClause):
     args: tuple[ColumnElement, ...]
     dialect: str
 
-    def __hash__(self):
+    def hash(self) -> str:
         raise NotImplementedError
 
     def apply_sql_clause(self, query):
@@ -941,7 +947,7 @@ class SQLUnion(Step):
     query1: "DatasetQuery"
     query2: "DatasetQuery"
 
-    def __hash__(self):
+    def hash(self) -> str:
         raise NotImplementedError
 
     def apply(
@@ -980,7 +986,7 @@ class SQLJoin(Step):
     full: bool
     rname: str
 
-    def __hash__(self):
+    def hash(self) -> str:
         raise NotImplementedError
 
     def get_query(self, dq: "DatasetQuery", temp_tables: list[str]) -> sa.Subquery:
@@ -1104,7 +1110,7 @@ class SQLGroupBy(SQLClause):
     cols: Sequence[Union[str, Function, ColumnElement]]
     group_by: Sequence[Union[str, Function, ColumnElement]]
 
-    def __hash__(self):
+    def hash(self) -> str:
         raise NotImplementedError
 
     def apply_sql_clause(self, query) -> Select:
@@ -1260,17 +1266,18 @@ class DatasetQuery:
     def __or__(self, other):
         return self.union(other)
 
-    def __hash__(self):
+    def hash(self) -> str:
         hasher = hashlib.sha256()
         if self.starting_step:
-            hasher.update(hash(self.starting_step).encode("utf-8"))
+            hasher.update(self.starting_step.hash().encode("utf-8"))
         else:
-            hasher.update(self.listing_ds_name.encode("utf-8"))
+            assert self.list_ds_name
+            hasher.update(self.list_ds_name.encode("utf-8"))
 
         for step in self.steps:
-            hasher.update(hash(step).encode("utf-8"))
+            hasher.update(step.hash().encode("utf-8"))
 
-        return hasher.hexigest()
+        return hasher.hexdigest()
 
     @staticmethod
     def get_table() -> "TableClause":
