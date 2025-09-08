@@ -217,6 +217,9 @@ class DatasetDiffOperation(Step):
     def clone(self) -> "Self":
         return self.__class__(self.dq, self.catalog)
 
+    def __hash__(self):
+        raise NotImplementedError
+
     @abstractmethod
     def query(
         self,
@@ -661,6 +664,9 @@ class UDFSignal(UDFStep):
     min_task_size: Optional[int] = None
     batch_size: Optional[int] = None
 
+    def __hash__(self):
+        raise NotImplementedError
+
     def create_udf_table(self, query: Select) -> "Table":
         udf_output_columns: list[sqlalchemy.Column[Any]] = [
             sqlalchemy.Column(col_name, col_type)
@@ -740,6 +746,9 @@ class RowGenerator(UDFStep):
     min_task_size: Optional[int] = None
     batch_size: Optional[int] = None
 
+    def __hash__(self):
+        raise NotImplementedError
+
     def create_udf_table(self, query: Select) -> "Table":
         warehouse = self.catalog.warehouse
 
@@ -798,6 +807,9 @@ class SQLClause(Step, ABC):
 class SQLSelect(SQLClause):
     args: tuple[Union[Function, ColumnElement], ...]
 
+    def __hash__(self):
+        raise NotImplementedError
+
     def apply_sql_clause(self, query) -> Select:
         subquery = query.subquery()
         args = [
@@ -814,6 +826,9 @@ class SQLSelect(SQLClause):
 class SQLSelectExcept(SQLClause):
     args: tuple[Union[Function, ColumnElement], ...]
 
+    def __hash__(self):
+        raise NotImplementedError
+
     def apply_sql_clause(self, query: Select) -> Select:
         subquery = query.subquery()
         args = [c for c in subquery.c if c.name not in set(self.parse_cols(self.args))]
@@ -824,6 +839,9 @@ class SQLSelectExcept(SQLClause):
 class SQLMutate(SQLClause):
     args: tuple[Label, ...]
     new_schema: SignalSchema
+
+    def __hash__(self):
+        raise NotImplementedError
 
     def apply_sql_clause(self, query: Select) -> Select:
         original_subquery = query.subquery()
@@ -853,6 +871,9 @@ class SQLMutate(SQLClause):
 @frozen
 class SQLFilter(SQLClause):
     expressions: tuple[Union[Function, ColumnElement], ...]
+
+    def __hash__(self):
+        raise NotImplementedError
 
     def __and__(self, other):
         expressions = self.parse_cols(self.expressions)
@@ -884,12 +905,18 @@ class SQLLimit(SQLClause):
 class SQLOffset(SQLClause):
     offset: int
 
+    def __hash__(self):
+        raise NotImplementedError
+
     def apply_sql_clause(self, query: "GenerativeSelect"):
         return query.offset(self.offset)
 
 
 @frozen
 class SQLCount(SQLClause):
+    def __hash__(self):
+        raise NotImplementedError
+
     def apply_sql_clause(self, query):
         return sqlalchemy.select(f.count(1)).select_from(query.subquery())
 
@@ -898,6 +925,9 @@ class SQLCount(SQLClause):
 class SQLDistinct(SQLClause):
     args: tuple[ColumnElement, ...]
     dialect: str
+
+    def __hash__(self):
+        raise NotImplementedError
 
     def apply_sql_clause(self, query):
         if self.dialect == "sqlite":
@@ -910,6 +940,9 @@ class SQLDistinct(SQLClause):
 class SQLUnion(Step):
     query1: "DatasetQuery"
     query2: "DatasetQuery"
+
+    def __hash__(self):
+        raise NotImplementedError
 
     def apply(
         self, query_generator: QueryGenerator, temp_tables: list[str]
@@ -946,6 +979,9 @@ class SQLJoin(Step):
     inner: bool
     full: bool
     rname: str
+
+    def __hash__(self):
+        raise NotImplementedError
 
     def get_query(self, dq: "DatasetQuery", temp_tables: list[str]) -> sa.Subquery:
         query = dq.apply_steps().select()
@@ -1067,6 +1103,9 @@ class SQLJoin(Step):
 class SQLGroupBy(SQLClause):
     cols: Sequence[Union[str, Function, ColumnElement]]
     group_by: Sequence[Union[str, Function, ColumnElement]]
+
+    def __hash__(self):
+        raise NotImplementedError
 
     def apply_sql_clause(self, query) -> Select:
         if not self.cols:
