@@ -1,4 +1,5 @@
 import contextlib
+import hashlib
 import inspect
 import logging
 import os
@@ -167,6 +168,10 @@ class Step(ABC):
     ) -> "StepResult":
         """Apply the processing step."""
 
+    @abstractmethod
+    def __hash__(self):
+        """Calculates hash for this step"""
+
 
 @frozen
 class QueryStep:
@@ -185,6 +190,9 @@ class QueryStep:
         return step_result(
             q, dr.columns, dependencies=[(self.dataset, self.dataset_version)]
         )
+
+    def hash(self) -> str:
+        return self.dataset.get_version(self.dataset_version).uuid
 
 
 def generator_then_call(generator, func: Callable):
@@ -1212,6 +1220,18 @@ class DatasetQuery:
 
     def __or__(self, other):
         return self.union(other)
+
+    def __hash__(self):
+        hasher = hashlib.sha256()
+        if self.starting_step:
+            hasher.update(hash(self.starting_step).encode("utf-8"))
+        else:
+            hasher.update(self.listing_ds_name.encode("utf-8"))
+
+        for step in self.steps:
+            hasher.update(hash(step).encode("utf-8"))
+
+        return hasher.hexigest()
 
     @staticmethod
     def get_table() -> "TableClause":
