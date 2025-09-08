@@ -55,6 +55,7 @@ from datachain.query.session import Session
 from datachain.query.udf import UdfInfo
 from datachain.sql.functions.random import rand
 from datachain.sql.types import SQLType
+from datachain.sql.utils import hash_column_elements
 from datachain.utils import (
     determine_processes,
     determine_workers,
@@ -169,8 +170,14 @@ class Step(ABC):
         """Apply the processing step."""
 
     @abstractmethod
+    def _hash(self) -> str:
+        """Calculates hash for this step without class name"""
+
     def hash(self) -> str:
         """Calculates hash for this step"""
+        return hashlib.sha256(
+            f"{self.__class__.__name__}|{self._hash()}".encode()
+        ).hexdigest()
 
 
 @frozen
@@ -266,6 +273,9 @@ class DatasetDiffOperation(Step):
 @frozen
 class Subtract(DatasetDiffOperation):
     on: Sequence[tuple[str, str]]
+
+    def _hash(self) -> str:
+        raise NotImplementedError
 
     def query(self, source_query: Select, target_query: Select) -> sa.Selectable:
         sq = source_query.alias("source_query")
@@ -664,7 +674,7 @@ class UDFSignal(UDFStep):
     min_task_size: Optional[int] = None
     batch_size: Optional[int] = None
 
-    def hash(self) -> str:
+    def _hash(self) -> str:
         raise NotImplementedError
 
     def create_udf_table(self, query: Select) -> "Table":
@@ -746,7 +756,7 @@ class RowGenerator(UDFStep):
     min_task_size: Optional[int] = None
     batch_size: Optional[int] = None
 
-    def hash(self) -> str:
+    def _hash(self) -> str:
         raise NotImplementedError
 
     def create_udf_table(self, query: Select) -> "Table":
@@ -807,8 +817,8 @@ class SQLClause(Step, ABC):
 class SQLSelect(SQLClause):
     args: tuple[Union[Function, ColumnElement], ...]
 
-    def hash(self) -> str:
-        raise NotImplementedError
+    def _hash(self) -> str:
+        return hash_column_elements(self.parse_cols(self.args))
 
     def apply_sql_clause(self, query) -> Select:
         subquery = query.subquery()
@@ -826,8 +836,8 @@ class SQLSelect(SQLClause):
 class SQLSelectExcept(SQLClause):
     args: tuple[Union[Function, ColumnElement], ...]
 
-    def hash(self) -> str:
-        raise NotImplementedError
+    def _hash(self) -> str:
+        return hash_column_elements(self.parse_cols(self.args))
 
     def apply_sql_clause(self, query: Select) -> Select:
         subquery = query.subquery()
@@ -840,7 +850,7 @@ class SQLMutate(SQLClause):
     args: tuple[Label, ...]
     new_schema: SignalSchema
 
-    def hash(self) -> str:
+    def _hash(self) -> str:
         raise NotImplementedError
 
     def apply_sql_clause(self, query: Select) -> Select:
@@ -872,7 +882,7 @@ class SQLMutate(SQLClause):
 class SQLFilter(SQLClause):
     expressions: tuple[Union[Function, ColumnElement], ...]
 
-    def hash(self) -> str:
+    def _hash(self) -> str:
         raise NotImplementedError
 
     def __and__(self, other):
@@ -888,7 +898,7 @@ class SQLFilter(SQLClause):
 class SQLOrderBy(SQLClause):
     args: tuple[Union[Function, ColumnElement], ...]
 
-    def hash(self) -> str:
+    def _hash(self) -> str:
         raise NotImplementedError
 
     def apply_sql_clause(self, query: Select) -> Select:
@@ -900,7 +910,7 @@ class SQLOrderBy(SQLClause):
 class SQLLimit(SQLClause):
     n: int
 
-    def hash(self) -> str:
+    def _hash(self) -> str:
         raise NotImplementedError
 
     def apply_sql_clause(self, query: Select) -> Select:
@@ -911,7 +921,7 @@ class SQLLimit(SQLClause):
 class SQLOffset(SQLClause):
     offset: int
 
-    def hash(self) -> str:
+    def _hash(self) -> str:
         raise NotImplementedError
 
     def apply_sql_clause(self, query: "GenerativeSelect"):
@@ -920,7 +930,7 @@ class SQLOffset(SQLClause):
 
 @frozen
 class SQLCount(SQLClause):
-    def hash(self) -> str:
+    def _hash(self) -> str:
         raise NotImplementedError
 
     def apply_sql_clause(self, query):
@@ -932,7 +942,7 @@ class SQLDistinct(SQLClause):
     args: tuple[ColumnElement, ...]
     dialect: str
 
-    def hash(self) -> str:
+    def _hash(self) -> str:
         raise NotImplementedError
 
     def apply_sql_clause(self, query):
@@ -947,7 +957,7 @@ class SQLUnion(Step):
     query1: "DatasetQuery"
     query2: "DatasetQuery"
 
-    def hash(self) -> str:
+    def _hash(self) -> str:
         raise NotImplementedError
 
     def apply(
@@ -986,7 +996,7 @@ class SQLJoin(Step):
     full: bool
     rname: str
 
-    def hash(self) -> str:
+    def _hash(self) -> str:
         raise NotImplementedError
 
     def get_query(self, dq: "DatasetQuery", temp_tables: list[str]) -> sa.Subquery:
@@ -1110,7 +1120,7 @@ class SQLGroupBy(SQLClause):
     cols: Sequence[Union[str, Function, ColumnElement]]
     group_by: Sequence[Union[str, Function, ColumnElement]]
 
-    def hash(self) -> str:
+    def _hash(self) -> str:
         raise NotImplementedError
 
     def apply_sql_clause(self, query) -> Select:
