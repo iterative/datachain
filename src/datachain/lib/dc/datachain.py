@@ -40,11 +40,7 @@ from datachain.lib.data_model import (
     StandardType,
     dict_to_data_model,
 )
-from datachain.lib.file import (
-    EXPORT_FILES_MAX_THREADS,
-    ArrowRow,
-    FileExporter,
-)
+from datachain.lib.file import EXPORT_FILES_MAX_THREADS, ArrowRow, FileExporter
 from datachain.lib.file import ExportPlacement as FileExportPlacement
 from datachain.lib.model_store import ModelStore
 from datachain.lib.settings import Settings
@@ -358,18 +354,18 @@ class DataChain:
         It returns chain, so, it can be chained later with next operation.
 
         Parameters:
-            cache : data caching. (default=False)
-            prefetch : number of workers to use for downloading files in advance.
-                      This is enabled by default and uses 2 workers.
-                      To disable prefetching, set it to 0 or False.
-            parallel : number of thread for processors. True is a special value to
+            cache: data caching. (default=False)
+            prefetch: number of workers to use for downloading files in advance.
+                This is enabled by default and uses 2 workers.
+                To disable prefetching, set it to 0 or False.
+            parallel: number of thread for processors. True is a special value to
                 enable all available CPUs. (default=1)
-            workers : number of distributed workers. Only for Studio mode. (default=1)
-            namespace : namespace name.
-            project : project name.
-            min_task_size : minimum number of tasks. (default=1)
-            batch_size : row limit per insert to balance speed and memory usage.
-                      (default=2000)
+            workers: number of distributed workers. Only for Studio mode. (default=1)
+            namespace: namespace name.
+            project: project name.
+            min_task_size: minimum number of tasks. (default=1)
+            batch_size: row limit per insert to balance speed and memory usage.
+                (default=2000)
 
         Example:
             ```py
@@ -580,14 +576,14 @@ class DataChain:
         """Save to a Dataset. It returns the chain itself.
 
         Parameters:
-            name : dataset name. It can be full name consisting of namespace and
-                project, but it can also be just a regular dataset name in which
-                case we are taking namespace and project from settings, if they
-                are defined there, or default ones instead.
-            version : version of a dataset. If version is not specified and dataset
+            name: The dataset name. This can be either a fully qualified name, including
+                the namespace and project, or just a regular dataset name. In the latter
+                case, the namespace and project will be taken from the settings
+                (if specified) or from the default values otherwise.
+            version: version of a dataset. If version is not specified and dataset
                 already exists, version patch increment will happen e.g 1.2.1 -> 1.2.2.
-            description : description of a dataset.
-            attrs : attributes of a dataset. They can be without value, e.g "NLP",
+            description: description of a dataset.
+            attrs: attributes of a dataset. They can be without value, e.g "NLP",
                 or with a value, e.g "location=US".
             update_version: which part of the dataset version to automatically increase.
                 Available values: `major`, `minor` or `patch`. Default is `patch`.
@@ -704,7 +700,7 @@ class DataChain:
         func: Optional[Callable] = None,
         params: Union[None, str, Sequence[str]] = None,
         output: OutputType = None,
-        **signal_map,
+        **signal_map: Any,
     ) -> "Self":
         """Apply a function to each row to create new signals. The function should
         return a new object for each row. It returns a chain itself with new signals.
@@ -712,17 +708,17 @@ class DataChain:
         Input-output relationship: 1:1
 
         Parameters:
-            func : Function applied to each row.
-            params : List of column names used as input for the function. Default
+            func: Function applied to each row.
+            params: List of column names used as input for the function. Default
                     is taken from function signature.
-            output : Dictionary defining new signals and their corresponding types.
+            output: Dictionary defining new signals and their corresponding types.
                     Default type is taken from function signature. Default can be also
                     taken from kwargs - **signal_map (see below).
                     If signal name is defined using signal_map (see below) only a single
                     type value can be used.
-            **signal_map : kwargs can be used to define `func` together with it's return
+            **signal_map: kwargs can be used to define `func` together with its return
                     signal name in format of `map(my_sign=my_func)`. This helps define
-                    signal names and function in a nicer way.
+                    signal names and functions in a nicer way.
 
         Example:
             Using signal_map and single type in output:
@@ -941,7 +937,7 @@ class DataChain:
         It accepts the same parameters plus an
         additional parameter:
 
-            batch : Size of each batch passed to `func`. Defaults to 1000.
+            batch: Size of each batch passed to `func`. Defaults to 1000.
 
         Example:
             ```py
@@ -1309,9 +1305,9 @@ class DataChain:
         """Yields flattened rows of values as a tuple.
 
         Args:
-            row_factory : A callable to convert row to a custom format.
-                          It should accept two arguments: a list of column names and
-                          a tuple of row values.
+            row_factory: A callable to convert row to a custom format.
+                It should accept two arguments: a list of column names and
+                a tuple of row values.
             include_hidden: Whether to include hidden signals from the schema.
         """
         db_signals = self._effective_signals_schema.db_signals(
@@ -1956,19 +1952,19 @@ class DataChain:
         model_name: str = "",
         source: bool = True,
         nrows: Optional[int] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> "Self":
         """Generate chain from list of tabular files.
 
         Parameters:
-            output : Dictionary or feature class defining column names and their
+            output: Dictionary or feature class defining column names and their
                 corresponding types. List of column names is also accepted, in which
                 case types will be inferred.
-            column : Generated column name.
-            model_name : Generated model name.
-            source : Whether to include info about the source file.
-            nrows : Optional row limit.
-            kwargs : Parameters to pass to pyarrow.dataset.dataset.
+            column: Generated column name.
+            model_name: Generated model name.
+            source: Whether to include info about the source file.
+            nrows: Optional row limit.
+            kwargs: Parameters to pass to pyarrow.dataset.dataset.
 
         Example:
             Reading a json lines file:
@@ -2098,12 +2094,12 @@ class DataChain:
         """Save chain to parquet file with SignalSchema metadata.
 
         Parameters:
-            path : Path or a file-like binary object to save the file. This supports
+            path: Path or a file-like binary object to save the file. This supports
                 local paths as well as remote paths, such as s3:// or hf:// with fsspec.
-            partition_cols : Column names by which to partition the dataset.
-            chunk_size : The chunk size of results to read and convert to columnar
+            partition_cols: Column names by which to partition the dataset.
+            chunk_size: The chunk size of results to read and convert to columnar
                 data, to avoid running out of memory.
-            fs_kwargs : Optional kwargs to pass to the fsspec filesystem, used only for
+            fs_kwargs: Optional kwargs to pass to the fsspec filesystem, used only for
                 write, for fsspec-type URLs, such as s3:// or hf:// when
                 provided as the destination path.
         """
@@ -2195,10 +2191,10 @@ class DataChain:
         """Save chain to a csv (comma-separated values) file.
 
         Parameters:
-            path : Path to save the file. This supports local paths as well as
+            path: Path to save the file. This supports local paths as well as
                 remote paths, such as s3:// or hf:// with fsspec.
-            delimiter : Delimiter to use for the resulting file.
-            fs_kwargs : Optional kwargs to pass to the fsspec filesystem, used only for
+            delimiter: Delimiter to use for the resulting file.
+            fs_kwargs: Optional kwargs to pass to the fsspec filesystem, used only for
                 write, for fsspec-type URLs, such as s3:// or hf:// when
                 provided as the destination path.
         """
@@ -2241,12 +2237,12 @@ class DataChain:
         """Save chain to a JSON file.
 
         Parameters:
-            path : Path to save the file. This supports local paths as well as
+            path: Path to save the file. This supports local paths as well as
                 remote paths, such as s3:// or hf:// with fsspec.
-            fs_kwargs : Optional kwargs to pass to the fsspec filesystem, used only for
+            fs_kwargs: Optional kwargs to pass to the fsspec filesystem, used only for
                 write, for fsspec-type URLs, such as s3:// or hf:// when
                 provided as the destination path.
-            include_outer_list : Sets whether to include an outer list for all rows.
+            include_outer_list: Sets whether to include an outer list for all rows.
                 Setting this to True makes the file valid JSON, while False instead
                 writes in the JSON lines format.
         """
@@ -2301,9 +2297,9 @@ class DataChain:
         """Save chain to a JSON lines file.
 
         Parameters:
-            path : Path to save the file. This supports local paths as well as
+            path: Path to save the file. This supports local paths as well as
                 remote paths, such as s3:// or hf:// with fsspec.
-            fs_kwargs : Optional kwargs to pass to the fsspec filesystem, used only for
+            fs_kwargs: Optional kwargs to pass to the fsspec filesystem, used only for
                 write, for fsspec-type URLs, such as s3:// or hf:// when
                 provided as the destination path.
         """
@@ -2571,9 +2567,9 @@ class DataChain:
                 The possible values are: "filename", "etag", "fullpath", and "checksum".
             link_type: Method to use for exporting files.
                 Falls back to `'copy'` if symlinking fails.
-            num_threads : number of threads to use for exporting files.
-                By default it uses 5 threads.
-            anon: If True, we will treat cloud bucket as public one. Default behavior
+            num_threads: number of threads to use for exporting files.
+                By default, it uses 5 threads.
+            anon: If True, we will treat cloud bucket as a public one. Default behavior
                 depends on the previous session configuration (e.g. happens in the
                 initial `read_storage`) and particular cloud storage client
                 implementation (e.g. S3 fallbacks to anonymous access if no credentials
