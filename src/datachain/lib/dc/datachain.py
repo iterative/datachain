@@ -349,31 +349,27 @@ class DataChain:
         sys: Optional[bool] = None,
     ) -> "Self":
         """
-        Update chain settings.
-
-        This method updates the specified settings without changing not specified ones.
-        It returns the chain itself, allowing method chaining for subsequent operations.
-        To restore all settings to their default values, use `reset_settings()`.
+        Set chain execution parameters. Returns the chain itself, allowing method
+        chaining for subsequent operations. To restore all settings to their default
+        values, use `reset_settings()`.
 
         Parameters:
             cache: Enable files caching to speed up subsequent accesses to the same
-                files from the same or different chains on the same worker node.
-                Defaults to False.
+                files from the same or different chains. Defaults to False.
             prefetch: Enable prefetching of files. This will download files in
                 advance in parallel. If an integer is provided, it specifies the number
-                of files to prefetch concurrently for each worker. Defaults to 2.
-                Set to 0 or False to disable prefetching.
+                of files to prefetch concurrently for each process on each worker.
+                Defaults to 2. Set to 0 or False to disable prefetching.
             parallel: Number of processes to use for processing user-defined functions
                 (UDFs) in parallel. If an integer is provided, it specifies the number
-                of CPUs to use. If True, all available CPUs are used.  Defaults to 1.
+                of CPUs to use. If True, all available CPUs are used. Defaults to 1.
             namespace: Namespace to use for the chain by default.
             project: Project to use for the chain by default.
             min_task_size: Minimum number of rows per worker/process for parallel
                 processing by UDFs. Defaults to 1.
-            batch_size: Maximum number of rows per insert by UDF to fine tune
-                and balance speed and memory usage. This might be useful when
-                processing large rows or when running into memory issues.
-                Defaults to 2000.
+            batch_size: Number of rows per insert by UDF to fine tune and balance speed
+                and memory usage. This might be useful when processing large rows
+                or when running into memory issues. Defaults to 2000.
 
         Example:
             ```py
