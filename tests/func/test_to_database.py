@@ -286,7 +286,7 @@ def test_to_database_large_dataset(connection, test_session):
         session=test_session,
     )
 
-    rows_affected = chain.to_database("large_table", connection, batch_rows=1000)
+    rows_affected = chain.to_database("large_table", connection, batch_size=1000)
 
     count = _count_table_rows(connection, "large_table")
     assert count == large_size

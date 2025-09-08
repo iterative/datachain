@@ -822,7 +822,7 @@ def test_udf_parallel(cloud_test_catalog_tmpfile):
 
     chain = (
         dc.read_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
-        .settings(parallel=-1)
+        .settings(parallel=True)
         .map(name_len, params=["file.path"], output={"name_len": int})
         .select("file.path", "name_len")
     )
@@ -996,7 +996,7 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
         dc.read_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
         .filter(dc.C("file.size") < 13)
         .filter(dc.C("file.path").glob("cats*") | (dc.C("file.size") < 4))
-        .settings(parallel=-1)
+        .settings(parallel=True)
         .map(name_len_error, params=["file.path"], output={"name_len": int})
     )
 
@@ -1100,7 +1100,7 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
         dc.read_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
         .filter(dc.C("file.size") < 13)
         .filter(dc.C("file.path").glob("cats*") | (dc.C("file.size") < 4))
-        .settings(parallel=-1)
+        .settings(parallel=True)
         .map(name_len_interrupt, params=["file.path"], output={"name_len": int})
     )
     if os.environ.get("DATACHAIN_DISTRIBUTED"):
@@ -1383,7 +1383,7 @@ def test_gen_parallel(cloud_test_catalog_tmpfile):
 
     chain = (
         dc.read_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
-        .settings(parallel=-1)
+        .settings(parallel=True)
         .gen(gen=func, params=["file"], output={"val": str})
         .order_by("val")
     )
@@ -2356,7 +2356,7 @@ def test_agg_sample(catalog_tmpfile, parallel, sample):
 def test_batch_for_map(test_session):
     # Create a chain with batch settings
     chain = dc.read_values(x=list(range(100)), session=test_session)
-    chain_with_settings = chain.settings(batch_rows=15)
+    chain_with_settings = chain.settings(batch_size=15)
 
     def add_one(x):
         return x + 1

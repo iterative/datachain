@@ -1,11 +1,7 @@
-import os.path
+import os
 from collections.abc import Sequence
 from functools import reduce
-from typing import (
-    TYPE_CHECKING,
-    Optional,
-    Union,
-)
+from typing import TYPE_CHECKING, Optional, Union
 
 from datachain.lib.dc.storage_pattern import (
     apply_glob_filter,
@@ -14,16 +10,8 @@ from datachain.lib.dc.storage_pattern import (
     split_uri_pattern,
     validate_cloud_bucket_name,
 )
-from datachain.lib.file import (
-    FileType,
-    get_file_type,
-)
-from datachain.lib.listing import (
-    get_file_info,
-    get_listing,
-    list_bucket,
-    ls,
-)
+from datachain.lib.file import FileType, get_file_type
+from datachain.lib.listing import get_file_info, get_listing, list_bucket, ls
 from datachain.query import Session
 
 if TYPE_CHECKING:
@@ -58,7 +46,7 @@ def read_storage(
 
     Parameters:
         uri : Storage path(s) or URI(s). Can be a local path or start with a
-            storage prefix like `s3://`, `gs://`, `az://` or "file:///".
+            storage prefix like `s3://`, `gs://`, `az://`, `hf://` or "file:///".
             Supports glob patterns:
               - `*` : wildcard
               - `**` : recursive wildcard

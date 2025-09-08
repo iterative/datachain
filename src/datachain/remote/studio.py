@@ -1,4 +1,3 @@
-import base64
 import json
 import logging
 import os
@@ -7,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from struct import unpack
 from typing import (
     Any,
+    BinaryIO,
     Generic,
     Optional,
     TypeVar,
@@ -30,8 +30,9 @@ DatasetExportStatus = Optional[dict[str, Any]]
 DatasetExportSignedUrls = Optional[list[str]]
 FileUploadData = Optional[dict[str, Any]]
 JobData = Optional[dict[str, Any]]
-JobListData = dict[str, Any]
-ClusterListData = dict[str, Any]
+JobListData = list[dict[str, Any]]
+ClusterListData = list[dict[str, Any]]
+
 logger = logging.getLogger("datachain")
 
 DATASET_ROWS_CHUNK_SIZE = 8192
@@ -239,6 +240,45 @@ class StudioClient:
 
         return Response(data, ok, message, response.status_code)
 
+    def _send_multipart_request(
+        self, route: str, files: dict[str, Any], params: Optional[dict[str, Any]] = None
+    ) -> Response[Any]:
+        """
+        Function that communicates with Studio API using multipart/form-data.
+        It will raise an exception, and try to retry, if 5xx status code is
+        returned, or if Timeout exceptions is thrown from the requests lib
+        """
+        import requests
+
+        # Add team_name to params
+        request_params = {**(params or {}), "team_name": self.team}
+
+        response = requests.post(
+            url=f"{self.url}/{route}",
+            files=files,
+            params=request_params,
+            headers={
+                "Authorization": f"token {self.token}",
+            },
+            timeout=self.timeout,
+        )
+
+        ok = response.ok
+        try:
+            data = json.loads(response.content.decode("utf-8"))
+        except json.decoder.JSONDecodeError:
+            data = {}
+
+        if not ok:
+            if response.status_code == 403:
+                message = f"Not authorized for the team {self.team}"
+            else:
+                message = data.get("message", "")
+        else:
+            message = ""
+
+        return Response(data, ok, message, response.status_code)
+
     @staticmethod
     def _unpacker_hook(code, data):
         import msgpack
@@ -409,12 +449,13 @@ class StudioClient:
             method="GET",
         )
 
-    def upload_file(self, content: bytes, file_name: str) -> Response[FileUploadData]:
-        data = {
-            "file_content": base64.b64encode(content).decode("utf-8"),
-            "file_name": file_name,
-        }
-        return self._send_request("datachain/upload-file", data)
+    def upload_file(
+        self, file_obj: BinaryIO, file_name: str
+    ) -> Response[FileUploadData]:
+        # Prepare multipart form data
+        files = {"file": (file_name, file_obj, "application/octet-stream")}
+
+        return self._send_multipart_request("datachain/jobs/files", files)
 
     def create_job(
         self,
@@ -449,25 +490,27 @@ class StudioClient:
             "cron_expression": cron,
             "credentials_name": credentials_name,
         }
-        return self._send_request("datachain/job", data)
+        return self._send_request("datachain/jobs/", data)
 
     def get_jobs(
         self,
         status: Optional[str] = None,
         limit: int = 20,
+        job_id: Optional[str] = None,
     ) -> Response[JobListData]:
-        return self._send_request(
-            "datachain/jobs",
-            {"status": status, "limit": limit} if status else {"limit": limit},
-            method="GET",
-        )
+        params: dict[str, Any] = {"limit": limit}
+        if status is not None:
+            params["status"] = status
+        if job_id is not None:
+            params["job_id"] = job_id
+        return self._send_request("datachain/jobs/", params, method="GET")
 
     def cancel_job(
         self,
         job_id: str,
     ) -> Response[JobData]:
-        url = f"datachain/job/{job_id}/cancel"
+        url = f"datachain/jobs/{job_id}/cancel"
         return self._send_request(url, data={}, method="POST")
 
     def get_clusters(self) -> Response[ClusterListData]:
-        return self._send_request("datachain/clusters", {}, method="GET")
+        return self._send_request("datachain/clusters/", {}, method="GET")

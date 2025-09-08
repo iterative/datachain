@@ -26,22 +26,22 @@ def read_json(
     column: Optional[str] = "",
     model_name: Optional[str] = None,
     format: Optional[str] = "json",
-    nrows=None,
+    nrows: Optional[int] = None,
     **kwargs,
 ) -> "DataChain":
     """Get data from JSON. It returns the chain itself.
 
     Parameters:
-        path : storage URI with directory. URI must start with storage prefix such
+        path: storage URI with directory. URI must start with storage prefix such
             as `s3://`, `gs://`, `az://` or "file:///"
-        type : read file as "binary", "text", or "image" data. Default is "text".
-        spec : optional Data Model
-        schema_from : path to sample to infer spec (if schema not provided)
-        column : generated column name
-        model_name : optional generated model name
+        type: read file as "binary", "text", or "image" data. Default is "text".
+        spec: optional Data Model
+        schema_from: path to sample to infer spec (if schema not provided)
+        column: generated column name
+        model_name: optional generated model name
         format: "json", "jsonl"
-        jmespath : optional JMESPATH expression to reduce JSON
-        nrows : optional row limit for jsonl and JSON arrays
+        jmespath: optional JMESPATH expression to reduce JSON
+        nrows: optional row limit for jsonl and JSON arrays
 
     Example:
         infer JSON schema from data, reduce using JMESPATH

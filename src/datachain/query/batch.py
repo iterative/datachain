@@ -81,8 +81,8 @@ class Batch(BatchingStrategy):
         # select rows in batches
         results = []
 
-        with contextlib.closing(execute(query, page_size=page_size)) as batch_rows:
-            for row in batch_rows:
+        with contextlib.closing(execute(query, page_size=page_size)) as rows:
+            for row in rows:
                 results.append(row)
                 if len(results) >= self.count:
                     batch, results = results[: self.count], results[self.count :]

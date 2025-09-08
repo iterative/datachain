@@ -336,7 +336,7 @@ def test_studio_rm_dataset(capsys, mocker):
 def test_studio_cancel_job(capsys, mocker):
     job_id = "8bddde6c-c3ca-41b0-9d87-ee945bfdce70"
     with requests_mock.mock() as m:
-        m.post(f"{STUDIO_URL}/api/datachain/job/{job_id}/cancel", json={})
+        m.post(f"{STUDIO_URL}/api/datachain/jobs/{job_id}/cancel", json={})
 
         # Studio token is required
         assert main(["job", "cancel", job_id]) == 1
@@ -359,10 +359,12 @@ def test_studio_run(capsys, mocker, tmp_dir):
         conf["studio"] = {"token": "isat_access_token", "team": "team_name"}
 
     with requests_mock.mock() as m:
-        m.post(f"{STUDIO_URL}/api/datachain/upload-file", json={"blob": {"id": 1}})
         m.post(
-            f"{STUDIO_URL}/api/datachain/job",
-            json={"job": {"id": 1, "url": "https://example.com"}},
+            f"{STUDIO_URL}/api/datachain/jobs/files?team_name=team_name", json={"id": 1}
+        )
+        m.post(
+            f"{STUDIO_URL}/api/datachain/jobs/",
+            json={"id": 1, "url": "https://example.com"},
         )
         m.get(
             f"{STUDIO_URL}/api/datachain/datasets/dataset_job_versions?job_id=1&team_name=team_name",
@@ -421,15 +423,17 @@ def test_studio_run(capsys, mocker, tmp_dir):
     second_request = m.request_history[1]
 
     assert first_request.method == "POST"
-    assert first_request.url == f"{STUDIO_URL}/api/datachain/upload-file"
-    assert first_request.json() == {
-        "file_content": "ZmlsZSBjb250ZW50",
-        "file_name": "file.txt",
-        "team_name": "team_name",
-    }
+    assert (
+        first_request.url
+        == f"{STUDIO_URL}/api/datachain/jobs/files?team_name=team_name"
+    )
+    # Check that it's multipart/form-data request
+    assert "multipart/form-data" in first_request.headers.get("Content-Type", "")
+    # Check query parameters
+    assert first_request.qs["team_name"] == ["team_name"]
 
     assert second_request.method == "POST"
-    assert second_request.url == f"{STUDIO_URL}/api/datachain/job"
+    assert second_request.url == f"{STUDIO_URL}/api/datachain/jobs/"
     assert second_request.json() == {
         "query": "print(1)",
         "query_type": "PYTHON",
@@ -456,8 +460,8 @@ def test_studio_run_task(capsys, mocker, tmp_dir, studio_token):
 
     with requests_mock.mock() as m:
         m.post(
-            f"{STUDIO_URL}/api/datachain/job",
-            json={"job": {"id": 1, "url": "https://example.com"}},
+            f"{STUDIO_URL}/api/datachain/jobs/",
+            json={"id": 1, "url": "https://example.com"},
         )
         m.get(
             f"{STUDIO_URL}/api/datachain/datasets/dataset_job_versions?job_id=1&team_name=team_name",
@@ -485,7 +489,7 @@ def test_studio_run_task(capsys, mocker, tmp_dir, studio_token):
         )
     first_request = m.request_history[0]
     assert first_request.method == "POST"
-    assert first_request.url == f"{STUDIO_URL}/api/datachain/job"
+    assert first_request.url == f"{STUDIO_URL}/api/datachain/jobs/"
     request_json = first_request.json()
     assert request_json["start_after"] is not None
     assert request_json["cron_expression"] is not None
@@ -518,8 +522,8 @@ def test_studio_run_non_zero_exit_code(
 
     with requests_mock.mock() as m:
         m.post(
-            f"{STUDIO_URL}/api/datachain/job",
-            json={"job": {"id": 1, "url": "https://example.com"}},
+            f"{STUDIO_URL}/api/datachain/jobs/",
+            json={"id": 1, "url": "https://example.com"},
         )
         m.get(
             f"{STUDIO_URL}/api/datachain/datasets/dataset_job_versions?job_id=1&team_name=team_name",
