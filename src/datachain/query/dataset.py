@@ -224,7 +224,7 @@ class DatasetDiffOperation(Step):
     def clone(self) -> "Self":
         return self.__class__(self.dq, self.catalog)
 
-    def hash(self) -> str:
+    def _hash(self) -> str:
         raise NotImplementedError
 
     @abstractmethod
