@@ -657,7 +657,9 @@ class DataChain:
                 # current latest version instead.
                 from .datasets import read_dataset
 
-                return read_dataset(name, **kwargs)
+                return read_dataset(
+                    name, namespace=namespace_name, project=project_name, **kwargs
+                )
 
         return self._evolve(
             query=self._query.save(
