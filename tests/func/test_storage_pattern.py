@@ -238,3 +238,24 @@ def test_glob_pattern_in_bucket_name_raises_error():
         match="Glob patterns in bucket names are not supported.*bucket-\\{dev,prod\\}",
     ):
         dc.read_storage("s3://bucket-{dev,prod}/logs/*.log")
+
+
+def test_hugging_face_glob_patterns():
+    from datachain.lib.dc.storage_pattern import (
+        split_uri_pattern,
+        validate_cloud_bucket_name,
+    )
+
+    base, pattern = split_uri_pattern("hf://datasets/username/repo-name/data/file.txt")
+    assert base == "hf://datasets/username/repo-name/data/file.txt"
+    assert pattern is None
+
+    base, pattern = split_uri_pattern("hf://datasets/username/repo-name/data/*.txt")
+    assert base == "hf://datasets/username/repo-name/data"
+    assert pattern == "*.txt"
+
+    with pytest.raises(
+        ValueError,
+        match="Glob patterns in bucket names are not supported.*hf://datasets",
+    ):
+        validate_cloud_bucket_name("hf://datasets*/username/repo-name/data/file.txt")
