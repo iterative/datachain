@@ -118,10 +118,7 @@ nav:
           - Namespaces: guide/namespaces.md
           - Local DB Migrations: guide/db_migrations.md
       - 🔗 Studio:
-          - API:
-              - OAD version: studio/api/oad.md
-              - Swagger UI version: studio/api/swagger-ui.md
-              - Redoc version: studio/api/redoc.md
+          - API: studio/api/index.md
       - 🤝 Contributing: contributing.md
 
   - DataChain Website ↗: https://datachain.ai" target="_blank"
@@ -169,10 +166,8 @@ extra:
 plugins:
   - search
   - section-index
-  - neoteroi.mkdocsoad:
-      use_pymdownx: true
-  - swagger-ui-tag
-  - redoc-tag
+  - render_swagger:
+      allow_arbitrary_locations: true
   - mkdocstrings:
       handlers:
         python:
