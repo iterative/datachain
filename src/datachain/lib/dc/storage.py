@@ -45,19 +45,19 @@ def read_storage(
     It returns the chain itself as usual.
 
     Parameters:
-        uri : Storage path(s) or URI(s). Can be a local path or start with a
+        uri: Storage path(s) or URI(s). Can be a local path or start with a
             storage prefix like `s3://`, `gs://`, `az://`, `hf://` or "file:///".
             Supports glob patterns:
               - `*` : wildcard
               - `**` : recursive wildcard
               - `?` : single character
               - `{a,b}` : brace expansion
-        type : read file as "binary", "text", or "image" data. Default is "binary".
-        recursive : search recursively for the given path.
-        column : Column name that will contain File objects. Default is "file".
-        update : force storage reindexing. Default is False.
-        anon : If True, we will treat cloud bucket as public one
-        client_config : Optional client configuration for the storage client.
+        type: read file as "binary", "text", or "image" data. Default is "binary".
+        recursive: search recursively for the given path.
+        column: Column name that will contain File objects. Default is "file".
+        update: force storage reindexing. Default is False.
+        anon: If True, we will treat cloud bucket as public one.
+        client_config: Optional client configuration for the storage client.
         delta: If True, only process new or changed files instead of reprocessing
             everything. This saves time by skipping files that were already processed in
             previous versions. The optimization is working when a new version of the
