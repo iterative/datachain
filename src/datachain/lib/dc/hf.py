@@ -1,8 +1,4 @@
-from typing import (
-    TYPE_CHECKING,
-    Optional,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from datachain.lib.data_model import dict_to_data_model
 from datachain.query import Session
@@ -20,28 +16,28 @@ if TYPE_CHECKING:
 
 def read_hf(
     dataset: Union[str, "HFDatasetType"],
-    *args,
+    *args: Any,
     session: Optional[Session] = None,
     settings: Optional[dict] = None,
     column: str = "",
     model_name: str = "",
     limit: int = 0,
-    **kwargs,
+    **kwargs: Any,
 ) -> "DataChain":
     """Generate chain from Hugging Face Hub dataset.
 
     Parameters:
-        dataset : Path or name of the dataset to read from Hugging Face Hub,
+        dataset: Path or name of the dataset to read from Hugging Face Hub,
             or an instance of `datasets.Dataset`-like object.
-        args : Additional positional arguments to pass to `datasets.load_dataset`.
-        session : Session to use for the chain.
-        settings : Settings to use for the chain.
-        column : Generated object column name.
-        model_name : Generated model name.
-        limit : Limit the number of items to read from the HF dataset.
-                Adds `take(limit)` to the `datasets.load_dataset`.
-                Defaults to 0 (no limit).
-        kwargs : Parameters to pass to `datasets.load_dataset`.
+        args: Additional positional arguments to pass to `datasets.load_dataset`.
+        session: Session to use for the chain.
+        settings: Settings to use for the chain.
+        column: Generated object column name.
+        model_name: Generated model name.
+        limit: The maximum number of items to read from the HF dataset.
+            Applies `take(limit)` to `datasets.load_dataset`.
+            Defaults to 0 (no limit).
+        kwargs: Parameters to pass to `datasets.load_dataset`.
 
     Example:
         Load from Hugging Face Hub:

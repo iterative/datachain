@@ -45,15 +45,15 @@ def clip_similarity_scores(
     Calculate CLIP similarity scores between one or more images and/or text.
 
     Parameters:
-        images : Images to use as inputs.
-        text : Text to use as inputs.
-        model : Model from clip or open_clip packages.
-        preprocess : Image preprocessor to apply.
-        tokenizer : Text tokenizer.
-        prob : Compute softmax probabilities.
-        image_to_text : Whether to compute for image-to-text or text-to-image. Ignored
-            if only one of images or text provided.
-        device : Device to use. Defaults is None - use model's device.
+        images: Images to use as inputs.
+        text: Text to use as inputs.
+        model: Model from clip or open_clip packages.
+        preprocess: Image preprocessor to apply.
+        tokenizer: Text tokenizer.
+        prob: Compute softmax probabilities.
+        image_to_text: Whether to compute for image-to-text or text-to-image. Ignored
+            if only one of the images or text provided.
+        device: Device to use. Default is None - use model's device.
 
 
     Example:
