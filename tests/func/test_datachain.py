@@ -19,6 +19,7 @@ from PIL import Image
 
 import datachain as dc
 from datachain import DataModel, func
+from datachain.data_storage import JobQueryStepStatus
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetDependencyType
 from datachain.func import path as pathfunc
@@ -1648,6 +1649,43 @@ def test_datachain_save_with_job(test_session, catalog, datachain_job_id):
     dataset = catalog.get_dataset("my-ds")
     result_job_id = dataset.get_version(dataset.latest_version).job_id
     assert result_job_id == datachain_job_id
+
+
+def test_datachain_with_job_query_step_success(test_session, catalog, datachain_job_id):
+    dc.read_values(value=["val1", "val2"], session=test_session).save("my-ds")
+
+    query_steps = list(catalog.metastore.list_jobs_query_steps(datachain_job_id))
+    assert len(query_steps) == 1
+    query_step = query_steps[0]
+    print(query_step)
+    assert query_step.job_id == datachain_job_id
+    assert query_step.status == JobQueryStepStatus.FINISHED
+    assert query_step.error_message == ""
+    assert query_step.error_stack == ""
+    assert query_step.started_at
+    assert query_step.finished_at
+
+
+def test_datachain_with_job_query_step_failed(test_session, catalog, datachain_job_id):
+    def fun(value) -> str:
+        raise Exception("Error")
+
+    with pytest.raises(Exception):  # noqa: B017
+        (
+            dc.read_values(value=["val1", "val2"], session=test_session)
+            .map(new=fun)
+            .save("my-ds")
+        )
+
+    query_steps = list(catalog.metastore.list_jobs_query_steps(datachain_job_id))
+    assert len(query_steps) == 1
+    query_step = query_steps[0]
+    assert query_step.job_id == datachain_job_id
+    assert query_step.status == JobQueryStepStatus.ERROR
+    assert query_step.error_message == "Error in user code in class 'Mapper': Error"
+    assert query_step.error_stack
+    assert query_step.started_at
+    assert query_step.finished_at is None
 
 
 def test_group_by_signals(cloud_test_catalog):
