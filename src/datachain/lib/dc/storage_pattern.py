@@ -1,6 +1,7 @@
 import glob
 from typing import TYPE_CHECKING, Union
 
+from datachain.client.fsspec import is_cloud_uri
 from datachain.lib.listing import ls
 
 if TYPE_CHECKING:
@@ -17,7 +18,7 @@ def validate_cloud_bucket_name(uri: str) -> None:
     Raises:
         ValueError: If a cloud storage bucket name contains glob patterns
     """
-    if not any(uri.startswith(scheme) for scheme in ["s3://", "gs://", "az://"]):
+    if not is_cloud_uri(uri):
         return
 
     # Extract bucket name (everything between :// and first /)
