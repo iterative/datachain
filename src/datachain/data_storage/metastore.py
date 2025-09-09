@@ -195,13 +195,17 @@ class AbstractMetastore(ABC, Serializable):
         It also creates project if not found and create flag is set to True.
         """
 
-    @abstractmethod
     def is_default_project(self, project_name: str, namespace_name: str) -> bool:
-        """Checks if some project in namespace is default"""
+        return (
+            project_name == self.default_project_name
+            and namespace_name == self.default_namespace_name
+        )
 
-    @abstractmethod
     def is_listing_project(self, project_name: str, namespace_name: str) -> bool:
-        """Checks if some project in namespace is listing"""
+        return (
+            project_name == self.listing_project_name
+            and namespace_name == self.system_namespace_name
+        )
 
     @abstractmethod
     def get_project_by_id(self, project_id: int, conn=None) -> Project:
@@ -821,18 +825,6 @@ class AbstractDBMetastore(AbstractMetastore):
         self.db.execute(query)
 
         return self.get_project(name, namespace.name)
-
-    def is_listing_project(self, project_name: str, namespace_name: str) -> bool:
-        return (
-            project_name == self.listing_project_name
-            and namespace_name == self.system_namespace_name
-        )
-
-    def is_default_project(self, project_name: str, namespace_name: str) -> bool:
-        return (
-            project_name == self.default_project_name
-            and namespace_name == self.default_namespace_name
-        )
 
     def get_project(
         self, name: str, namespace_name: str, create: bool = False, conn=None

@@ -88,7 +88,7 @@ def ls(
     return session.catalog.metastore.list_projects(namespace_id)
 
 
-def delete(name: str, namespace: str, session: Optional[Session]) -> None:
+def delete(name: str, namespace: str, session: Optional[Session] = None) -> None:
     """
     Removes a project by name within a namespace.
 
@@ -106,8 +106,7 @@ def delete(name: str, namespace: str, session: Optional[Session]) -> None:
     Example:
         ```py
         import datachain as dc
-        from datachain.lib.projects import delete as delete_project
-        delete_project("my-project", "local")
+        dc.delete_project("my-project", "local")
         ```
     """
     session = Session.get(session)
