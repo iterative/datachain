@@ -24,7 +24,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
       - name: Set up Python 3.9
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.9'
 
@@ -97,7 +97,7 @@ jobs:
         shell: bash
 
       - name: Set up Python ${{ matrix.pyv }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.pyv }}
 
@@ -183,7 +183,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
       - name: Set up Python ${{ matrix.pyv }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.pyv }}
 
