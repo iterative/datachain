@@ -999,7 +999,22 @@ class SQLJoin(Step):
     rname: str
 
     def _hash(self) -> str:
-        raise NotImplementedError
+        predicates = (
+            (self.predicates,)
+            if not isinstance(self.predicates, tuple)
+            else self.predicates
+        )
+
+        parts = [
+            bytes.fromhex(self.query1.hash()),
+            bytes.fromhex(self.query2.hash()),
+            bytes.fromhex(hash_column_elements(predicates)),
+            str(self.inner).encode(),
+            str(self.full).encode(),
+            self.rname.encode("utf-8"),
+        ]
+
+        return hashlib.sha256(b"".join(parts)).hexdigest()
 
     def get_query(self, dq: "DatasetQuery", temp_tables: list[str]) -> sa.Subquery:
         query = dq.apply_steps().select()

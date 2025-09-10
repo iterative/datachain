@@ -9,6 +9,7 @@ from datachain.query.dataset import (
     SQLCount,
     SQLDistinct,
     SQLFilter,
+    SQLJoin,
     SQLLimit,
     SQLMutate,
     SQLOffset,
@@ -193,4 +194,43 @@ def test_union_hash(test_session, numbers_dataset):
 
     assert SQLUnion(chain1._query, chain2._query).hash() == (
         "ac9c210ba6c599d5ce8155692fccb5d56ec45562d87aedbc7853a283739880b3"
+    )
+
+
+@pytest.mark.parametrize(
+    "predicates,inner,full,rname,result",
+    [
+        (
+            "id",
+            True,
+            False,
+            "{name}_right",
+            "bcac0223d91650c419cea1626502dbb77bf3deabf6b522b0d0dc1cdafd8d488a",
+        ),
+        (
+            ("id", "name"),
+            False,
+            True,
+            "{name}_r",
+            "035a972f3f830ceea1ef14781e2a2bdbaa3bf3db2320a5147826d1768bd64315",
+        ),
+    ],
+)
+def test_join_hash(
+    test_session, numbers_dataset, predicates, inner, full, rname, result
+):
+    chain1 = dc.read_dataset("numbers").filter(C("num") > 50).limit(10)
+    chain2 = dc.read_dataset("numbers").filter(C("num") < 50).limit(20)
+
+    assert (
+        SQLJoin(
+            test_session.catalog,
+            chain1._query,
+            chain2._query,
+            predicates,
+            inner,
+            full,
+            rname,
+        ).hash()
+        == result
     )

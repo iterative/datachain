@@ -1,6 +1,7 @@
 import hashlib
 import json
 from collections.abc import Sequence
+from typing import Union
 
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql.elements import (
@@ -37,7 +38,7 @@ def compiler_not_implemented(func, *spec):
     return raise_not_implemented
 
 
-def serialize_expression(expr: ClauseElement) -> dict:  # noqa: PLR0911
+def serialize_expression(expr: Union[str, ClauseElement]) -> dict:  # noqa: PLR0911
     """
     Recursively serialize a SQLAlchemy ColumnElement into a deterministic structure.
     """
@@ -111,7 +112,7 @@ def serialize_expression(expr: ClauseElement) -> dict:  # noqa: PLR0911
     return {"type": "other", "repr": str(expr)}
 
 
-def hash_column_elements(columns: Sequence[ColumnElement]) -> str:
+def hash_column_elements(columns: Sequence[Union[ColumnElement, str]]) -> str:
     """
     Hash a list of ColumnElements deterministically, dialect agnostic.
     Only accepts ordered iterables (like list or tuple).
