@@ -547,11 +547,9 @@ def is_studio():
 
 @pytest.fixture(autouse=True)
 def mock_is_studio(monkeypatch, is_studio):
-    if not is_studio:
-        yield
-    else:
-        monkeypatch.setenv("DATACHAIN_IS_STUDIO", True)
-        yield
+    if is_studio:
+        monkeypatch.setenv("DATACHAIN_IS_STUDIO", "True")
+    yield
 
 
 @pytest.fixture
@@ -584,7 +582,10 @@ def dogs_dataset(listed_bucket, cloud_test_catalog):
     catalog = cloud_test_catalog.catalog
     src_uri = cloud_test_catalog.src_uri
     dataset = catalog.create_dataset_from_sources(
-        name, [f"{src_uri}/dogs/*"], catalog.metastore.default_project, recursive=True
+        name,
+        [f"{src_uri}/dogs/"],
+        catalog.metastore.default_project,
+        recursive=True,
     )
     return catalog.update_dataset(
         dataset, {"description": "dogs dataset", "attrs": ["dogs", "dataset"]}

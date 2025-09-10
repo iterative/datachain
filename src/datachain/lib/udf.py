@@ -54,23 +54,11 @@ UDFOutputSpec = Mapping[str, ColumnType]
 UDFResult = dict[str, Any]
 
 
-@attrs.define
-class UDFProperties:
-    udf: "UDFAdapter"
-
-    def get_batching(self, use_partitioning: bool = False) -> BatchingStrategy:
-        return self.udf.get_batching(use_partitioning)
-
-    @property
-    def batch_rows(self):
-        return self.udf.batch_rows
-
-
 @attrs.define(slots=False)
 class UDFAdapter:
     inner: "UDFBase"
     output: UDFOutputSpec
-    batch_rows: Optional[int] = None
+    batch_size: Optional[int] = None
     batch: int = 1
 
     def get_batching(self, use_partitioning: bool = False) -> BatchingStrategy:
@@ -82,11 +70,6 @@ class UDFAdapter:
         if self.batch > 1:
             return Batch(self.batch)
         raise ValueError(f"invalid batch size {self.batch}")
-
-    @property
-    def properties(self):
-        # For backwards compatibility.
-        return UDFProperties(self)
 
     def run(
         self,
@@ -237,13 +220,13 @@ class UDFBase(AbstractUDF):
 
     def to_udf_wrapper(
         self,
-        batch_rows: Optional[int] = None,
+        batch_size: Optional[int] = None,
         batch: int = 1,
     ) -> UDFAdapter:
         return UDFAdapter(
             self,
             self.output.to_udf_spec(),
-            batch_rows,
+            batch_size,
             batch,
         )
 

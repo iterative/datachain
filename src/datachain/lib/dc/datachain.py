@@ -40,11 +40,7 @@ from datachain.lib.data_model import (
     StandardType,
     dict_to_data_model,
 )
-from datachain.lib.file import (
-    EXPORT_FILES_MAX_THREADS,
-    ArrowRow,
-    FileExporter,
-)
+from datachain.lib.file import EXPORT_FILES_MAX_THREADS, ArrowRow, FileExporter
 from datachain.lib.file import ExportPlacement as FileExportPlacement
 from datachain.lib.model_store import ModelStore
 from datachain.lib.settings import Settings
@@ -193,6 +189,7 @@ class DataChain:
         self._setup: dict = setup or {}
         self._sys = _sys
         self._delta = False
+        self._delta_unsafe = False
         self._delta_on: Optional[Union[str, Sequence[str]]] = None
         self._delta_result_on: Optional[Union[str, Sequence[str]]] = None
         self._delta_compare: Optional[Union[str, Sequence[str]]] = None
@@ -216,6 +213,7 @@ class DataChain:
         right_on: Optional[Union[str, Sequence[str]]] = None,
         compare: Optional[Union[str, Sequence[str]]] = None,
         delta_retry: Optional[Union[bool, str]] = None,
+        delta_unsafe: bool = False,
     ) -> "Self":
         """Marks this chain as delta, which means special delta process will be
         called on saving dataset for optimization"""
@@ -226,6 +224,7 @@ class DataChain:
         self._delta_result_on = right_on
         self._delta_compare = compare
         self._delta_retry = delta_retry
+        self._delta_unsafe = delta_unsafe
         return self
 
     @property
@@ -237,6 +236,10 @@ class DataChain:
     def delta(self) -> bool:
         """Returns True if this chain is ran in "delta" update mode"""
         return self._delta
+
+    @property
+    def delta_unsafe(self) -> bool:
+        return self._delta_unsafe
 
     @property
     def schema(self) -> dict[str, DataType]:
@@ -328,46 +331,51 @@ class DataChain:
                 right_on=self._delta_result_on,
                 compare=self._delta_compare,
                 delta_retry=self._delta_retry,
+                delta_unsafe=self._delta_unsafe,
             )
 
         return chain
 
     def settings(
         self,
-        cache=None,
-        parallel=None,
-        workers=None,
-        min_task_size=None,
-        prefetch: Optional[int] = None,
-        sys: Optional[bool] = None,
+        cache: Optional[bool] = None,
+        prefetch: Optional[Union[bool, int]] = None,
+        parallel: Optional[Union[bool, int]] = None,
+        workers: Optional[int] = None,
         namespace: Optional[str] = None,
         project: Optional[str] = None,
-        batch_rows: Optional[int] = None,
+        min_task_size: Optional[int] = None,
+        batch_size: Optional[int] = None,
+        sys: Optional[bool] = None,
     ) -> "Self":
-        """Change settings for chain.
-
-        This function changes specified settings without changing not specified ones.
-        It returns chain, so, it can be chained later with next operation.
+        """
+        Set chain execution parameters. Returns the chain itself, allowing method
+        chaining for subsequent operations. To restore all settings to their default
+        values, use `reset_settings()`.
 
         Parameters:
-            cache : data caching. (default=False)
-            parallel : number of thread for processors. True is a special value to
-                enable all available CPUs. (default=1)
-            workers : number of distributed workers. Only for Studio mode. (default=1)
-            min_task_size : minimum number of tasks. (default=1)
-            prefetch : number of workers to use for downloading files in advance.
-                      This is enabled by default and uses 2 workers.
-                      To disable prefetching, set it to 0.
-            namespace : namespace name.
-            project : project name.
-            batch_rows : row limit per insert to balance speed and memory usage.
-                      (default=2000)
+            cache: Enable files caching to speed up subsequent accesses to the same
+                files from the same or different chains. Defaults to False.
+            prefetch: Enable prefetching of files. This will download files in
+                advance in parallel. If an integer is provided, it specifies the number
+                of files to prefetch concurrently for each process on each worker.
+                Defaults to 2. Set to 0 or False to disable prefetching.
+            parallel: Number of processes to use for processing user-defined functions
+                (UDFs) in parallel. If an integer is provided, it specifies the number
+                of CPUs to use. If True, all available CPUs are used. Defaults to 1.
+            namespace: Namespace to use for the chain by default.
+            project: Project to use for the chain by default.
+            min_task_size: Minimum number of rows per worker/process for parallel
+                processing by UDFs. Defaults to 1.
+            batch_size: Number of rows per insert by UDF to fine tune and balance speed
+                and memory usage. This might be useful when processing large rows
+                or when running into memory issues. Defaults to 2000.
 
         Example:
             ```py
             chain = (
                 chain
-                .settings(cache=True, parallel=8, batch_rows=300)
+                .settings(cache=True, parallel=8, batch_size=300)
                 .map(laion=process_webdataset(spec=WDSLaion), params="file")
             )
             ```
@@ -377,20 +385,20 @@ class DataChain:
         settings = copy.copy(self._settings)
         settings.add(
             Settings(
-                cache,
-                parallel,
-                workers,
-                min_task_size,
-                prefetch,
-                namespace,
-                project,
-                batch_rows,
+                cache=cache,
+                prefetch=prefetch,
+                parallel=parallel,
+                workers=workers,
+                namespace=namespace,
+                project=project,
+                min_task_size=min_task_size,
+                batch_size=batch_size,
             )
         )
         return self._evolve(settings=settings, _sys=sys)
 
     def reset_settings(self, settings: Optional[Settings] = None) -> "Self":
-        """Reset all settings to default values."""
+        """Reset all chain settings to default values."""
         self._settings = settings if settings else Settings()
         return self
 
@@ -572,14 +580,14 @@ class DataChain:
         """Save to a Dataset. It returns the chain itself.
 
         Parameters:
-            name : dataset name. It can be full name consisting of namespace and
-                project, but it can also be just a regular dataset name in which
-                case we are taking namespace and project from settings, if they
-                are defined there, or default ones instead.
-            version : version of a dataset. If version is not specified and dataset
+            name: dataset name. This can be either a fully qualified name, including
+                the namespace and project, or just a regular dataset name. In the latter
+                case, the namespace and project will be taken from the settings
+                (if specified) or from the default values otherwise.
+            version: version of a dataset. If version is not specified and dataset
                 already exists, version patch increment will happen e.g 1.2.1 -> 1.2.2.
-            description : description of a dataset.
-            attrs : attributes of a dataset. They can be without value, e.g "NLP",
+            description: description of a dataset.
+            attrs: attributes of a dataset. They can be without value, e.g "NLP",
                 or with a value, e.g "location=US".
             update_version: which part of the dataset version to automatically increase.
                 Available values: `major`, `minor` or `patch`. Default is `patch`.
@@ -653,7 +661,9 @@ class DataChain:
                 # current latest version instead.
                 from .datasets import read_dataset
 
-                return read_dataset(name, **kwargs)
+                return read_dataset(
+                    name, namespace=namespace_name, project=project_name, **kwargs
+                )
 
         return self._evolve(
             query=self._query.save(
@@ -696,7 +706,7 @@ class DataChain:
         func: Optional[Callable] = None,
         params: Union[None, str, Sequence[str]] = None,
         output: OutputType = None,
-        **signal_map,
+        **signal_map: Any,
     ) -> "Self":
         """Apply a function to each row to create new signals. The function should
         return a new object for each row. It returns a chain itself with new signals.
@@ -704,17 +714,17 @@ class DataChain:
         Input-output relationship: 1:1
 
         Parameters:
-            func : Function applied to each row.
-            params : List of column names used as input for the function. Default
+            func: Function applied to each row.
+            params: List of column names used as input for the function. Default
                     is taken from function signature.
-            output : Dictionary defining new signals and their corresponding types.
+            output: Dictionary defining new signals and their corresponding types.
                     Default type is taken from function signature. Default can be also
                     taken from kwargs - **signal_map (see below).
                     If signal name is defined using signal_map (see below) only a single
                     type value can be used.
-            **signal_map : kwargs can be used to define `func` together with it's return
+            **signal_map: kwargs can be used to define `func` together with its return
                     signal name in format of `map(my_sign=my_func)`. This helps define
-                    signal names and function in a nicer way.
+                    signal names and functions in a nicer way.
 
         Example:
             Using signal_map and single type in output:
@@ -737,7 +747,7 @@ class DataChain:
 
         return self._evolve(
             query=self._query.add_signals(
-                udf_obj.to_udf_wrapper(self._settings.batch_rows),
+                udf_obj.to_udf_wrapper(self._settings.batch_size),
                 **self._settings.to_dict(),
             ),
             signal_schema=self.signals_schema | udf_obj.output,
@@ -775,7 +785,7 @@ class DataChain:
             udf_obj.prefetch = prefetch
         return self._evolve(
             query=self._query.generate(
-                udf_obj.to_udf_wrapper(self._settings.batch_rows),
+                udf_obj.to_udf_wrapper(self._settings.batch_size),
                 **self._settings.to_dict(),
             ),
             signal_schema=udf_obj.output,
@@ -911,7 +921,7 @@ class DataChain:
         udf_obj = self._udf_to_obj(Aggregator, func, params, output, signal_map)
         return self._evolve(
             query=self._query.generate(
-                udf_obj.to_udf_wrapper(self._settings.batch_rows),
+                udf_obj.to_udf_wrapper(self._settings.batch_size),
                 partition_by=processed_partition_by,
                 **self._settings.to_dict(),
             ),
@@ -933,7 +943,7 @@ class DataChain:
         It accepts the same parameters plus an
         additional parameter:
 
-            batch : Size of each batch passed to `func`. Defaults to 1000.
+            batch: Size of each batch passed to `func`. Defaults to 1000.
 
         Example:
             ```py
@@ -960,7 +970,7 @@ class DataChain:
 
         return self._evolve(
             query=self._query.add_signals(
-                udf_obj.to_udf_wrapper(self._settings.batch_rows, batch=batch),
+                udf_obj.to_udf_wrapper(self._settings.batch_size, batch=batch),
                 **self._settings.to_dict(),
             ),
             signal_schema=self.signals_schema | udf_obj.output,
@@ -1301,9 +1311,9 @@ class DataChain:
         """Yields flattened rows of values as a tuple.
 
         Args:
-            row_factory : A callable to convert row to a custom format.
-                          It should accept two arguments: a list of column names and
-                          a tuple of row values.
+            row_factory: A callable to convert row to a custom format.
+                It should accept two arguments: a list of column names and
+                a tuple of row values.
             include_hidden: Whether to include hidden signals from the schema.
         """
         db_signals = self._effective_signals_schema.db_signals(
@@ -1948,19 +1958,19 @@ class DataChain:
         model_name: str = "",
         source: bool = True,
         nrows: Optional[int] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> "Self":
         """Generate chain from list of tabular files.
 
         Parameters:
-            output : Dictionary or feature class defining column names and their
+            output: Dictionary or feature class defining column names and their
                 corresponding types. List of column names is also accepted, in which
                 case types will be inferred.
-            column : Generated column name.
-            model_name : Generated model name.
-            source : Whether to include info about the source file.
-            nrows : Optional row limit.
-            kwargs : Parameters to pass to pyarrow.dataset.dataset.
+            column: Generated column name.
+            model_name: Generated model name.
+            source: Whether to include info about the source file.
+            nrows: Optional row limit.
+            kwargs: Parameters to pass to pyarrow.dataset.dataset.
 
         Example:
             Reading a json lines file:
@@ -2090,12 +2100,12 @@ class DataChain:
         """Save chain to parquet file with SignalSchema metadata.
 
         Parameters:
-            path : Path or a file-like binary object to save the file. This supports
+            path: Path or a file-like binary object to save the file. This supports
                 local paths as well as remote paths, such as s3:// or hf:// with fsspec.
-            partition_cols : Column names by which to partition the dataset.
-            chunk_size : The chunk size of results to read and convert to columnar
+            partition_cols: Column names by which to partition the dataset.
+            chunk_size: The chunk size of results to read and convert to columnar
                 data, to avoid running out of memory.
-            fs_kwargs : Optional kwargs to pass to the fsspec filesystem, used only for
+            fs_kwargs: Optional kwargs to pass to the fsspec filesystem, used only for
                 write, for fsspec-type URLs, such as s3:// or hf:// when
                 provided as the destination path.
         """
@@ -2187,10 +2197,10 @@ class DataChain:
         """Save chain to a csv (comma-separated values) file.
 
         Parameters:
-            path : Path to save the file. This supports local paths as well as
+            path: Path to save the file. This supports local paths as well as
                 remote paths, such as s3:// or hf:// with fsspec.
-            delimiter : Delimiter to use for the resulting file.
-            fs_kwargs : Optional kwargs to pass to the fsspec filesystem, used only for
+            delimiter: Delimiter to use for the resulting file.
+            fs_kwargs: Optional kwargs to pass to the fsspec filesystem, used only for
                 write, for fsspec-type URLs, such as s3:// or hf:// when
                 provided as the destination path.
         """
@@ -2233,12 +2243,12 @@ class DataChain:
         """Save chain to a JSON file.
 
         Parameters:
-            path : Path to save the file. This supports local paths as well as
+            path: Path to save the file. This supports local paths as well as
                 remote paths, such as s3:// or hf:// with fsspec.
-            fs_kwargs : Optional kwargs to pass to the fsspec filesystem, used only for
+            fs_kwargs: Optional kwargs to pass to the fsspec filesystem, used only for
                 write, for fsspec-type URLs, such as s3:// or hf:// when
                 provided as the destination path.
-            include_outer_list : Sets whether to include an outer list for all rows.
+            include_outer_list: Sets whether to include an outer list for all rows.
                 Setting this to True makes the file valid JSON, while False instead
                 writes in the JSON lines format.
         """
@@ -2293,9 +2303,9 @@ class DataChain:
         """Save chain to a JSON lines file.
 
         Parameters:
-            path : Path to save the file. This supports local paths as well as
+            path: Path to save the file. This supports local paths as well as
                 remote paths, such as s3:// or hf:// with fsspec.
-            fs_kwargs : Optional kwargs to pass to the fsspec filesystem, used only for
+            fs_kwargs: Optional kwargs to pass to the fsspec filesystem, used only for
                 write, for fsspec-type URLs, such as s3:// or hf:// when
                 provided as the destination path.
         """
@@ -2306,7 +2316,7 @@ class DataChain:
         table_name: str,
         connection: "ConnectionType",
         *,
-        batch_rows: int = DEFAULT_DATABASE_BATCH_SIZE,
+        batch_size: int = DEFAULT_DATABASE_BATCH_SIZE,
         on_conflict: Optional[str] = None,
         conflict_columns: Optional[list[str]] = None,
         column_mapping: Optional[dict[str, Optional[str]]] = None,
@@ -2328,7 +2338,7 @@ class DataChain:
                 library. If a DBAPI2 object, only sqlite3 is supported. The user is
                 responsible for engine disposal and connection closure for the
                 SQLAlchemy connectable; str connections are closed automatically.
-            batch_rows: Number of rows to insert per batch for optimal performance.
+            batch_size: Number of rows to insert per batch for optimal performance.
                 Larger batches are faster but use more memory. Default: 10,000.
             on_conflict: Strategy for handling duplicate rows (requires table
                 constraints):
@@ -2409,7 +2419,7 @@ class DataChain:
             self,
             table_name,
             connection,
-            batch_rows=batch_rows,
+            batch_size=batch_size,
             on_conflict=on_conflict,
             conflict_columns=conflict_columns,
             column_mapping=column_mapping,
@@ -2563,9 +2573,9 @@ class DataChain:
                 The possible values are: "filename", "etag", "fullpath", and "checksum".
             link_type: Method to use for exporting files.
                 Falls back to `'copy'` if symlinking fails.
-            num_threads : number of threads to use for exporting files.
-                By default it uses 5 threads.
-            anon: If True, we will treat cloud bucket as public one. Default behavior
+            num_threads: number of threads to use for exporting files.
+                By default, it uses 5 threads.
+            anon: If True, we will treat cloud bucket as a public one. Default behavior
                 depends on the previous session configuration (e.g. happens in the
                 initial `read_storage`) and particular cloud storage client
                 implementation (e.g. S3 fallbacks to anonymous access if no credentials

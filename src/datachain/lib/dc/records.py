@@ -30,9 +30,9 @@ def read_records(
     or other sources.
 
     Parameters:
-        to_insert : records (or a single record) to insert. Each record is
-                    a dictionary of signals and theirs values.
-        schema : describes chain signals and their corresponding types
+        to_insert: records (or a single record) to insert. Each record is
+                    a dictionary of signals and their values.
+        schema: describes chain signals and their corresponding types
 
     Example:
         ```py
@@ -45,7 +45,6 @@ def read_records(
     """
     from datachain.query.dataset import adjust_outputs, get_col_types
     from datachain.sql.types import SQLType
-    from datachain.utils import batched
 
     from .datasets import read_dataset
 
@@ -96,7 +95,6 @@ def read_records(
         {c.name: c.type for c in columns if isinstance(c.type, SQLType)},
     )
     records = (adjust_outputs(warehouse, record, col_types) for record in to_insert)
-    for chunk in batched(records, READ_RECORDS_BATCH_SIZE):
-        warehouse.insert_rows(table, chunk)
+    warehouse.insert_rows(table, records, batch_size=READ_RECORDS_BATCH_SIZE)
     warehouse.insert_rows_done(table)
     return read_dataset(name=dsr.full_name, session=session, settings=settings)

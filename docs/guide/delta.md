@@ -80,3 +80,23 @@ Delta processing can be combined with [retry processing](./retry.md) to create a
 
 1. Processes only new or changed records (delta)
 2. Reprocesses records with errors or that are missing (retry)
+
+## Using Delta with Restricted Methods
+
+By default, delta updates cannot be combined with the following methods:
+
+1. `merge`
+2. `union`
+3. `distinct`
+4. `agg`
+5. `group_by`
+
+These methods are restricted because they may produce **unexpected results** when used with delta processing. Delta runs the chain only on a subset of rows (new and changed records), while methods like `distinct`, `agg`, or `group_by` are designed to operate on the entire dataset.
+
+Similarly, combining delta with methods like `merge` or `union` may result in duplicated rows when merging with a static dataset.
+
+If you still need to use these methods together with delta, you can override this restriction by setting the additional flag:
+
+```python
+delta_unsafe=True
+```

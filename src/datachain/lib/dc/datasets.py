@@ -40,6 +40,7 @@ def read_dataset(
     delta_result_on: Optional[Union[str, Sequence[str]]] = None,
     delta_compare: Optional[Union[str, Sequence[str]]] = None,
     delta_retry: Optional[Union[bool, str]] = None,
+    delta_unsafe: bool = False,
     update: bool = False,
 ) -> "DataChain":
     """Get data from a saved Dataset. It returns the chain itself.
@@ -50,14 +51,14 @@ def read_dataset(
             namespace and project. Alternatively, it can be a regular name, in which
             case the explicitly defined namespace and project will be used if they are
             set; otherwise, default values will be applied.
-        namespace : optional name of namespace in which dataset to read is created
-        project : optional name of project in which dataset to read is created
-        version : dataset version. Supports:
+        namespace: optional name of namespace in which dataset to read is created
+        project: optional name of project in which dataset to read is created
+        version: dataset version. Supports:
             - Exact version strings: "1.2.3"
             - Legacy integer versions: 1, 2, 3 (finds latest major version)
             - Version specifiers (PEP 440): ">=1.0.0,<2.0.0", "~=1.4.2", "==1.2.*", etc.
-        session : Session to use for the chain.
-        settings : Settings to use for the chain.
+        session: Session to use for the chain.
+        settings: Settings to use for the chain.
         delta: If True, only process new or changed files instead of reprocessing
             everything. This saves time by skipping files that were already processed in
             previous versions. The optimization is working when a new version of the
@@ -80,6 +81,8 @@ def read_dataset(
         update: If True always checks for newer versions available on Studio, even if
             some version of the dataset exists locally already. If False (default), it
             will only fetch the dataset from Studio if it is not found locally.
+        delta_unsafe: Allow restricted ops in delta: merge, agg, union, group_by,
+            distinct.
 
 
     Example:
@@ -205,6 +208,7 @@ def read_dataset(
             right_on=delta_result_on,
             compare=delta_compare,
             delta_retry=delta_retry,
+            delta_unsafe=delta_unsafe,
         )
 
     return chain
@@ -310,9 +314,9 @@ def delete_dataset(
             namespace and project. Alternatively, it can be a regular name, in which
             case the explicitly defined namespace and project will be used if they are
             set; otherwise, default values will be applied.
-        namespace : optional name of namespace in which dataset to delete is created
-        project : optional name of project in which dataset to delete is created
-        version : Optional dataset version
+        namespace: optional name of namespace in which dataset to delete is created
+        project: optional name of project in which dataset to delete is created
+        version: Optional dataset version
         force: If true, all datasets versions will be removed. Defaults to False.
         studio: If True, removes dataset from Studio only, otherwise removes local
             dataset. Defaults to False.

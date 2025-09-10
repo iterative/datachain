@@ -1,22 +1,17 @@
-import os.path
+import os
 from collections.abc import Sequence
 from functools import reduce
-from typing import (
-    TYPE_CHECKING,
-    Optional,
-    Union,
-)
+from typing import TYPE_CHECKING, Optional, Union
 
-from datachain.lib.file import (
-    FileType,
-    get_file_type,
+from datachain.lib.dc.storage_pattern import (
+    apply_glob_filter,
+    expand_brace_pattern,
+    should_use_recursion,
+    split_uri_pattern,
+    validate_cloud_bucket_name,
 )
-from datachain.lib.listing import (
-    get_file_info,
-    get_listing,
-    list_bucket,
-    ls,
-)
+from datachain.lib.file import FileType, get_file_type
+from datachain.lib.listing import get_file_info, get_listing, list_bucket, ls
 from datachain.query import Session
 
 if TYPE_CHECKING:
@@ -43,21 +38,26 @@ def read_storage(
     delta_result_on: Optional[Union[str, Sequence[str]]] = None,
     delta_compare: Optional[Union[str, Sequence[str]]] = None,
     delta_retry: Optional[Union[bool, str]] = None,
+    delta_unsafe: bool = False,
     client_config: Optional[dict] = None,
 ) -> "DataChain":
     """Get data from storage(s) as a list of file with all file attributes.
     It returns the chain itself as usual.
 
     Parameters:
-        uri : storage URI with directory or list of URIs.
-            URIs must start with storage prefix such
-            as `s3://`, `gs://`, `az://` or "file:///"
-        type : read file as "binary", "text", or "image" data. Default is "binary".
-        recursive : search recursively for the given path.
-        column : Created column name.
-        update : force storage reindexing. Default is False.
-        anon : If True, we will treat cloud bucket as public one
-        client_config : Optional client configuration for the storage client.
+        uri: Storage path(s) or URI(s). Can be a local path or start with a
+            storage prefix like `s3://`, `gs://`, `az://`, `hf://` or "file:///".
+            Supports glob patterns:
+              - `*` : wildcard
+              - `**` : recursive wildcard
+              - `?` : single character
+              - `{a,b}` : brace expansion
+        type: read file as "binary", "text", or "image" data. Default is "binary".
+        recursive: search recursively for the given path.
+        column: Column name that will contain File objects. Default is "file".
+        update: force storage reindexing. Default is False.
+        anon: If True, we will treat cloud bucket as public one.
+        client_config: Optional client configuration for the storage client.
         delta: If True, only process new or changed files instead of reprocessing
             everything. This saves time by skipping files that were already processed in
             previous versions. The optimization is working when a new version of the
@@ -77,6 +77,9 @@ def read_storage(
               (error mode)
             - True: Reprocess records missing from the result dataset (missing mode)
             - None: No retry processing (default)
+        delta_unsafe: Allow restricted ops in delta: merge, agg, union, group_by,
+            distinct. Caller must ensure datasets are consistent and not partially
+            updated.
 
     Returns:
         DataChain: A DataChain object containing the file information.
@@ -88,12 +91,19 @@ def read_storage(
         chain = dc.read_storage("s3://my-bucket/my-dir")
         ```
 
+        Match all .json files recursively using glob pattern
+        ```py
+        chain = dc.read_storage("gs://bucket/meta/**/*.json")
+        ```
+
+        Match image file extensions for directories with pattern
+        ```py
+        chain = dc.read_storage("s3://bucket/202?/**/*.{jpg,jpeg,png}")
+        ```
+
         Multiple URIs:
         ```python
-        chain = dc.read_storage([
-            "s3://bucket1/dir1",
-            "s3://bucket2/dir2"
-        ])
+        chain = dc.read_storage(["s3://my-bkt/dir1", "s3://bucket2/dir2/dir3"])
         ```
 
         With AWS S3-compatible storage:
@@ -103,19 +113,6 @@ def read_storage(
             client_config = {"aws_endpoint_url": "<minio-endpoint-url>"}
         )
         ```
-
-        Pass existing session
-        ```py
-        session = Session.get()
-        chain = dc.read_storage([
-            "path/to/dir1",
-            "path/to/dir2"
-        ], session=session, recursive=True)
-        ```
-
-    Note:
-        When using multiple URIs with `update=True`, the function optimizes by
-        avoiding redundant updates for URIs pointing to the same storage location.
     """
     from .datachain import DataChain
     from .datasets import read_dataset
@@ -138,13 +135,36 @@ def read_storage(
     if not uris:
         raise ValueError("No URIs provided")
 
+    # Then expand all URIs that contain brace patterns
+    expanded_uris = []
+    for single_uri in uris:
+        uri_str = str(single_uri)
+        validate_cloud_bucket_name(uri_str)
+        expanded_uris.extend(expand_brace_pattern(uri_str))
+
+    # Now process each expanded URI
     chains = []
     listed_ds_name = set()
     file_values = []
 
-    for single_uri in uris:
+    updated_uris = set()
+
+    for single_uri in expanded_uris:
+        # Check if URI contains glob patterns and split them
+        base_uri, glob_pattern = split_uri_pattern(single_uri)
+
+        # If a pattern is found, use the base_uri for listing
+        # The pattern will be used for filtering later
+        list_uri_to_use = base_uri if glob_pattern else single_uri
+
+        # Avoid double updates for the same URI
+        update_single_uri = False
+        if update and (list_uri_to_use not in updated_uris):
+            updated_uris.add(list_uri_to_use)
+            update_single_uri = True
+
         list_ds_name, list_uri, list_path, list_ds_exists = get_listing(
-            single_uri, session, update=update
+            list_uri_to_use, session, update=update_single_uri
         )
 
         # list_ds_name is None if object is a file, we don't want to use cache
@@ -193,7 +213,21 @@ def read_storage(
                 lambda ds_name=list_ds_name, lst_uri=list_uri: lst_fn(ds_name, lst_uri)
             )
 
-        chains.append(ls(dc, list_path, recursive=recursive, column=column))
+        # If a glob pattern was detected, use it for filtering
+        # Otherwise, use the original list_path from get_listing
+        if glob_pattern:
+            # Determine if we should use recursive listing based on the pattern
+            use_recursive = should_use_recursion(glob_pattern, recursive or False)
+
+            # Apply glob filter - no need for brace expansion here as it's done above
+            chain = apply_glob_filter(
+                dc, glob_pattern, list_path, use_recursive, column
+            )
+            chains.append(chain)
+        else:
+            # No glob pattern detected, use normal ls behavior
+            chains.append(ls(dc, list_path, recursive=recursive, column=column))
+
         listed_ds_name.add(list_ds_name)
 
     storage_chain = None if not chains else reduce(lambda x, y: x.union(y), chains)
@@ -218,6 +252,7 @@ def read_storage(
             right_on=delta_result_on,
             compare=delta_compare,
             delta_retry=delta_retry,
+            delta_unsafe=delta_unsafe,
         )
 
     return storage_chain

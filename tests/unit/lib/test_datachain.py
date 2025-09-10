@@ -2230,6 +2230,13 @@ def test_subtract(test_session):
     assert set(chain4.subtract(chain5, on="d", right_on="a").to_list()) == {(3, "z")}
 
 
+def test_subtract_duplicated_rows(test_session):
+    chain1 = dc.read_values(id=[1, 1], name=["1", "1"], session=test_session)
+    chain2 = dc.read_values(id=[2], name=["2"], session=test_session)
+    sub = chain1.subtract(chain2, on="id")
+    assert set(sub.to_list()) == {(1, "1"), (1, "1")}
+
+
 def test_subtract_error(test_session):
     chain1 = dc.read_values(a=[1, 1, 2], b=["x", "y", "z"], session=test_session)
     chain2 = dc.read_values(a=[1, 2], b=["x", "y"], session=test_session)
