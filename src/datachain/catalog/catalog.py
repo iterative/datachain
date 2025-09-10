@@ -152,7 +152,7 @@ def process_output(stream: IO[bytes], callback: Callable[[str], None]) -> None:
             buffer += byt
 
             if byt in (b"\n", b"\r"):  # Check for newline or carriage return
-                line = buffer.decode("utf-8")
+                line = buffer.decode("utf-8", errors="replace")
                 callback(line)
                 buffer = b""  # Clear buffer for the next line
 
