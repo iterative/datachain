@@ -7,6 +7,7 @@ from datachain.lib.signal_schema import SignalSchema
 from datachain.query.dataset import (
     SQLFilter,
     SQLMutate,
+    SQLOrderBy,
     SQLSelect,
     SQLSelectExcept,
 )
@@ -95,3 +96,22 @@ def test_mutate_hash(inputs, schema, result):
         for k, v in inputs.items()
     )
     assert SQLMutate(inputs, new_schema=None).hash() == result
+
+
+@pytest.mark.parametrize(
+    "inputs,result",
+    [
+        (
+            (C("name"), C("age")),
+            "8368b3239fd66422c18d561d2b61dbbae9fd88f9c935f67719b0d12ada50ffb6",
+        ),
+        (("name",), "b3562b4508052e5a57bc84ae862255939df294eb079e124c5af61fc21044343e"),
+        (
+            (sa.desc(C("name")),),
+            "fd91c8cfe480debf1cdcf2b3f91462393a75042d0752a813ecc65dfed1ac7a6c",
+        ),
+        ((), "c525013178ef24a807af6d4dd44d108c20a5224eb3ab88b84c55c635ec32ba04"),
+    ],
+)
+def test_order_by_hash(inputs, result):
+    assert SQLOrderBy(inputs).hash() == result
