@@ -151,5 +151,3 @@ cython_debug/
 local/
 docs/openapi.json
 docs/studio/api/index.md
-
-# docs/openapi.json

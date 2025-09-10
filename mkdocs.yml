@@ -168,8 +168,6 @@ hooks:
 plugins:
   - search
   - section-index
-  - render_swagger:
-      allow_arbitrary_locations: true
   - mkdocstrings:
       handlers:
         python:
