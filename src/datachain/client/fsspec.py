@@ -44,6 +44,7 @@ FETCH_WORKERS = 100
 DELIMITER = "/"  # Path delimiter.
 
 DATA_SOURCE_URI_PATTERN = re.compile(r"^[\w]+:\/\/.*$")
+CLOUD_STORAGE_PROTOCOLS = {"s3", "gs", "az", "hf"}
 
 ResultQueue = asyncio.Queue[Optional[Sequence["File"]]]
 
@@ -60,6 +61,16 @@ def _is_win_local_path(uri: str) -> bool:
         ):
             return True
     return False
+
+
+def is_cloud_uri(uri: str) -> bool:
+    protocol = urlparse(uri).scheme
+    return protocol in CLOUD_STORAGE_PROTOCOLS
+
+
+def get_cloud_schemes() -> list[str]:
+    """Get list of cloud storage scheme prefixes."""
+    return [f"{p}://" for p in CLOUD_STORAGE_PROTOCOLS]
 
 
 class Bucket(NamedTuple):

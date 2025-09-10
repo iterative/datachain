@@ -351,24 +351,28 @@ class DataChain:
         batch_size: Optional[int] = None,
         sys: Optional[bool] = None,
     ) -> "Self":
-        """Change settings for chain.
-
-        This function changes specified settings without changing not specified ones.
-        It returns chain, so, it can be chained later with next operation.
+        """
+        Set chain execution parameters. Returns the chain itself, allowing method
+        chaining for subsequent operations. To restore all settings to their default
+        values, use `reset_settings()`.
 
         Parameters:
-            cache: data caching. (default=False)
-            prefetch: number of workers to use for downloading files in advance.
-                This is enabled by default and uses 2 workers.
-                To disable prefetching, set it to 0 or False.
-            parallel: number of thread for processors. True is a special value to
-                enable all available CPUs. (default=1)
-            workers: number of distributed workers. Only for Studio mode. (default=1)
-            namespace: namespace name.
-            project: project name.
-            min_task_size: minimum number of tasks. (default=1)
-            batch_size: row limit per insert to balance speed and memory usage.
-                (default=2000)
+            cache: Enable files caching to speed up subsequent accesses to the same
+                files from the same or different chains. Defaults to False.
+            prefetch: Enable prefetching of files. This will download files in
+                advance in parallel. If an integer is provided, it specifies the number
+                of files to prefetch concurrently for each process on each worker.
+                Defaults to 2. Set to 0 or False to disable prefetching.
+            parallel: Number of processes to use for processing user-defined functions
+                (UDFs) in parallel. If an integer is provided, it specifies the number
+                of CPUs to use. If True, all available CPUs are used. Defaults to 1.
+            namespace: Namespace to use for the chain by default.
+            project: Project to use for the chain by default.
+            min_task_size: Minimum number of rows per worker/process for parallel
+                processing by UDFs. Defaults to 1.
+            batch_size: Number of rows per insert by UDF to fine tune and balance speed
+                and memory usage. This might be useful when processing large rows
+                or when running into memory issues. Defaults to 2000.
 
         Example:
             ```py
@@ -397,7 +401,7 @@ class DataChain:
         return self._evolve(settings=settings, _sys=sys)
 
     def reset_settings(self, settings: Optional[Settings] = None) -> "Self":
-        """Reset all settings to default values."""
+        """Reset all chain settings to default values."""
         self._settings = settings if settings else Settings()
         return self
 
@@ -660,7 +664,9 @@ class DataChain:
                 # current latest version instead.
                 from .datasets import read_dataset
 
-                return read_dataset(name, **kwargs)
+                return read_dataset(
+                    name, namespace=namespace_name, project=project_name, **kwargs
+                )
 
         return self._evolve(
             query=self._query.save(
