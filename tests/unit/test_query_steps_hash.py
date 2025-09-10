@@ -1,6 +1,7 @@
 import pytest
 import sqlalchemy as sa
 
+import datachain as dc
 from datachain import C, func
 from datachain.func.func import Func
 from datachain.lib.signal_schema import SignalSchema
@@ -14,7 +15,24 @@ from datachain.query.dataset import (
     SQLOrderBy,
     SQLSelect,
     SQLSelectExcept,
+    SQLUnion,
 )
+
+
+@pytest.fixture
+def numbers_dataset(test_session):
+    """
+    Fixture to create dataset with stable / constant UUID to have consistent
+    hash values in tests as it goes into chain hash calculation
+    """
+    dc.read_values(num=list(range(100)), session=test_session).save("numbers")
+    test_session.catalog.metastore.update_dataset_version(
+        test_session.catalog.get_dataset("numbers"),
+        "1.0.0",
+        uuid="9045d46d-7c57-4442-aae3-3ca9e9f286c4",
+    )
+
+    return test_session.catalog.get_dataset("numbers")
 
 
 @pytest.mark.parametrize(
@@ -167,3 +185,12 @@ def test_count_hash(result):
 )
 def test_distinct_hash(inputs, result):
     assert SQLDistinct(inputs, dialect=None).hash() == result
+
+
+def test_union_hash(test_session, numbers_dataset):
+    chain1 = dc.read_dataset("numbers").filter(C("num") > 50).limit(10)
+    chain2 = dc.read_dataset("numbers").filter(C("num") < 50).limit(20)
+
+    assert SQLUnion(chain1._query, chain2._query).hash() == (
+        "ac9c210ba6c599d5ce8155692fccb5d56ec45562d87aedbc7853a283739880b3"
+    )
