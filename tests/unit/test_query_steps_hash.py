@@ -55,6 +55,10 @@ def test_select_except_hash(inputs, result):
             "ba98f1a292cc7e95402899a43e5392708bcf448332e060becb24956fb531bfd0",
         ),
         ((), "19e718af35ddc311aa892756fa4f95413ce17db7c8b27f68200d9c3ce0fc8dbf"),
+        (
+            (C("files.path").glob("*.jpg"),),
+            "c77898b24747f5106fd3793862d6c227e0423e096c6859ac95c27a9f7f7a824b",
+        ),
     ],
 )
 def test_filter_hash(inputs, result):
