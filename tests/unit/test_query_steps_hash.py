@@ -2,8 +2,11 @@ import pytest
 import sqlalchemy as sa
 
 from datachain import C, func
+from datachain.func.func import Func
+from datachain.lib.signal_schema import SignalSchema
 from datachain.query.dataset import (
     SQLFilter,
+    SQLMutate,
     SQLSelect,
     SQLSelectExcept,
 )
@@ -63,3 +66,32 @@ def test_select_except_hash(inputs, result):
 )
 def test_filter_hash(inputs, result):
     assert SQLFilter(inputs).hash() == result
+
+
+@pytest.mark.parametrize(
+    "inputs,schema,result",
+    [
+        (
+            {"new_id": func.sum("id")},
+            SignalSchema({"id": int}),
+            "d8e3af2fa2b5357643f80702455f0bbecb795b38bbb37eef24c644315e28617c",
+        ),
+        (
+            {"new_id": C("id") * 10, "old_id": C("id")},
+            SignalSchema({"id": int}),
+            "beea21224d3e2fae077a6a38d663fbaea0549fd38508b48fac3454cd76eca0df",
+        ),
+        (
+            {},
+            SignalSchema({"id": int}),
+            "b9717325e70a10ccd55c7faa22d5099ac8d5726d1a3c0eb3cfb001c7f628ce7f",
+        ),
+    ],
+)
+def test_mutate_hash(inputs, schema, result):
+    # transforming input into format SQLMutate expects
+    inputs = (
+        v.label(k).get_column(schema) if isinstance(v, Func) else v.label(k)
+        for k, v in inputs.items()
+    )
+    assert SQLMutate(inputs, new_schema=None).hash() == result
