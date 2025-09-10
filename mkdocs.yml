@@ -163,6 +163,8 @@ extra:
     - icon: fontawesome/brands/linkedin
       link: https://www.linkedin.com/company/dvc-ai
 
+hooks:
+  - docs/api_hooks.py
 plugins:
   - search
   - section-index

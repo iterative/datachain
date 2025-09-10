@@ -1,0 +1,61 @@
+{{ data.responses = data.utils.getResponses(data); }}
+{{ data.responseSchemas = false; }}
+{{~ data.responses :response }}
+{{ if (response.content) data.responseSchemas = true; }}
+{{~}}
+
+{{? data.responseSchemas }}
+> Example responses
+
+{{? data.utils.getResponseExamples(data) }}{{= data.utils.getResponseExamples(data) }}{{?}}
+{{?}}
+
+{{= data.tags.section }}
+<h3 id="{{=data.operationUniqueSlug||''}}-responses">Responses</h3>
+
+|Status|Meaning|Description|Schema|
+|---|---|---|---|
+{{~ data.responses :r}}|{{=r.status}}|{{=r.meaning}}|{{=r.description || 'none'}}|{{=r.schema||'none'}}|
+{{~}}
+
+{{ data.responseSchemas = false; }}
+{{~ data.responses :response }}
+{{ if (response.content && !response.$ref && !data.utils.isPrimitive(response.type)) data.responseSchemas = true; }}
+{{~}}
+{{? data.responseSchemas }}
+<h3 id="{{=data.operationUniqueSlug||''}}-responseschema">Response Schema</h3>
+{{~ data.responses :response}}
+{{? response.content && !response.$ref && !data.utils.isPrimitive(response.type)}}
+{{? Object.keys(response.content).length }}
+{{ var responseKey = Object.keys(response.content)[0]; }}
+{{ var responseSchema = response.content[responseKey].schema; }}
+{{ var enums = []; }}
+{{ var blocks = data.utils.schemaToArray(responseSchema,0,{trim:true,join:true},data); }}
+{{ for (var block of blocks) {
+     for (var p of block.rows) {
+       if (p.schema && p.schema.enum) {
+         for (var e of p.schema.enum) {
+           enums.push({name:p.name,value:e});
+         }
+       }
+     }
+   }
+}}
+
+Status Code **{{=response.status||''}}**
+
+{{ data.response = response; }}
+
+{{?}}
+{{?}}
+{{~}}
+{{?}}
+{{ data.responseHeaders = data.utils.getResponseHeaders(data); }}
+{{? data.responseHeaders.length }}
+### Response Headers
+|Status|Header|Type|Format|Description|
+|---|---|---|---|---|
+{{~ data.responseHeaders :h}}|{{=h.status}}|{{=h.header}}|{{=h.type}}|{{=h.format||''}}|{{=h.description||'none'}}|
+{{~}}
+{{?}}
+{{= data.tags.endSection }}
