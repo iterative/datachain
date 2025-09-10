@@ -1,7 +1,12 @@
 import pytest
+import sqlalchemy as sa
 
 from datachain import C, func
-from datachain.query.dataset import SQLSelect, SQLSelectExcept
+from datachain.query.dataset import (
+    SQLFilter,
+    SQLSelect,
+    SQLSelectExcept,
+)
 
 
 @pytest.mark.parametrize(
@@ -40,3 +45,17 @@ def test_select_hash(inputs, result):
 )
 def test_select_except_hash(inputs, result):
     assert SQLSelectExcept(inputs).hash() == result
+
+
+@pytest.mark.parametrize(
+    "inputs,result",
+    [
+        (
+            (sa.and_(C("name") != "John", C("age") * 10 > 100)),
+            "ba98f1a292cc7e95402899a43e5392708bcf448332e060becb24956fb531bfd0",
+        ),
+        ((), "19e718af35ddc311aa892756fa4f95413ce17db7c8b27f68200d9c3ce0fc8dbf"),
+    ],
+)
+def test_filter_hash(inputs, result):
+    assert SQLFilter(inputs).hash() == result

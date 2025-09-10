@@ -883,7 +883,7 @@ class SQLFilter(SQLClause):
     expressions: tuple[Union[Function, ColumnElement], ...]
 
     def _hash(self) -> str:
-        raise NotImplementedError
+        return hash_column_elements(self.parse_cols(self.expressions))
 
     def __and__(self, other):
         expressions = self.parse_cols(self.expressions)
