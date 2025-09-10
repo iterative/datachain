@@ -157,7 +157,7 @@ def process_output(stream: IO[bytes], callback: Callable[[str], None]) -> None:
                 buffer = b""  # Clear buffer for the next line
 
         if buffer:  # Handle any remaining data in the buffer
-            line = buffer.decode("utf-8")
+            line = buffer.decode("utf-8", errors="replace")
             callback(line)
     finally:
         try:
