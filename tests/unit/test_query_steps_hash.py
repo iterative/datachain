@@ -8,6 +8,7 @@ from datachain.query.dataset import (
     SQLFilter,
     SQLLimit,
     SQLMutate,
+    SQLOffset,
     SQLOrderBy,
     SQLSelect,
     SQLSelectExcept,
@@ -127,3 +128,14 @@ def test_order_by_hash(inputs, result):
 )
 def test_limit_hash(inputs, result):
     assert SQLLimit(inputs).hash() == result
+
+
+@pytest.mark.parametrize(
+    "inputs,result",
+    [
+        (5, "ff65be6bef149f6f2568f33c2bd0ac3362018a504caadf52c221a2e64acc5bb3"),
+        (0, "e88121711a1fa5da46ea2305e0d6fbeebe63f5b575450c628e7bf6f81e73aa46"),
+    ],
+)
+def test_offset_hash(inputs, result):
+    assert SQLOffset(inputs).hash() == result

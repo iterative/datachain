@@ -922,7 +922,7 @@ class SQLOffset(SQLClause):
     offset: int
 
     def _hash(self) -> str:
-        raise NotImplementedError
+        return hashlib.sha256(str(self.offset).encode()).hexdigest()
 
     def apply_sql_clause(self, query: "GenerativeSelect"):
         return query.offset(self.offset)
