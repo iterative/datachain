@@ -958,7 +958,9 @@ class SQLUnion(Step):
     query2: "DatasetQuery"
 
     def _hash(self) -> str:
-        raise NotImplementedError
+        return hashlib.sha256(
+            bytes.fromhex(self.query1.hash()) + bytes.fromhex(self.query2.hash())
+        ).hexdigest()
 
     def apply(
         self, query_generator: QueryGenerator, temp_tables: list[str]
