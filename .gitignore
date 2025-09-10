@@ -149,3 +149,5 @@ cython_debug/
 # for local dev, e.g. LLM generated files, .env.test to override
 # test variables, local scripts to try, etc
 local/
+docs/openapi.json
+docs/studio/api/index.md

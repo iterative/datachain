@@ -117,6 +117,8 @@ nav:
           - Environment Variables: guide/env.md
           - Namespaces: guide/namespaces.md
           - Local DB Migrations: guide/db_migrations.md
+      - 🔗 Studio:
+          - API: studio/api/index.md
       - 🤝 Contributing: contributing.md
 
   - DataChain Website ↗: https://datachain.ai" target="_blank"
@@ -161,6 +163,8 @@ extra:
     - icon: fontawesome/brands/linkedin
       link: https://www.linkedin.com/company/dvc-ai
 
+hooks:
+  - docs/api_hooks.py
 plugins:
   - search
   - section-index
