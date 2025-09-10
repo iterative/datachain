@@ -943,7 +943,7 @@ class SQLDistinct(SQLClause):
     dialect: str
 
     def _hash(self) -> str:
-        raise NotImplementedError
+        return hash_column_elements(self.parse_cols(self.args))
 
     def apply_sql_clause(self, query):
         if self.dialect == "sqlite":
