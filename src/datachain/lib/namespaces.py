@@ -112,10 +112,10 @@ def delete(name: str, session: Optional[Session]) -> None:
             f"Namespace {metastore.default_namespace_name} cannot be removed"
         )
 
-    projects = metastore.list_projects(namespace.id)
-    if len(projects) > 0:
+    num_projects = metastore.count_projects(namespace.id)
+    if num_projects > 0:
         raise NamespaceDeleteNotAllowedError(
-            f"Namespace cannot be removed. It contains {len(projects)} project(s). "
+            f"Namespace cannot be removed. It contains {num_projects} project(s). "
             "Please remove the project(s) first."
         )
 

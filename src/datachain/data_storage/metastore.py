@@ -212,6 +212,10 @@ class AbstractMetastore(ABC, Serializable):
         """Gets a single project by id"""
 
     @abstractmethod
+    def count_projects(self, namespace_id: Optional[int] = None) -> int:
+        """Counts projects in some namespace or in general."""
+
+    @abstractmethod
     def remove_project(self, project_id: int, conn=None) -> None:
         """Removes a single project by id"""
 
@@ -876,12 +880,24 @@ class AbstractDBMetastore(AbstractMetastore):
             raise ProjectNotFoundError(f"Project with id {project_id} not found.")
         return self.project_class.parse(*rows[0])
 
+    def count_projects(self, namespace_id: Optional[int] = None) -> int:
+        p = self._projects
+        query = self._projects_select()
+        if namespace_id:
+            query = query.where(p.c.namespace_id == namespace_id)
+
+        query = select(f.count(1)).select_from(query.subquery())
+
+        return next(self.db.execute(query))[0]
+
     def remove_project(self, project_id: int, conn=None) -> None:
         p = self._projects
         with self.db.transaction():
             self.db.execute(self._projects_delete().where(p.c.id == project_id))
 
-    def list_projects(self, namespace_id: Optional[int], conn=None) -> list[Project]:
+    def list_projects(
+        self, namespace_id: Optional[int] = None, conn=None
+    ) -> list[Project]:
         """
         Gets a list of projects inside some namespace, or in all namespaces
         """
@@ -1222,7 +1238,7 @@ class AbstractDBMetastore(AbstractMetastore):
 
     def count_datasets(self, project_id: Optional[int] = None) -> int:
         d = self._datasets
-        query = self._base_list_datasets_query()
+        query = self._datasets_select()
         if project_id:
             query = query.where(d.c.project_id == project_id)
 
