@@ -5,6 +5,7 @@ from datachain import C, func
 from datachain.func.func import Func
 from datachain.lib.signal_schema import SignalSchema
 from datachain.query.dataset import (
+    SQLCount,
     SQLFilter,
     SQLLimit,
     SQLMutate,
@@ -139,3 +140,14 @@ def test_limit_hash(inputs, result):
 )
 def test_offset_hash(inputs, result):
     assert SQLOffset(inputs).hash() == result
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        "8867973da58bd4d14c023fa9bad98dc50c18ba69240347216f7a8a1c7e70d377",
+        "8867973da58bd4d14c023fa9bad98dc50c18ba69240347216f7a8a1c7e70d377",
+    ],
+)
+def test_count_hash(result):
+    assert SQLCount().hash() == result

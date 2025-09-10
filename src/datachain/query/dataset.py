@@ -931,7 +931,7 @@ class SQLOffset(SQLClause):
 @frozen
 class SQLCount(SQLClause):
     def _hash(self) -> str:
-        raise NotImplementedError
+        return ""
 
     def apply_sql_clause(self, query):
         return sqlalchemy.select(f.count(1)).select_from(query.subquery())
