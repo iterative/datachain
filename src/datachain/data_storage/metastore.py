@@ -38,7 +38,9 @@ from datachain.dataset import (
 from datachain.error import (
     DatasetNotFoundError,
     DatasetVersionNotFoundError,
+    NamespaceDeleteNotAllowedError,
     NamespaceNotFoundError,
+    ProjectDeleteNotAllowedError,
     ProjectNotFoundError,
     TableMissingError,
 )
@@ -765,6 +767,13 @@ class AbstractDBMetastore(AbstractMetastore):
         return self.get_namespace(name)
 
     def remove_namespace(self, namespace_id: int, conn=None) -> None:
+        num_projects = self.count_projects(namespace_id)
+        if num_projects > 0:
+            raise NamespaceDeleteNotAllowedError(
+                f"Namespace cannot be removed. It contains {num_projects} project(s). "
+                "Please remove the project(s) first."
+            )
+
         n = self._namespaces
         with self.db.transaction():
             self.db.execute(self._namespaces_delete().where(n.c.id == namespace_id))
@@ -891,6 +900,13 @@ class AbstractDBMetastore(AbstractMetastore):
         return next(self.db.execute(query))[0]
 
     def remove_project(self, project_id: int, conn=None) -> None:
+        num_datasets = self.count_datasets(project_id)
+        if num_datasets > 0:
+            raise ProjectDeleteNotAllowedError(
+                f"Project cannot be removed. It contains {num_datasets} dataset(s). "
+                "Please remove the dataset(s) first."
+            )
+
         p = self._projects
         with self.db.transaction():
             self.db.execute(self._projects_delete().where(p.c.id == project_id))
