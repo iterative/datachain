@@ -1845,10 +1845,21 @@ class Catalog:
                 signal.signal(signal.SIGTERM, orig_sigterm_handler)
                 signal.signal(signal.SIGINT, orig_sigint_handler)
                 # wait for the reader thread
+                thread_join_timeout_seconds = 30
                 if stdout_thread is not None:
-                    stdout_thread.join(timeout=30)
+                    stdout_thread.join(timeout=thread_join_timeout_seconds)
+                    if stdout_thread.is_alive():
+                        logger.warning(
+                            "stdout thread is still alive after %s seconds",
+                            thread_join_timeout_seconds,
+                        )
                 if stderr_thread is not None:
-                    stderr_thread.join(timeout=30)
+                    stderr_thread.join(timeout=thread_join_timeout_seconds)
+                    if stderr_thread.is_alive():
+                        logger.warning(
+                            "stderr thread is still alive after %s seconds",
+                            thread_join_timeout_seconds,
+                        )
 
         logger.info("Process %s exited with return code %s", proc.pid, proc.returncode)
         if proc.returncode in (
