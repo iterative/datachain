@@ -911,7 +911,7 @@ class SQLLimit(SQLClause):
     n: int
 
     def _hash(self) -> str:
-        raise NotImplementedError
+        return hashlib.sha256(str(self.n).encode()).hexdigest()
 
     def apply_sql_clause(self, query: Select) -> Select:
         return query.limit(self.n)

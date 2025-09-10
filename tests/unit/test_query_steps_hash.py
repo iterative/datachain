@@ -6,6 +6,7 @@ from datachain.func.func import Func
 from datachain.lib.signal_schema import SignalSchema
 from datachain.query.dataset import (
     SQLFilter,
+    SQLLimit,
     SQLMutate,
     SQLOrderBy,
     SQLSelect,
@@ -115,3 +116,14 @@ def test_mutate_hash(inputs, schema, result):
 )
 def test_order_by_hash(inputs, result):
     assert SQLOrderBy(inputs).hash() == result
+
+
+@pytest.mark.parametrize(
+    "inputs,result",
+    [
+        (5, "9fc462c7b5fe66106c8056b9f361817523de5c9f8d4e4b847e79cb02feba1351"),
+        (0, "1da7ad424bfdb853e852352fbb853722eb5fdc119592a778679aa00ba29f971a"),
+    ],
+)
+def test_limit_hash(inputs, result):
+    assert SQLLimit(inputs).hash() == result
