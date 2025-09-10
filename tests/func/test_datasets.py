@@ -175,7 +175,7 @@ def test_create_dataset_from_sources(listed_bucket, cloud_test_catalog, project)
     catalog = cloud_test_catalog.catalog
 
     dataset = catalog.create_dataset_from_sources(
-        dataset_name, [f"{src_uri}/dogs/*"], project, recursive=True
+        dataset_name, [f"{src_uri}/dogs/"], project, recursive=True
     )
 
     dataset_version = dataset.get_version(dataset.latest_version)
@@ -193,7 +193,7 @@ def test_create_dataset_from_sources(listed_bucket, cloud_test_catalog, project)
     assert dataset_version.error_message == ""
     assert dataset_version.error_stack == ""
     assert dataset_version.script_output == ""
-    assert dataset_version.sources == f"{src_uri}/dogs/*"
+    assert dataset_version.sources == f"{src_uri}/dogs/"
     assert dataset_version.uuid
 
     dr = catalog.warehouse.schema.dataset_row_cls
@@ -270,7 +270,7 @@ def test_create_dataset_from_sources_failed(
     )
     with pytest.raises(RuntimeError):
         catalog.create_dataset_from_sources(
-            dataset_name, [f"{src_uri}/dogs/*"], project, recursive=True
+            dataset_name, [f"{src_uri}/dogs/"], project, recursive=True
         )
 
     with pytest.raises(DatasetNotFoundError):
