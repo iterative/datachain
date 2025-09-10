@@ -1,6 +1,6 @@
 # Webhooks in Studio
 
-# About webhooks
+## About webhooks
 
 Webhooks provide a way for the notifications to be delivered to an external web server whenever certain events occur in [Studio](https://studio.datachain.ai).
 
@@ -18,13 +18,13 @@ or some of our available API endpoints but webhook requires less effort than pol
 
 # Available webhooks
 
-As of now, the webhooks available with us falls under following categories.
+As of now, the webhooks available with us fall under the following categories.
 
 ## JOB
 
 Whenever any job is created or any status is changed to the job, you will receive the JOB webhook event. The payload you get with the job webhook is as:
 
-```jsx
+```json
 {
         "event": "job_status",
         "job": {
@@ -33,7 +33,7 @@ Whenever any job is created or any status is changed to the job, you will receiv
             "error_message": "",
             "created_at": "2021-07-27T16:02:08.070557",
             "updated_at": "2021-07-27T16:22:08.070557",
-            "finished_at": "2021-07-27T16:22:08.070557"
+            "finished_at": "2021-07-27T16:22:08.070557",
             "url": "https://studio.datachain.ai/team/TeamName/datasets/jobs/da59df47-d121-4eb6-aa76-dc452755544e"
         },
         "timestamp": "2021-07-27T16:22:08.070557",
@@ -55,11 +55,11 @@ You can create a webhook to subscribe to events that occur in a specific team. Y
         - RUNNING: When a job starts running
         - COMPLETE: Job has completed successfully
         - FAILED: Job failed with error
-        - CANCELED: Job has been cancelled successfully
+        - CANCELED: Job has been canceled successfully
         - CANCELING: Job has been scheduled to cancel
         - TASK: A scheduled task is created.
 
-- SSL Verification: By default, we verify SSL certificates when delivering payloads. SSL verification helps ensure that hook payloads are delivered to your URL endpoint securely, keeping your data away from prying eyes. Disabling this option is **not recommended**..
+- SSL Verification: By default, we verify SSL certificates when delivering payloads. SSL verification helps ensure that hook payloads are delivered to your URL endpoint securely, keeping your data away from prying eyes. Disabling this option is **not recommended**.
 - HTTP HEADERS: Some custom extra headers you want to include in the request
 - HTTP Method: By default, we make a post request, but you can specify other http method if necessary.
 - Content Type: Optionally, select the data format you want to receive the webhook payload in
@@ -68,7 +68,7 @@ You can create a webhook to subscribe to events that occur in a specific team. Y
 
 # Handling webhook deliveries
 
-When you create a webhook, you specify a URL and subscribe to event types. When any event that your webhook is subscribed to occurs, Datachain Studio will send an HTTP request with the data about the event to the event that you specified. If your sever is setup at that URL, it can take action when it receives one.
+When you create a webhook, you specify a URL and subscribe to event types. When any event that your webhook is subscribed to occurs, Datachain Studio will send an HTTP request with the data about the event to the event that you specified. If your server is setup at that URL, it can take action when it receives one.
 
 ## Setup
 
@@ -97,7 +97,7 @@ You can use any programming languages that you can to run on your server.
 
 ### Python
 
-This example uses the python and flask library to handle the routes and HTTP requests.
+This example uses the Python and Flask libraries to handle the routes and HTTP requests.
 
 To use this you must install flask library in your project. For example:
 
@@ -105,7 +105,7 @@ To use this you must install flask library in your project. For example:
 pip install Flask
 ```
 
-Create a python file with following contents. Modify the code to handle only the event types that your webhook is subscribed to as well as ping event that Studio sends you create a webhook. This example handles job, dataset and ping events.
+Create a python file with following contents. Modify the code to handle only the event types that your webhook is subscribed to as well as the ping event that Studio sends when you create a webhook. This example handles job, dataset and ping events.
 
 ```python
 # You installed the `flask` library earlier.
@@ -190,6 +190,7 @@ Updating the example above:
 ```python
 import hashlib
 import hmac
+from flask import abort
 def verify_signature(payload_body, secret_token, signature_header):
     """Verify that the payload was sent from Studio by validating SHA256.
 
