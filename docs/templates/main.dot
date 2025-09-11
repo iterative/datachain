@@ -1,0 +1,81 @@
+<h1 id="{{=data.title_prefix||''}}">{{=data.api.info && data.api.info.title}} {{=data.version||''}}</h1>
+
+> Scroll down for {{? data.header.language_tabs.length}}code samples, {{?}}example requests and responses.{{? data.header.language_tabs.length}} .{{?}}
+
+{{? data.api.info && data.api.info.description}}{{=data.api.info.description||''}}{{?}}
+
+
+{{? data.api.info && data.api.info.termsOfService}}<a href="{{=data.api.info.termsOfService||''}}">Terms of service</a>{{?}}
+{{? data.api.info && data.api.info.contact}}{{? data.api.info.contact.email}}Email: <a href="mailto:{{=data.api.info.contact.email||''}}">{{=data.api.info.contact.name || 'Support'}}</a> {{?}}{{? data.api.info.contact.url}}Web: <a href="{{=data.api.info.contact.url||''}}">{{= data.api.info.contact.name || 'Support'}}</a> {{?}}{{?}}
+{{? data.api.info && data.api.info.license}}{{? data.api.info.license.url}}License: <a href="{{=data.api.info.license.url||''}}">{{=data.api.info.license.name||''}}</a>{{??}} License: {{=data.api.info.license.name||''}}{{?}}{{?}}
+{{= data.tags.endSection }}
+
+{{? data.api.components && data.api.components.securitySchemes && data.def && data.def.security}}
+{{#def.security}}
+{{?}}
+
+{{ for (var r in data.resources) { }}
+{{ data.resource = data.resources[r]; }}
+
+{{= data.tags.section }}
+<h1 id="{{=data.title_prefix||''+'-'+data.utils.slugify(r)}}">{{= r||''}}</h1>
+
+{{? data.resource.description }}{{= data.resource.description||''}}{{?}}
+
+{{? data.resource.externalDocs}}
+<a href="{{=data.resource.externalDocs.url||''}}">{{=data.resource.externalDocs.description||'External documentation'}}</a>
+{{?}}
+
+{{ for (var m in data.resource.methods) { }}
+{{ data.operationUniqueName = m; }}
+{{ data.method = data.resource.methods[m]; }}
+{{ data.operationUniqueSlug = data.method.slug; }}
+{{ data.operation = data.method.operation; }}
+{{= data.templates.operation(data) }}
+{{ } /* of methods */ }}
+
+{{= data.tags.endSection }}
+{{ } /* of resources */ }}
+
+{{? data.api.components && data.api.components.schemas }}
+{{= data.tags.section }}
+
+# Schemas
+
+{{ for (var s in data.components.schemas) { }}
+{{ var origSchema = data.components.schemas[s]; }}
+{{ var schema = data.api.components.schemas[s]; }}
+
+{{= data.tags.section }}
+<h2 id="tocS_{{=s||''}}">{{=s||''}}</h2>
+{{ /* backwards compatibility */ }}
+<a id="schema{{=s.toLowerCase()||''}}"></a>
+<a id="schema_{{=s||''}}"></a>
+<a id="tocS{{=s.toLowerCase()||''}}"></a>
+<a id="tocs{{=s.toLowerCase()||''}}"></a>
+
+{{? data.options.yaml }}
+```yaml
+{{=data.utils.yaml.stringify(data.utils.getSample(schema,data.options,{quiet:true},data.api))}}
+{{??}}
+```json
+{{=data.utils.safejson(data.utils.getSample(schema,data.options,{quiet:true},data.api),null,2)}}
+{{?}}
+```
+
+
+
+{{= data.tags.endSection }}
+{{= data.tags.endSection }}
+
+{{ } /* of schemas */ }}
+
+{{?}}
+
+{{? data.options.footer}}
+{{#def.footer}}
+{{?}}
+
+{{? data.options.discovery}}
+{{#def.discovery}}
+{{?}}
