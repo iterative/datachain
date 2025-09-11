@@ -818,7 +818,7 @@ class SQLSelect(SQLClause):
     args: tuple[Union[Function, ColumnElement], ...]
 
     def _hash(self) -> str:
-        return hash_column_elements(self.parse_cols(self.args))
+        return hash_column_elements(self.args)
 
     def apply_sql_clause(self, query) -> Select:
         subquery = query.subquery()
@@ -837,7 +837,7 @@ class SQLSelectExcept(SQLClause):
     args: tuple[Union[Function, ColumnElement], ...]
 
     def _hash(self) -> str:
-        return hash_column_elements(self.parse_cols(self.args))
+        return hash_column_elements(self.args)
 
     def apply_sql_clause(self, query: Select) -> Select:
         subquery = query.subquery()
@@ -851,7 +851,7 @@ class SQLMutate(SQLClause):
     new_schema: SignalSchema
 
     def _hash(self) -> str:
-        return hash_column_elements(self.parse_cols(self.args))
+        return hash_column_elements(self.args)
 
     def apply_sql_clause(self, query: Select) -> Select:
         original_subquery = query.subquery()
@@ -883,7 +883,7 @@ class SQLFilter(SQLClause):
     expressions: tuple[Union[Function, ColumnElement], ...]
 
     def _hash(self) -> str:
-        return hash_column_elements(self.parse_cols(self.expressions))
+        return hash_column_elements(self.expressions)
 
     def __and__(self, other):
         expressions = self.parse_cols(self.expressions)
@@ -899,7 +899,7 @@ class SQLOrderBy(SQLClause):
     args: tuple[Union[Function, ColumnElement], ...]
 
     def _hash(self) -> str:
-        return hash_column_elements(self.parse_cols(self.args))
+        return hash_column_elements(self.args)
 
     def apply_sql_clause(self, query: Select) -> Select:
         args = self.parse_cols(self.args)
@@ -943,7 +943,7 @@ class SQLDistinct(SQLClause):
     dialect: str
 
     def _hash(self) -> str:
-        return hash_column_elements(self.parse_cols(self.args))
+        return hash_column_elements(self.args)
 
     def apply_sql_clause(self, query):
         if self.dialect == "sqlite":
@@ -1138,7 +1138,11 @@ class SQLGroupBy(SQLClause):
     group_by: Sequence[Union[str, Function, ColumnElement]]
 
     def _hash(self) -> str:
-        raise NotImplementedError
+        return hashlib.sha256(
+            bytes.fromhex(
+                hash_column_elements(self.cols) + hash_column_elements(self.group_by)
+            )
+        ).hexdigest()
 
     def apply_sql_clause(self, query) -> Select:
         if not self.cols:

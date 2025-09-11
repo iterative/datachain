@@ -9,6 +9,7 @@ from datachain.query.dataset import (
     SQLCount,
     SQLDistinct,
     SQLFilter,
+    SQLGroupBy,
     SQLJoin,
     SQLLimit,
     SQLMutate,
@@ -41,7 +42,7 @@ def numbers_dataset(test_session):
     [
         (
             (C("name"), C("age") * 10, func.avg("id"), C("country").label("country")),
-            "f2f02f8197037661348d11a4bdf19bd7913d067d08ee1ff4eea08652f1a109d9",
+            "d03395827dcdddc2b2c3f0a3dafb71affa89c7f3b03b89e42734af2aea0e05ba",
         ),
         ((), "3245ba76bc1e4b1b1d4d775b88448ff02df9473bd919929166c70e9e2b245345"),
         (
@@ -60,7 +61,7 @@ def test_select_hash(inputs, result):
     [
         (
             (C("name"), C("age") * 10, func.avg("id"), C("country").label("country")),
-            "40af3a740d12d33e350c41b7c8d9651a2d9c560720d0e8474906650504cf3066",
+            "19894de08d545f3db85242be292dea0bb1ef47b0feaaf2c9359b159c7aa588c6",
         ),
         ((), "0d27e4cfa3801628afc535190c64a426d9db66e5145c57129b9f5ca0935ef29e"),
         (
@@ -234,3 +235,32 @@ def test_join_hash(
         ).hash()
         == result
     )
+
+
+@pytest.mark.parametrize(
+    "columns,partition_by,result",
+    [
+        (
+            {"cnt": func.count(), "sum": func.sum("id")},
+            [
+                C("id"),
+            ],
+            "0f28ac6aa6daee1892d5e79b559c9c1c2072cec2d53d4e0f12c3ae42db1a869f",
+        ),
+        (
+            {"cnt": func.count(), "sum": func.sum("id")},
+            [C("id"), C("name")],
+            "f8ef71fc6d3438cd6905e0a4d96f9b13a465c4a955127d929837e3f0ac3d31d6",
+        ),
+        (
+            {"cnt": func.count()},
+            [],
+            "fe833a3ce997c919bcf3a2c5de1e76f2481a0937320f9fa0c2a8b3c191cea480",
+        ),
+    ],
+)
+def test_group_by_hash(columns, partition_by, result):
+    schema = SignalSchema({"id": int})
+    # transforming inputs into format SQLGroupBy expects
+    columns = [v.get_column(schema, label=k) for k, v in columns.items()]
+    assert SQLGroupBy(columns, partition_by).hash() == result
