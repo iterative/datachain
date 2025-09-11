@@ -37,6 +37,7 @@ from datachain.lib.file import (
     VideoFrame,
 )
 from datachain.lib.model_store import ModelStore
+from datachain.lib.namespaces import delete as delete_namespace
 from datachain.lib.projects import create as create_project
 from datachain.lib.udf import Aggregator, Generator, Mapper
 from datachain.lib.utils import AbstractUDF, DataChainError
@@ -74,6 +75,7 @@ __all__ = [
     "create_project",
     "datasets",
     "delete_dataset",
+    "delete_namespace",
     "is_chain_type",
     "is_studio",
     "listings",

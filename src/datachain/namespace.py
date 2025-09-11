@@ -9,6 +9,25 @@ N = TypeVar("N", bound="Namespace")
 NAMESPACE_NAME_RESERVED_CHARS = [".", "@"]
 
 
+def parse_name(name: str) -> tuple[str, Optional[str]]:
+    """
+    Parses namespace name into namespace and optional project name.
+    If both namespace and project are defined in name, they need to be split by dot
+    e.g dev.my-project
+    Valid inputs:
+        - dev.my-project
+        - dev
+    """
+    parts = name.split(".")
+    if len(parts) == 1:
+        return name, None
+    if len(parts) == 2:
+        return parts[0], parts[1]
+    raise InvalidNamespaceNameError(
+        f"Invalid namespace format: {name}. Expected 'namespace' or 'ns1.ns2'."
+    )
+
+
 @dataclass(frozen=True)
 class Namespace:
     id: int
