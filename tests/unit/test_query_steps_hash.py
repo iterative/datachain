@@ -18,6 +18,7 @@ from datachain.query.dataset import (
     SQLSelect,
     SQLSelectExcept,
     SQLUnion,
+    Subtract,
 )
 
 
@@ -264,3 +265,25 @@ def test_group_by_hash(columns, partition_by, result):
     # transforming inputs into format SQLGroupBy expects
     columns = [v.get_column(schema, label=k) for k, v in columns.items()]
     assert SQLGroupBy(columns, partition_by).hash() == result
+
+
+@pytest.mark.parametrize(
+    "on,result",
+    [
+        (
+            [("id", "id")],
+            "416c1de08bcb423fbcf300d65b86387d83133d5d8e8d285fb09fec9b748165e8",
+        ),
+        (
+            [("id", "id"), ("name", "name")],
+            "f30681465b8a6e9c7f3c752fc0c12e7a642ca78077cd36b66075209665e9f0ac",
+        ),
+        (
+            [],
+            "c53881a69a3bb95de8d7348b895a443978b48fa3e7f5129d40719d1a74db16e2",
+        ),
+    ],
+)
+def test_subtract_hash(test_session, numbers_dataset, on, result):
+    chain = dc.read_dataset("numbers").filter(C("num") > 50).limit(20)
+    assert Subtract(chain._query, test_session.catalog, on).hash() == result

@@ -224,9 +224,6 @@ class DatasetDiffOperation(Step):
     def clone(self) -> "Self":
         return self.__class__(self.dq, self.catalog)
 
-    def _hash(self) -> str:
-        raise NotImplementedError
-
     @abstractmethod
     def query(
         self,
@@ -275,7 +272,11 @@ class Subtract(DatasetDiffOperation):
     on: Sequence[tuple[str, str]]
 
     def _hash(self) -> str:
-        raise NotImplementedError
+        on_bytes = b"".join(
+            f"{a}:{b}".encode() for a, b in sorted(self.on, key=lambda t: (t[0], t[1]))
+        )
+
+        return hashlib.sha256(bytes.fromhex(self.dq.hash()) + on_bytes).hexdigest()
 
     def query(self, source_query: Select, target_query: Select) -> sa.Selectable:
         sq = source_query.alias("source_query")
