@@ -225,7 +225,7 @@ def verify_signature(payload_body, secret_token, signature_header):
         abort(403, "Request signatures didn't match!")
 ```
 
-Add the following call in between the api receiver.
+Add the following call in the api receiver.
 
 ```python
 # Get the signature header - we can see it's X-Datachain-Signature-256
