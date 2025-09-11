@@ -144,26 +144,19 @@ def shutdown_process(
             return proc.wait()
 
 
-def process_output(stream: IO[bytes], callback: Callable[[str], None]) -> None:
+def _process_stream(stream: "IO[bytes]", callback: Callable[[str], None]) -> None:
     buffer = b""
+    while byt := stream.read(1):  # Read one byte at a time
+        buffer += byt
 
-    try:
-        while byt := stream.read(1):  # Read one byte at a time
-            buffer += byt
-
-            if byt in (b"\n", b"\r"):  # Check for newline or carriage return
-                line = buffer.decode("utf-8", errors="replace")
-                callback(line)
-                buffer = b""  # Clear buffer for the next line
-
-        if buffer:  # Handle any remaining data in the buffer
-            line = buffer.decode("utf-8", errors="replace")
+        if byt in (b"\n", b"\r"):  # Check for newline or carriage return
+            line = buffer.decode("utf-8")
             callback(line)
-    finally:
-        try:
-            stream.close()  # Ensure output is closed
-        except Exception:  # noqa: BLE001, S110
-            pass
+            buffer = b""  # Clear buffer for next line
+
+    if buffer:  # Handle any remaining data in the buffer
+        line = buffer.decode("utf-8")
+        callback(line)
 
 
 class DatasetRowsFetcher(NodesThreadPool):
@@ -1767,13 +1760,13 @@ class Catalog:
             recursive=recursive,
         )
 
-    @staticmethod
     def query(
+        self,
         query_script: str,
         env: Optional[Mapping[str, str]] = None,
         python_executable: str = sys.executable,
-        stdout_callback: Optional[Callable[[str], None]] = None,
-        stderr_callback: Optional[Callable[[str], None]] = None,
+        capture_output: bool = False,
+        output_hook: Callable[[str], None] = noop,
         params: Optional[dict[str, str]] = None,
         job_id: Optional[str] = None,
         interrupt_timeout: Optional[int] = None,
@@ -1788,18 +1781,13 @@ class Catalog:
             },
         )
         popen_kwargs: dict[str, Any] = {}
-
-        if stdout_callback is not None:
-            popen_kwargs = {"stdout": subprocess.PIPE}
-        if stderr_callback is not None:
-            popen_kwargs["stderr"] = subprocess.PIPE
+        if capture_output:
+            popen_kwargs = {"stdout": subprocess.PIPE, "stderr": subprocess.STDOUT}
 
         def raise_termination_signal(sig: int, _: Any) -> NoReturn:
             raise TerminationSignal(sig)
 
-        stdout_thread: Optional[Thread] = None
-        stderr_thread: Optional[Thread] = None
-
+        thread: Optional[Thread] = None
         with subprocess.Popen(cmd, env=env, **popen_kwargs) as proc:  # noqa: S603
             logger.info("Starting process %s", proc.pid)
 
@@ -1813,20 +1801,10 @@ class Catalog:
             orig_sigterm_handler = signal.getsignal(signal.SIGTERM)
             signal.signal(signal.SIGTERM, raise_termination_signal)
             try:
-                if stdout_callback is not None:
-                    stdout_thread = Thread(
-                        target=process_output,
-                        args=(proc.stdout, stdout_callback),
-                        daemon=True,
-                    )
-                    stdout_thread.start()
-                if stderr_callback is not None:
-                    stderr_thread = Thread(
-                        target=process_output,
-                        args=(proc.stderr, stderr_callback),
-                        daemon=True,
-                    )
-                    stderr_thread.start()
+                if capture_output:
+                    args = (proc.stdout, output_hook)
+                    thread = Thread(target=_process_stream, args=args, daemon=True)
+                    thread.start()
 
                 proc.wait()
             except TerminationSignal as exc:
@@ -1844,22 +1822,8 @@ class Catalog:
             finally:
                 signal.signal(signal.SIGTERM, orig_sigterm_handler)
                 signal.signal(signal.SIGINT, orig_sigint_handler)
-                # wait for the reader thread
-                thread_join_timeout_seconds = 30
-                if stdout_thread is not None:
-                    stdout_thread.join(timeout=thread_join_timeout_seconds)
-                    if stdout_thread.is_alive():
-                        logger.warning(
-                            "stdout thread is still alive after %s seconds",
-                            thread_join_timeout_seconds,
-                        )
-                if stderr_thread is not None:
-                    stderr_thread.join(timeout=thread_join_timeout_seconds)
-                    if stderr_thread.is_alive():
-                        logger.warning(
-                            "stderr thread is still alive after %s seconds",
-                            thread_join_timeout_seconds,
-                        )
+                if thread:
+                    thread.join()  # wait for the reader thread
 
         logger.info("Process %s exited with return code %s", proc.pid, proc.returncode)
         if proc.returncode in (
