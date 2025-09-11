@@ -103,7 +103,7 @@ def test_open_write_binary(cloud_test_catalog):
     data = b"hello via open()"
     file_path = f"{src_uri}/test-open-write-bytes.bin"
 
-    file = File.at(file_path, catalog)
+    file = File.at(file_path, ctc.session)
     with file.open("wb") as f:
         f.write(data)
 
@@ -142,7 +142,7 @@ def test_open_write_text(cloud_test_catalog):
     # Unicode content to exercise non-default (utf-16) encoding round trip
     content = "Привет Мир\nSecond line"
 
-    file = File.at(file_path, catalog)
+    file = File.at(file_path, ctc.session)
     with file.open("w", encoding="utf-16-le") as f:
         written_chars = f.write(content)
 

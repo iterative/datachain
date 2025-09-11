@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from datachain.catalog import Catalog
     from datachain.client.fsspec import Client
     from datachain.dataset import RowDict
+    from datachain.query.session import Session
 
 sha256 = partial(hashlib.sha256, usedforsecurity=False)
 
@@ -350,19 +351,19 @@ class File(DataModel):
         return file
 
     @classmethod
-    def at(cls, uri: str, catalog: Optional["Catalog"] = None) -> "Self":
+    def at(cls, uri: str, session: Optional["Session"] = None) -> "Self":
         """Construct a File from a full URI in one call.
 
         Example:
             file = File.at("s3://bucket/path/to/output.png")
             with file.open("wb") as f: ...
         """
-        if catalog is None:
-            from datachain.catalog.loader import get_catalog
-
-            catalog = get_catalog()
-
         from datachain.client.fsspec import Client
+        from datachain.query.session import Session
+
+        if session is None:
+            session = Session.get()
+        catalog = session.catalog
 
         client_cls = Client.get_implementation(uri)
         source, rel_path = client_cls.split_url(uri)
