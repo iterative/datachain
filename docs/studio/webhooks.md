@@ -2,31 +2,41 @@
 
 ## About webhooks
 
-Webhooks provide a way for the notifications to be delivered to an external web server whenever certain events occur in [Studio](https://studio.datachain.ai).
+Webhooks provide a way for the notifications to be delivered to an external web server whenever certain events occur in [Studio](https://studio.datachain.ai). With webhooks, you can set a setting once that you want to hear about certain events or activities .
 
-Webhooks are used to receive data as it happens as opposed to polling an API to see if data is available. With webhooks, you can set a setting once that you want to hear about certain events or activities when you create the webhook.
-
-When you create a webhook, you specify a URL, and necessary information you want us to send to the URL along with the events that you want to listen on Datachain. When the event your webhook is subscribed to occurs, Datachain Studio will send an HTTP request with the data about the event to the URL that you specified. If your server is setup to listen for webhook deliveries at that URL, it can take action when it receives one.
+When you create a webhook, you specify a URL, and necessary information you want us to send to along with the events that you want to listen on Datachain. When the event occurs, Datachain Studio will send an HTTP request with the data about the event to the URL that you specified. If your server is setup to listen for webhook deliveries at that URL, it can take action when it receives one.
 
 For example, you can subscribe your webhook to events that occur when a job is created, is complete, is failed, is running, and so on. You can then monitor whenever a job is failed through this webhook.
 
 ### Alternative
 
-As opposed to webhooks, you can also use CLI command to get the job information
+As opposed to webhooks, you can also use [CLI command](../commands/index.md) to get the job information or some of our available [API endpoints](api/index.md) but webhook requires less effort than polling an API since it allows near real time updates.
 
-or some of our available API endpoints but webhook requires less effort than polling an API since it allows near real time updates.
+# Available event type
+As of now, your server can receive two different types of events.
 
-# Available webhooks
+## PING
+Whenever you add your webhook to your team, Studio sends a PING event to check the delivery to the server. You can check the recent deliveries to check if the webhook is successfully connected.
 
-As of now, the webhooks available with us fall under the following categories.
+Header: `http-x-datachain-event`: `PING`.
+
+Payload:
+```json
+{
+    "action": "PING"
+}
+```
 
 ## JOB
 
 Whenever any job is created or any status is changed to the job, you will receive the JOB webhook event. The payload you get with the job webhook is as:
 
+Header: `http-x-datachain-event`: `JOB`
+
+Payload:
 ```json
 {
-        "event": "job_status",
+        "action": "job_status",
         "job": {
             "id": "da59df47-d121-4eb6-aa76-dc452755544e",
             "status": "COMPLETE",
@@ -42,10 +52,13 @@ Whenever any job is created or any status is changed to the job, you will receiv
 
 # Creating webhooks
 
-You can create a webhook to subscribe to events that occur in a specific team. You should have admin access to that team to create the webhooks in that repository. To create a webhook, go to settings for the team and under the section Webhook, click on Add Webhook. Enter the necessary information to create the webhooks.
+You should have admin access to a team to create the webhooks in the team. To create a webhook, go to settings for the team and under the section Webhooks, click on Add new Webhook.
+![Webhook Settings](../assets/webhook_list.png)
+
+Enter the necessary information to create the webhooks.
 
 - **URL:**  Enter the valid URL where you’d like to receive the webhook payload in
-- **Secret:** A string to use as a secret key. You should choose a random string of text with high entropy. You can use the webhook secret to limit incoming requests to those only originating from Datachain Studio.
+- **Secret:** A string to use as a secret key. You should choose a random string of text with high entropy. You can use the webhook secret to [validate incoming requests](#validating-webhook-deliveries) to those only originating from Datachain Studio.
 - **Events:** Under events, select the events you would like to trigger the webhook.
     - **JOB:**
         - CREATED: When a job is created but not yet scheduled to run
@@ -60,11 +73,13 @@ You can create a webhook to subscribe to events that occur in a specific team. Y
         - TASK: A scheduled task is created.
 
 - SSL Verification: By default, we verify SSL certificates when delivering payloads. SSL verification helps ensure that hook payloads are delivered to your URL endpoint securely, keeping your data away from prying eyes. Disabling this option is **not recommended**.
-- HTTP HEADERS: Some custom extra headers you want to include in the request
 - HTTP Method: By default, we make a post request, but you can specify other http method if necessary.
 - Content Type: Optionally, select the data format you want to receive the webhook payload in
     - **application/json** will deliver the JSON payload directly as the body of the `POST` request.
     - **application/x-www-form-urlencoded** will send the JSON payload as a form parameter called `payload`.
+
+![Add webhook](../assets/webhook_dialog.png)
+
 
 # Handling webhook deliveries
 
@@ -78,15 +93,15 @@ In order to test your webhook locally, you can use a webhook proxy URL to forwar
 2. Start a new channel
 3. Copy the full URL under the webhook proxy URL. We will use this URL in the following setup steps.
 4. Install smee-client if it is not already installed using `npm install --global smee-client`
-5. To receive forwarded webhooks from smee.io, run the following command in your terminal. Replace the WEBHOOK_PROXY_URL with your webhook proxy URL from earlier.
+5. To receive forwarded webhooks from smee.io, run the following command in your terminal. Replace the `WEBHOOK_PROXY_URL` with your webhook proxy URL from earlier.
 
 ```bash
 smee --path /webhook --port 3000 --url WEBHOOK_PROXY_URL
 ```
 
-1. Keep this running while you test out your webhook. When you want to stop forwarding the webhooks, enter Ctrl + C
-2. Create webhook using the step as mentioned above or edit the one if you already have with the url from earlier.
-3. Write code to handle webhook deliveries
+6. Keep this running while you test out your webhook. When you want to stop forwarding the webhooks, enter Ctrl + C
+7. Create webhook using the step as mentioned above or edit the one if you already have with the url from earlier.
+8. Write code to handle webhook deliveries
     1. Initialize your server to listen for requests to your webhook URL
     2. Read HTTP headers and body from request
     3. Take desired action in response to the request.
@@ -137,11 +152,11 @@ def webhook():
     # For example, this code handles the `JOB` and `PING` events.
     if datachain_event == 'JOB':
         data = request.get_json()
-        event = data.get('event')
-        if event == 'job_status':
+        action = data.get('action')
+        if action == 'job_status':
             print(f"Job status for job {data['job']['id']} was changed to {data['job']['status']}")
         else:
-            print(f"Unhandled action for the job event: {event}")
+            print(f"Unhandled action for the job event: {action}")
     elif datachain_event == 'PING':
         print('Ping event received')
     else:
@@ -191,6 +206,7 @@ Updating the example above:
 import hashlib
 import hmac
 from flask import abort
+
 def verify_signature(payload_body, secret_token, signature_header):
     """Verify that the payload was sent from Studio by validating SHA256.
 
@@ -227,8 +243,8 @@ else:
 1. You should only subscribe to the webhook events that you need. This will reduce the amount of work your server needs to do.
 2. The webhook secret should be a random string of text with high entropy. You should securely store your webhook secret in a way that your server can access.
 3. You should ensure that your server uses an HTTPS connection. By default, Studio will verify SSL certificates when delivering webhooks. Studio recommends that you leave SSL verification enabled.
-4. You can set up an IP allow list for your server, and add the IP addresses that Studio uses for webhook deliveries. This can block spoofed requests to your server.
-5. Your server should respond with a 2XX response within 10 seconds of receiving a webhook delivery. If your server takes longer than that to respond, then Studio terminates the connection and considers the delivery a failure.
-6. Check the event header and event type before processing the event.
-7. Make sure the endpoints are idempotent meaning if multiple requests for same event is received, the server should handle this.
-8. Datachain Studio may deliver webhooks in a different order than the order in which the events took place. If you need to know when the event occurred relative to another event, you should use the timestamps that are included in the delivery payload.
+4. Your server should respond with a 2XX response within 10 seconds of receiving a webhook delivery. If your server takes longer than that to respond, then Studio terminates the connection and considers the delivery a failure.
+5. Check the event header and action type before processing the event.
+6. Make sure the endpoints are idempotent meaning if multiple requests for same event is received, the server should handle this.
+7. Datachain Studio may deliver webhooks in a different order than the order in which the events took place. If you need to know when the event occurred relative to another event, you should use the timestamps that are included in the delivery payload.
+8. Consecutive 10 failures to webhook will disable the webhook deliveries.

@@ -4,6 +4,13 @@ def on_pre_build(**kwargs):
 
     import requests
 
+    # Skip if files already exist
+    if os.path.exists("docs/openapi.json") and os.path.exists(
+        "docs/studio/api/index.md"
+    ):
+        print("API docs already exist, skipping generation")
+        return
+
     # Download OpenAPI spec
     response = requests.get(
         "https://studio.datachain.ai/api/openapi.json",
