@@ -415,6 +415,10 @@ class UDFStep(Step, ABC):
     min_task_size: Optional[int] = None
     batch_size: Optional[int] = None
 
+
+    def _hash(self) -> str:
+        raise NotImplementedError
+
     @abstractmethod
     def create_udf_table(self, query: Select) -> "Table":
         """Method that creates a table where temp udf results will be saved"""

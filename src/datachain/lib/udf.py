@@ -223,6 +223,28 @@ class UDFBase(AbstractUDF):
         batch_size: Optional[int] = None,
         batch: int = 1,
     ) -> UDFAdapter:
+        """
+        Use self._func and self.output.to_udf_spec() to calculate hash
+        There is a way to calc hash of a function
+        """
+        print("INSIDE to_udf_wrapper()")
+        print("INSIDE to_udf_wrapper()")
+        print("INSIDE to_udf_wrapper()")
+        print("INSIDE to_udf_wrapper()")
+        print("SELF IS")
+        print(self)
+        print("SELF FUNC IS")
+        print(self._func)
+        print(type(self._func))
+        print("SELF OUTPUT IS")
+        print(self.output)
+        print(type(self.output))
+        print("SELF PARAMS IS")
+        print(self.params)
+        print(type(self.params))
+        print("UDF SPEC IS")
+        print(self.output.to_udf_spec())
+        print(type(self.output.to_udf_spec()))
         return UDFAdapter(
             self,
             self.output.to_udf_spec(),
