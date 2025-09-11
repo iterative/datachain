@@ -4,7 +4,8 @@ from datachain.error import (
     NamespaceCreateNotAllowedError,
     NamespaceDeleteNotAllowedError,
 )
-from datachain.namespace import Namespace
+from datachain.lib.projects import delete as delete_project
+from datachain.namespace import Namespace, parse_name
 from datachain.query import Session
 
 
@@ -99,6 +100,11 @@ def delete(name: str, session: Optional[Session]) -> None:
     """
     session = Session.get(session)
     metastore = session.catalog.metastore
+
+    namespace_name, project_name = parse_name(name)
+
+    if project_name:
+        return delete_project(project_name, namespace_name, session)
 
     namespace = metastore.get_namespace(name)
 

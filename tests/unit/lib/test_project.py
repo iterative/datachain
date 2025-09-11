@@ -8,8 +8,8 @@ from datachain.error import (
     ProjectNotFoundError,
 )
 from datachain.lib.namespaces import create as create_namespace
+from datachain.lib.namespaces import delete as delete_namespace
 from datachain.lib.namespaces import get as get_namespace
-from datachain.lib.projects import delete as delete_project
 from datachain.lib.projects import get as get_project
 from datachain.lib.projects import ls as ls_projects
 from tests.utils import skip_if_not_sqlite
@@ -160,22 +160,26 @@ def test_ls_projects_empty_in_namespace(test_session):
 
 
 def test_delete_project(test_session, chatbot_project, dev_namespace):
-    delete_project(chatbot_project.name, dev_namespace.name, session=test_session)
+    delete_namespace(
+        f"{dev_namespace.name}.{chatbot_project.name}", session=test_session
+    )
     with pytest.raises(ProjectNotFoundError):
         get_project(chatbot_project.name, dev_namespace.name, session=test_session)
+
+    # namespace should not be deleted
+    get_namespace(dev_namespace.name, session=test_session)
 
 
 def test_delete_project_not_found(test_session, chatbot_project, dev_namespace):
     with pytest.raises(ProjectNotFoundError):
-        delete_project("missing", dev_namespace.name, session=test_session)
+        delete_namespace(f"{dev_namespace.name}.missing", session=test_session)
 
 
 def test_delete_project_listing(test_session):
     metastore = test_session.catalog.metastore
     with pytest.raises(ProjectDeleteNotAllowedError) as excinfo:
-        delete_project(
-            metastore.listing_project_name,
-            metastore.system_namespace_name,
+        delete_namespace(
+            f"{metastore.system_namespace_name}.{metastore.listing_project_name}",
             session=test_session,
         )
     assert str(excinfo.value) == (
@@ -186,9 +190,8 @@ def test_delete_project_listing(test_session):
 def test_delete_project_default(test_session):
     metastore = test_session.catalog.metastore
     with pytest.raises(ProjectDeleteNotAllowedError) as excinfo:
-        delete_project(
-            metastore.default_project_name,
-            metastore.default_namespace_name,
+        delete_namespace(
+            f"{metastore.default_namespace_name}.{metastore.default_project_name}",
             session=test_session,
         )
     assert str(excinfo.value) == (
@@ -204,7 +207,9 @@ def test_delete_project_non_empty(test_session, chatbot_project, dev_namespace):
     )
 
     with pytest.raises(ProjectDeleteNotAllowedError) as excinfo:
-        delete_project(chatbot_project.name, dev_namespace.name, session=test_session)
+        delete_namespace(
+            f"{dev_namespace.name}.{chatbot_project.name}", session=test_session
+        )
 
     assert str(excinfo.value) == (
         "Project cannot be removed. It contains 1 dataset(s)."
