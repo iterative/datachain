@@ -16,14 +16,12 @@ def test_protocol_detection_https():
 
 
 def test_split_url_https():
-    """Test URL splitting for HTTPS URLs"""
     domain, path = HTTPClient.split_url("https://example.com/path/to/file.txt")
     assert domain == "example.com"
     assert path == "path/to/file.txt"
 
 
 def test_is_root_url():
-    """Test root URL detection"""
     assert HTTPClient.is_root_url("https://example.com")
     assert HTTPClient.is_root_url("https://example.com/")
     assert not HTTPClient.is_root_url("https://example.com/path")
@@ -32,7 +30,6 @@ def test_is_root_url():
 
 
 def test_from_name_with_https():
-    """Test creating client from HTTPS URL"""
     cache = Mock(spec=Cache)
     client = HTTPSClient.from_name("https://example.com/path", cache, {})
     assert client.protocol == "https"
@@ -41,7 +38,6 @@ def test_from_name_with_https():
 
 
 def test_from_name_with_http():
-    """Test creating client from HTTP URL"""
     cache = Mock(spec=Cache)
     client = HTTPClient.from_name("http://example.com/path", cache, {})
     assert client.protocol == "http"
@@ -50,7 +46,6 @@ def test_from_name_with_http():
 
 
 def test_get_full_path_http():
-    """Test full path construction for HTTP"""
     cache = Mock(spec=Cache)
     client = HTTPClient("example.com:8080", {}, cache)
 
@@ -58,7 +53,6 @@ def test_get_full_path_http():
 
 
 def test_upload_raises_not_implemented():
-    """Test that upload raises NotImplementedError"""
     cache = Mock(spec=Cache)
     client = HTTPSClient("example.com", {}, cache)
 
@@ -67,26 +61,17 @@ def test_upload_raises_not_implemented():
 
 
 def test_create_fs():
-    """Test that create_fs properly configures HTTPFileSystem"""
     from fsspec.implementations.http import HTTPFileSystem
 
-    # Test with no kwargs
     fs = HTTPClient.create_fs()
     assert isinstance(fs, HTTPFileSystem)
 
-    # Test that version_aware is removed if passed
     fs = HTTPClient.create_fs(version_aware=True)
     assert isinstance(fs, HTTPFileSystem)
-    # HTTPFileSystem doesn't have version_aware attribute
     assert not hasattr(fs, "version_aware")
 
-    # Test that custom kwargs are passed through
     fs = HTTPClient.create_fs(timeout=30, headers={"User-Agent": "test"})
     assert isinstance(fs, HTTPFileSystem)
-    # Check that the filesystem was created with these options
-    # (they'll be stored in the session or other internal structures)
 
-    # Test that default options are set
     fs = HTTPClient.create_fs()
-    # These defaults should be set by create_fs
     assert isinstance(fs, HTTPFileSystem)
