@@ -4,12 +4,14 @@ import pytest
 
 from datachain.cache import Cache
 from datachain.client.fsspec import Client
-from datachain.client.http import HTTPClient
+from datachain.client.http import HTTPClient, HTTPSClient
 
 
 def test_protocol_detection_https():
-    """Test that HTTPS URLs are correctly detected"""
     client_class = Client.get_implementation("https://example.com/file.txt")
+    assert client_class == HTTPSClient
+
+    client_class = Client.get_implementation("http://example.com/file.txt")
     assert client_class == HTTPClient
 
 
@@ -32,7 +34,7 @@ def test_is_root_url():
 def test_from_name_with_https():
     """Test creating client from HTTPS URL"""
     cache = Mock(spec=Cache)
-    client = HTTPClient.from_name("https://example.com/path", cache, {})
+    client = HTTPSClient.from_name("https://example.com/path", cache, {})
     assert client.protocol == "https"
     assert client.name == "example.com/path"
     assert client.PREFIX == "https://"
@@ -50,7 +52,7 @@ def test_from_name_with_http():
 def test_get_full_path_http():
     """Test full path construction for HTTP"""
     cache = Mock(spec=Cache)
-    client = HTTPClient("example.com:8080", {}, cache, protocol="http")
+    client = HTTPClient("example.com:8080", {}, cache)
 
     assert client.get_full_path("file.txt") == "http://example.com:8080/file.txt"
 
@@ -58,7 +60,7 @@ def test_get_full_path_http():
 def test_upload_raises_not_implemented():
     """Test that upload raises NotImplementedError"""
     cache = Mock(spec=Cache)
-    client = HTTPClient("example.com", {}, cache, protocol="https")
+    client = HTTPSClient("example.com", {}, cache)
 
     with pytest.raises(NotImplementedError, match="HTTP/HTTPS client is read-only"):
         client.upload(b"data", "path/to/file.txt")

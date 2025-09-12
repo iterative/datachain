@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 
 from fsspec.implementations.http import HTTPFileSystem
 
+from datachain.dataset import StorageURI
 from datachain.lib.file import File
 
 from .fsspec import Client
@@ -19,19 +20,8 @@ class HTTPClient(Client):
     """
 
     FS_CLASS = HTTPFileSystem
-    PREFIX: ClassVar[str] = ""  # Will be set dynamically based on protocol
-    protocol: ClassVar[str] = ""  # Will be set dynamically
-
-    def __init__(
-        self,
-        name: str,
-        fs_kwargs: dict[str, Any],
-        cache: "Cache",
-        protocol: str = "https",
-    ) -> None:
-        super().__init__(name, fs_kwargs, cache)
-        self.protocol = protocol
-        self.PREFIX = f"{protocol}://"
+    PREFIX: ClassVar[str] = "http://"
+    protocol: ClassVar[str] = "http"
 
     @classmethod
     def create_fs(cls, **kwargs) -> HTTPFileSystem:
@@ -57,13 +47,12 @@ class HTTPClient(Client):
     ) -> "HTTPClient":
         # Determine protocol from the name if it includes it
         parsed = urlparse(name)
-        protocol = parsed.scheme if parsed.scheme in ("http", "https") else "https"
 
         # Extract just the host/path part without protocol
         if parsed.scheme:
             name = parsed.netloc + parsed.path
 
-        return cls(name, kwargs, cache, protocol=protocol)
+        return cls(name, kwargs, cache)
 
     @classmethod
     def split_url(cls, url: str) -> tuple[str, str]:
@@ -91,8 +80,6 @@ class HTTPClient(Client):
 
     @classmethod
     def get_uri(cls, name: str) -> "StorageURI":
-        from datachain.dataset import StorageURI
-
         # If name doesn't have protocol, default to https
         if not name.startswith(("http://", "https://")):
             return StorageURI(f"https://{name}")
@@ -112,13 +99,9 @@ class HTTPClient(Client):
             # HTTP doesn't support versioning, ignore it silently
             pass
 
-        # Check if self.name already contains the protocol (shouldn't happen but defensive)
         if self.name.startswith(("http://", "https://")):
-            # Name already has protocol, use it as-is
             base_url = self.name
         else:
-            # Check if rel_path already contains the full URL path including domain
-            # This happens when File has source="https://" and path="domain.com/path/file"
             if rel_path and "/" in rel_path:
                 # Check if the first part looks like a domain
                 first_part = rel_path.split("/")[0]
@@ -295,3 +278,8 @@ class HTTPClient(Client):
             # HTTP directory listing might not be available
             # Return empty set to indicate no subdirectories found
             return set()
+
+
+class HTTPSClient(HTTPClient):
+    protocol = "https"
+    PREFIX = "https://"

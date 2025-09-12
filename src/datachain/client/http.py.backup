@@ -1,0 +1,242 @@
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any, ClassVar, Optional, cast
+from urllib.parse import urlparse
+
+from fsspec.implementations.http import HTTPFileSystem
+
+from datachain.lib.file import File
+
+from .fsspec import Client
+
+if TYPE_CHECKING:
+    from datachain.cache import Cache
+
+
+class HTTPClient(Client):
+    """
+    Minimal HTTP/HTTPS client for file downloads only.
+    Directory listing is not supported.
+    """
+
+    FS_CLASS = HTTPFileSystem
+    PREFIX: ClassVar[str] = ""  # Will be set dynamically based on protocol
+    protocol: ClassVar[str] = ""  # Will be set dynamically
+
+    def __init__(
+        self,
+        name: str,
+        fs_kwargs: dict[str, Any],
+        cache: "Cache",
+        protocol: str = "https",
+    ) -> None:
+        super().__init__(name, fs_kwargs, cache)
+        self.protocol = protocol
+        self.PREFIX = f"{protocol}://"
+
+    @classmethod
+    def create_fs(cls, **kwargs) -> HTTPFileSystem:
+        # Configure HTTPFileSystem options
+        kwargs.setdefault("simple_links", True)
+        kwargs.setdefault("same_scheme", True)
+        
+        # HTTPFileSystem doesn't support version_aware, remove it if present
+        kwargs.pop("version_aware", None)
+        
+        # Create filesystem without calling super() to avoid version_aware
+        fs = cls.FS_CLASS(**kwargs)
+        fs.invalidate_cache()
+        return cast(HTTPFileSystem, fs)
+
+    @classmethod
+    def from_name(
+        cls,
+        name: str,
+        cache: "Cache",
+        kwargs: dict[str, Any],
+    ) -> "HTTPClient":
+        # Determine protocol from the name if it includes it
+        parsed = urlparse(name)
+        protocol = parsed.scheme if parsed.scheme in ("http", "https") else "https"
+
+        # Extract just the host/path part without protocol
+        if parsed.scheme:
+            name = parsed.netloc + parsed.path
+
+        return cls(name, kwargs, cache, protocol=protocol)
+
+    @classmethod
+    def split_url(cls, url: str) -> tuple[str, str]:
+        """
+        Split HTTP/HTTPS URL into domain and path.
+        """
+        parsed = urlparse(url)
+        
+        # Domain includes host and port if present
+        domain = parsed.netloc
+        
+        # Path without leading slash
+        path = parsed.path.lstrip("/")
+        
+        # Include query and fragment if present
+        if parsed.query:
+            path += f"?{parsed.query}"
+        if parsed.fragment:
+            path += f"#{parsed.fragment}"
+        
+        return domain, path
+
+    @classmethod
+    def get_uri(cls, name: str) -> "StorageURI":
+        from datachain.dataset import StorageURI
+
+        # If name doesn't have protocol, default to https
+        if not name.startswith(("http://", "https://")):
+            return StorageURI(f"https://{name}")
+        return StorageURI(name)
+
+    def get_full_path(self, rel_path: str, version_id: Optional[str] = None) -> str:
+        """
+        Construct full HTTP/HTTPS URL from relative path.
+        """
+        # Check if rel_path already contains the full URL path including domain
+        # This happens when File has source="https://" and path="domain.com/path/file"
+        if rel_path and "/" in rel_path:
+            # Check if the first part looks like a domain
+            first_part = rel_path.split("/")[0]
+            if "." in first_part and not first_part.startswith("."):
+                # This looks like domain.com/path/file format
+                # Just prepend the protocol
+                return f"{self.protocol}://{rel_path}"
+        
+        # Normal case: prepend protocol and name
+        base_url = f"{self.protocol}://{self.name}"
+        
+        if rel_path:
+            # Ensure single slash between base and path
+            if not base_url.endswith("/") and not rel_path.startswith("/"):
+                base_url += "/"
+            full_url = base_url + rel_path
+        else:
+            full_url = base_url
+        
+        return full_url
+
+    def info_to_file(self, v: dict[str, Any], path: str) -> File:
+        """
+        Convert HTTP file info to DataChain File object.
+        """
+        # Extract ETag if available (remove quotes if present)
+        etag = v.get("ETag", "").strip('"')
+        
+        # Parse last modified time
+        last_modified = v.get("last_modified")
+        if last_modified:
+            if isinstance(last_modified, str):
+                # Try to parse string date
+                try:
+                    from email.utils import parsedate_to_datetime
+                    last_modified = parsedate_to_datetime(last_modified)
+                except (ValueError, TypeError):
+                    last_modified = datetime.now(timezone.utc)
+            elif isinstance(last_modified, (int, float)):
+                # Timestamp
+                last_modified = datetime.fromtimestamp(last_modified, timezone.utc)
+        else:
+            last_modified = datetime.now(timezone.utc)
+        
+        return File(
+            source=self.uri,
+            path=path,
+            size=v.get("size", 0),
+            etag=etag,
+            version="",  # HTTP doesn't support versioning
+            is_latest=True,  # Always latest for HTTP
+            last_modified=last_modified,
+        )
+
+    async def scandir(
+        self, start_prefix: str, method: str = "default"
+    ):
+        """
+        Override scandir to handle HTTP/HTTPS URLs.
+        Try to download as a file, fail if it's a directory.
+        """
+        # Just pass through to parent implementation
+        # The error will be raised in _fetch_dir if needed
+        async for files in super().scandir(start_prefix, method):
+            yield files
+    
+    async def _fetch_dir(
+        self, prefix: str, pbar, result_queue
+    ) -> set[str]:
+        """
+        Override to handle single file downloads and reject directories.
+        """
+        full_url = self.get_full_path(prefix)
+        
+        from aiohttp.client_exceptions import ClientResponseError
+        
+        try:
+            # Try to get file info
+            info = await self.fs._info(full_url)
+            
+            # Check if it's a file
+            if info.get("type") == "file":
+                # This is a file, return it
+                file = self.info_to_file(info, prefix)
+                await result_queue.put([file])
+                pbar.update(1)
+                return set()
+            
+            # If type is directory or unknown, it's not a file
+            raise NotImplementedError(
+                f"Cannot download file from {full_url}"
+            )
+            
+        except ClientResponseError as e:
+            # HTTP errors (403, 404, etc)
+            if e.status == 403:
+                # This often happens with directory URLs on CloudFront
+                raise NotImplementedError(
+                    f"Cannot download file from {full_url}"
+                ) from e
+            # Re-raise other HTTP errors
+            raise
+        except NotImplementedError:
+            # Re-raise our own errors
+            raise
+        except Exception as e:
+            # Other errors - probably not a valid file
+            raise NotImplementedError(
+                f"Cannot download file from {full_url}"
+            ) from e
+
+    def get_file_info(self, path: str, version_id: Optional[str] = None) -> "File":
+        """
+        Get file info for HTTP/HTTPS file.
+        Note: version_id is ignored as HTTP doesn't support versioning.
+        """
+        # HTTP doesn't support versioning, don't pass version_id
+        info = self.fs.info(self.get_full_path(path))
+        return self.info_to_file(info, path)
+
+    async def get_file(self, lpath, rpath, callback, version_id: Optional[str] = None):
+        """
+        Download file from HTTP/HTTPS.
+        Note: version_id is ignored as HTTP doesn't support versioning.
+        """
+        # Don't pass version_id to HTTP filesystem
+        # lpath is already the full path for HTTP
+        return await self.fs._get_file(
+            lpath,
+            rpath,
+            callback=callback
+        )
+
+    def upload(self, data: bytes, path: str) -> "File":
+        """
+        Upload is not supported for HTTP/HTTPS protocol (read-only).
+        """
+        raise NotImplementedError(
+            "HTTP/HTTPS client is read-only. Upload operations are not supported."
+        )
