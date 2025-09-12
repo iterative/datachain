@@ -66,7 +66,7 @@ def test_upload_raises_not_implemented():
         client.upload(b"data", "path/to/file.txt")
 
 
-async def test_fetch_dir_always_raises():
+def test_fetch_dir_always_raises():
     """Test that _fetch_dir always raises NotImplementedError for HTTP/HTTPS"""
     cache = Mock(spec=Cache)
     client = HTTPSClient("example.com", {}, cache)
