@@ -112,7 +112,17 @@ class HTTPClient(Client):
             # HTTP doesn't support versioning, ignore it silently
             pass
 
-        # Ensure we have the right protocol prefix
+        # Check if rel_path already contains the full URL path including domain
+        # This happens when File has source="https://" and path="domain.com/path/file"
+        if rel_path and "/" in rel_path:
+            # Check if the first part looks like a domain
+            first_part = rel_path.split("/")[0]
+            if "." in first_part and not first_part.startswith("."):
+                # This looks like domain.com/path/file format
+                # Just prepend the protocol
+                return f"{self.protocol}://{rel_path}"
+
+        # Normal case: prepend protocol and name
         base_url = f"{self.protocol}://{self.name}"
 
         if rel_path:

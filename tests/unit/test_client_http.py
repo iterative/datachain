@@ -98,6 +98,11 @@ class TestHTTPClient:
         assert client.get_full_path("file.txt") == "https://example.com/file.txt"
         assert client.get_full_path("path/to/file.txt") == "https://example.com/path/to/file.txt"
         assert client.get_full_path("") == "https://example.com"
+        
+        # Test case when path contains full domain (e.g., File with source="https://")
+        client_empty = HTTPClient("", {}, cache, protocol="https")
+        full_domain_path = "d37ci6vzurychx.cloudfront.net/trip-data/file.parquet"
+        assert client_empty.get_full_path(full_domain_path) == f"https://{full_domain_path}"
 
     def test_get_full_path_http(self):
         """Test full path construction for HTTP"""
