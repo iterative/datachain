@@ -230,25 +230,21 @@ def _expand_range(range_spec: str) -> list[str]:
         if start_num <= end_num:
             if pad_width > 0:
                 return [str(i).zfill(pad_width) for i in range(start_num, end_num + 1)]
-            else:
-                return [str(i) for i in range(start_num, end_num + 1)]
-        else:
-            # Reverse range
-            if pad_width > 0:
-                return [str(i).zfill(pad_width) for i in range(start_num, end_num - 1, -1)]
-            else:
-                return [str(i) for i in range(start_num, end_num - 1, -1)]
+            return [str(i) for i in range(start_num, end_num + 1)]
+        # Reverse range
+        if pad_width > 0:
+            return [str(i).zfill(pad_width) for i in range(start_num, end_num - 1, -1)]
+        return [str(i) for i in range(start_num, end_num - 1, -1)]
 
     # Check if it's a single character range
-    elif len(start) == 1 and len(end) == 1 and start.isalpha() and end.isalpha():
+    if len(start) == 1 and len(end) == 1 and start.isalpha() and end.isalpha():
         start_ord = ord(start)
         end_ord = ord(end)
 
         if start_ord <= end_ord:
             return [chr(i) for i in range(start_ord, end_ord + 1)]
-        else:
-            # Reverse range
-            return [chr(i) for i in range(start_ord, end_ord - 1, -1)]
+        # Reverse range
+        return [chr(i) for i in range(start_ord, end_ord - 1, -1)]
 
     # Unknown range format, return as-is
     return [range_spec]

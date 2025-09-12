@@ -266,19 +266,25 @@ def test_brace_expansion_numeric_ranges(tmp_dir):
     # Create test files with numeric names
     for i in range(1, 6):
         (tmp_dir / "deep" / f"file{i}.txt").write_text(f"content {i}")
-    
+
     # Test simple numeric range
     result = dc.read_storage(f"{tmp_dir}/deep/file{{1..3}}.txt")
     files = sorted(f.name for f in result.to_values("file"))
     assert files == ["file1.txt", "file2.txt", "file3.txt"]
-    
+
     # Test zero-padded range
     for i in range(1, 10):
         (tmp_dir / "deep" / f"data{str(i).zfill(2)}.log").write_text(f"log {i}")
-    
+
     result = dc.read_storage(f"{tmp_dir}/deep/data{{01..05}}.log")
     files = sorted(f.name for f in result.to_values("file"))
-    assert files == ["data01.log", "data02.log", "data03.log", "data04.log", "data05.log"]
+    assert files == [
+        "data01.log",
+        "data02.log",
+        "data03.log",
+        "data04.log",
+        "data05.log",
+    ]
 
 
 def test_brace_expansion_character_ranges(tmp_dir):
@@ -288,7 +294,7 @@ def test_brace_expansion_character_ranges(tmp_dir):
         dir_path = tmp_dir / "deep" / f"dir-{char}"
         dir_path.mkdir()
         (dir_path / "file.txt").write_text(f"content {char}")
-    
+
     # Test character range
     result = dc.read_storage(f"{tmp_dir}/deep/dir-{{a..c}}/file.txt")
     # Extract directory names from the source paths
@@ -303,12 +309,12 @@ def test_brace_expansion_combined_patterns(tmp_dir):
         for month in range(1, 13):
             filename = f"data-{year}-{str(month).zfill(2)}.csv"
             (tmp_dir / "deep" / filename).write_text(f"data {year}-{month}")
-    
+
     # Test year-month pattern with zero-padded range
     result = dc.read_storage(f"{tmp_dir}/deep/data-2005-{{01..03}}.csv")
     files = sorted(f.name for f in result.to_values("file"))
     assert files == ["data-2005-01.csv", "data-2005-02.csv", "data-2005-03.csv"]
-    
+
     # Test combined with wildcards
     result = dc.read_storage(f"{tmp_dir}/deep/data-*-{{10..12}}.csv")
     files = sorted(f.name for f in result.to_values("file"))
