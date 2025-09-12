@@ -64,3 +64,35 @@ def test_upload_raises_not_implemented():
 
     with pytest.raises(NotImplementedError, match="HTTP/HTTPS client is read-only"):
         client.upload(b"data", "path/to/file.txt")
+
+
+@pytest.mark.asyncio
+async def test_fetch_dir_always_raises():
+    """Test that _fetch_dir always raises NotImplementedError for HTTP/HTTPS"""
+    from unittest.mock import AsyncMock
+
+    cache = Mock(spec=Cache)
+    client = HTTPSClient("example.com", {}, cache)
+
+    # Mock progress bar and result queue (won't be used but needed as params)
+    pbar = Mock()
+    result_queue = AsyncMock()
+
+    # Should always raise NotImplementedError
+    with pytest.raises(
+        NotImplementedError,
+        match="Cannot download file from https://example.com/any-path",
+    ):
+        await client._fetch_dir("any-path", pbar, result_queue)
+
+    # Test with different paths - all should raise
+    with pytest.raises(
+        NotImplementedError, match="Cannot download file from https://example.com"
+    ):
+        await client._fetch_dir("", pbar, result_queue)
+
+    with pytest.raises(
+        NotImplementedError,
+        match="Cannot download file from https://example.com/file.txt",
+    ):
+        await client._fetch_dir("file.txt", pbar, result_queue)

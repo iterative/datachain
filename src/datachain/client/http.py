@@ -208,76 +208,13 @@ class HTTPClient(Client):
 
     async def _fetch_dir(self, prefix: str, pbar, result_queue) -> set[str]:
         """
-        Fetch directory listing via HTTP.
-        This uses the HTTPFileSystem's HTML parsing capabilities.
+        Override to reject directory listing for HTTP/HTTPS.
+        HTTP doesn't support directory listing in a standard way.
         """
         full_url = self.get_full_path(prefix)
 
-        try:
-            # First, check if this might be a direct file URL (not a directory)
-            # Try to get file info directly
-            try:
-                info = await self.fs._info(full_url)
-                if info.get("type") == "file":
-                    # This is a direct file URL, not a directory
-                    # Extract the filename from the URL
-                    parsed = urlparse(full_url)
-                    filename = parsed.path.split("/")[-1] if parsed.path else "file"
-
-                    # Create file info for this single file
-                    file = self.info_to_file(info, prefix if prefix else filename)
-                    await result_queue.put([file])
-                    pbar.update(1)
-                    return set()  # No subdirectories for a single file
-            except (FileNotFoundError, OSError):
-                # Not a direct file, try directory listing
-                pass
-
-            # Try directory listing
-            infos = await self.fs._ls(full_url, detail=True)
-
-            files = []
-            subdirs = set()
-
-            for info in infos:
-                # Extract relative path from the full URL
-                file_url = info["name"]
-                parsed = urlparse(file_url)
-
-                # Get path relative to our base
-                if parsed.netloc == self.name:
-                    rel_path = parsed.path.lstrip("/")
-
-                    # Include query and fragment if present
-                    if parsed.query:
-                        rel_path += f"?{parsed.query}"
-                    if parsed.fragment:
-                        rel_path += f"#{parsed.fragment}"
-                else:
-                    # Different domain, skip
-                    continue
-
-                # Skip if it's the same as prefix (self-reference)
-                if prefix.strip("/") == rel_path.strip("/"):
-                    continue
-
-                if info["type"] == "directory":
-                    subdirs.add(rel_path)
-                else:
-                    files.append(self.info_to_file(info, rel_path))
-
-            if files:
-                await result_queue.put(files)
-
-            found_count = len(subdirs) + len(files)
-            pbar.update(found_count)
-
-            return subdirs
-
-        except (FileNotFoundError, OSError):
-            # HTTP directory listing might not be available
-            # Return empty set to indicate no subdirectories found
-            return set()
+        # HTTP/HTTPS doesn't support directory listing - always raise error
+        raise NotImplementedError(f"Cannot download file from {full_url}")
 
 
 class HTTPSClient(HTTPClient):
