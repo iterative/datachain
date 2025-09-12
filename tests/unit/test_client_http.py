@@ -1,10 +1,11 @@
+from datetime import datetime
+from unittest.mock import AsyncMock, Mock
+
 import pytest
-from datetime import datetime, timezone
-from unittest.mock import Mock, patch, AsyncMock
 
 from datachain.cache import Cache
-from datachain.client.http import HTTPClient
 from datachain.client.fsspec import Client
+from datachain.client.http import HTTPClient
 from datachain.lib.file import File
 
 
@@ -94,19 +95,30 @@ class TestHTTPClient:
         """Test full path construction"""
         cache = Mock(spec=Cache)
         client = HTTPClient("example.com", {}, cache, protocol="https")
-        
+
         assert client.get_full_path("file.txt") == "https://example.com/file.txt"
-        assert client.get_full_path("path/to/file.txt") == "https://example.com/path/to/file.txt"
+        assert (
+            client.get_full_path("path/to/file.txt")
+            == "https://example.com/path/to/file.txt"
+        )
         assert client.get_full_path("") == "https://example.com"
-        
+
         # Test case when path contains full domain (e.g., File with source="https://")
         client_empty = HTTPClient("", {}, cache, protocol="https")
         full_domain_path = "d37ci6vzurychx.cloudfront.net/trip-data/file.parquet"
-        assert client_empty.get_full_path(full_domain_path) == f"https://{full_domain_path}"
-        
+        assert (
+            client_empty.get_full_path(full_domain_path)
+            == f"https://{full_domain_path}"
+        )
+
         # Test case when client name already has protocol (defensive check)
-        client_with_protocol = HTTPClient("https://example.com", {}, cache, protocol="https")
-        assert client_with_protocol.get_full_path("file.txt") == "https://example.com/file.txt"
+        client_with_protocol = HTTPClient(
+            "https://example.com", {}, cache, protocol="https"
+        )
+        assert (
+            client_with_protocol.get_full_path("file.txt")
+            == "https://example.com/file.txt"
+        )
         # Should not create double https://
         assert "https://https://" not in client_with_protocol.get_full_path("file.txt")
 
@@ -114,25 +126,28 @@ class TestHTTPClient:
         """Test full path construction for HTTP"""
         cache = Mock(spec=Cache)
         client = HTTPClient("example.com:8080", {}, cache, protocol="http")
-        
+
         assert client.get_full_path("file.txt") == "http://example.com:8080/file.txt"
 
     def test_get_full_path_ignores_version(self):
         """Test that version_id is ignored in get_full_path"""
         cache = Mock(spec=Cache)
         client = HTTPClient("example.com", {}, cache, protocol="https")
-        
+
         # Version should be ignored for HTTP
-        assert client.get_full_path("file.txt", version_id="v123") == "https://example.com/file.txt"
+        assert (
+            client.get_full_path("file.txt", version_id="v123")
+            == "https://example.com/file.txt"
+        )
 
     def test_url_method(self):
         """Test URL generation (should be same as get_full_path for HTTP)"""
         cache = Mock(spec=Cache)
         client = HTTPClient("example.com", {}, cache, protocol="https")
-        
+
         url = client.url("path/to/file.txt")
         assert url == "https://example.com/path/to/file.txt"
-        
+
         # Expires parameter should be ignored
         url = client.url("file.txt", expires=7200)
         assert url == "https://example.com/file.txt"
@@ -141,16 +156,16 @@ class TestHTTPClient:
         """Test converting HTTP file info to File object"""
         cache = Mock(spec=Cache)
         client = HTTPClient("example.com", {}, cache, protocol="https")
-        
+
         info = {
             "size": 1024,
             "ETag": '"abc123"',
             "last_modified": 1609459200,  # 2021-01-01 00:00:00 UTC
-            "type": "file"
+            "type": "file",
         }
-        
+
         file = client.info_to_file(info, "path/to/file.txt")
-        
+
         assert isinstance(file, File)
         assert file.path == "path/to/file.txt"
         assert file.size == 1024
@@ -163,32 +178,31 @@ class TestHTTPClient:
         """Test converting HTTP file info with string date"""
         cache = Mock(spec=Cache)
         client = HTTPClient("example.com", {}, cache, protocol="https")
-        
+
         info = {
             "size": 2048,
             "ETag": 'W/"xyz789"',
             "last_modified": "Fri, 01 Jan 2021 00:00:00 GMT",
-            "type": "file"
+            "type": "file",
         }
-        
+
         file = client.info_to_file(info, "file.txt")
-        
+
         assert file.size == 2048
-        assert file.etag == 'W/"xyz789'  # Complex ETags preserved after stripping outer quotes
+        assert (
+            file.etag == 'W/"xyz789'
+        )  # Complex ETags preserved after stripping outer quotes
         assert isinstance(file.last_modified, datetime)
 
     def test_info_to_file_no_etag(self):
         """Test converting HTTP file info without ETag"""
         cache = Mock(spec=Cache)
         client = HTTPClient("example.com", {}, cache, protocol="https")
-        
-        info = {
-            "size": 512,
-            "type": "file"
-        }
-        
+
+        info = {"size": 512, "type": "file"}
+
         file = client.info_to_file(info, "file.txt")
-        
+
         assert file.etag == ""
         assert file.size == 512
 
@@ -196,7 +210,7 @@ class TestHTTPClient:
         """Test that upload raises NotImplementedError"""
         cache = Mock(spec=Cache)
         client = HTTPClient("example.com", {}, cache, protocol="https")
-        
+
         with pytest.raises(NotImplementedError, match="HTTP/HTTPS client is read-only"):
             client.upload(b"data", "path/to/file.txt")
 
@@ -205,45 +219,47 @@ class TestHTTPClient:
         """Test directory fetching via HTTP"""
         cache = Mock(spec=Cache)
         client = HTTPClient("example.com", {}, cache, protocol="https")
-        
+
         # Mock the filesystem
         mock_fs = AsyncMock()
-        mock_fs._ls = AsyncMock(return_value=[
-            {
-                "name": "https://example.com/file1.txt",
-                "size": 100,
-                "type": "file",
-                "ETag": '"etag1"',
-            },
-            {
-                "name": "https://example.com/subdir/",
-                "type": "directory",
-            },
-            {
-                "name": "https://example.com/file2.html",
-                "size": 200,
-                "type": "file",
-                "ETag": '"etag2"',
-            }
-        ])
+        mock_fs._ls = AsyncMock(
+            return_value=[
+                {
+                    "name": "https://example.com/file1.txt",
+                    "size": 100,
+                    "type": "file",
+                    "ETag": '"etag1"',
+                },
+                {
+                    "name": "https://example.com/subdir/",
+                    "type": "directory",
+                },
+                {
+                    "name": "https://example.com/file2.html",
+                    "size": 200,
+                    "type": "file",
+                    "ETag": '"etag2"',
+                },
+            ]
+        )
         client._fs = mock_fs
-        
+
         # Mock progress bar and result queue
         pbar = Mock()
         result_queue = AsyncMock()
-        
+
         subdirs = await client._fetch_dir("", pbar, result_queue)
-        
+
         # Check that files were added to queue
         result_queue.put.assert_called_once()
         files = result_queue.put.call_args[0][0]
         assert len(files) == 2
         assert files[0].path == "file1.txt"
         assert files[1].path == "file2.html"
-        
+
         # Check subdirectories
         assert subdirs == {"subdir/"}
-        
+
         # Check progress bar was updated
         pbar.update.assert_called_with(3)  # 2 files + 1 directory
 
@@ -252,25 +268,27 @@ class TestHTTPClient:
         """Test directory fetching with prefix"""
         cache = Mock(spec=Cache)
         client = HTTPClient("example.com", {}, cache, protocol="https")
-        
+
         mock_fs = AsyncMock()
-        mock_fs._ls = AsyncMock(return_value=[
-            {
-                "name": "https://example.com/data/file.json",
-                "size": 300,
-                "type": "file",
-            }
-        ])
+        mock_fs._ls = AsyncMock(
+            return_value=[
+                {
+                    "name": "https://example.com/data/file.json",
+                    "size": 300,
+                    "type": "file",
+                }
+            ]
+        )
         client._fs = mock_fs
-        
+
         pbar = Mock()
         result_queue = AsyncMock()
-        
+
         subdirs = await client._fetch_dir("data", pbar, result_queue)
-        
+
         # Check the correct URL was requested
         mock_fs._ls.assert_called_with("https://example.com/data", detail=True)
-        
+
         # Check files were processed correctly
         result_queue.put.assert_called_once()
         files = result_queue.put.call_args[0][0]
@@ -282,15 +300,15 @@ class TestHTTPClient:
         """Test directory fetching error handling"""
         cache = Mock(spec=Cache)
         client = HTTPClient("example.com", {}, cache, protocol="https")
-        
+
         # Mock filesystem to raise an error (e.g., 404)
         mock_fs = AsyncMock()
         mock_fs._ls = AsyncMock(side_effect=FileNotFoundError("404 Not Found"))
         client._fs = mock_fs
-        
+
         pbar = Mock()
         result_queue = AsyncMock()
-        
+
         # Should return empty set on error
         subdirs = await client._fetch_dir("nonexistent", pbar, result_queue)
         assert subdirs == set()
@@ -299,16 +317,19 @@ class TestHTTPClient:
         """Test that create_fs sets proper defaults for HTTPFileSystem"""
         # Test that version_aware is not passed to HTTPFileSystem
         result = HTTPClient.create_fs()
-        
+
         # Just verify it returns an HTTPFileSystem instance
         from fsspec.implementations.http import HTTPFileSystem
+
         assert isinstance(result, HTTPFileSystem)
 
     def test_client_initialization(self):
         """Test HTTPClient initialization"""
         cache = Mock(spec=Cache)
-        client = HTTPClient("example.com", {"custom_option": "value"}, cache, protocol="http")
-        
+        client = HTTPClient(
+            "example.com", {"custom_option": "value"}, cache, protocol="http"
+        )
+
         assert client.name == "example.com"
         assert client.protocol == "http"
         assert client.PREFIX == "http://"

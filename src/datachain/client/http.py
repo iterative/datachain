@@ -161,6 +161,7 @@ class HTTPClient(Client):
                 # Try to parse string date
                 try:
                     from email.utils import parsedate_to_datetime
+
                     last_modified = parsedate_to_datetime(last_modified)
                 except (ValueError, TypeError):
                     last_modified = datetime.now(timezone.utc)
@@ -197,18 +198,16 @@ class HTTPClient(Client):
         info = self.fs.info(self.get_full_path(path))
         return self.info_to_file(info, path)
 
-    def open_object(
-        self, file: "File", use_cache: bool = True, cb = None
-    ):
+    def open_object(self, file: "File", use_cache: bool = True, cb=None):
         """
         Open an HTTP/HTTPS file.
         Note: HTTP doesn't support versioning, so file.version is ignored.
         """
         from datachain.client.fileslice import FileWrapper
-        
+
         if use_cache and (cache_path := self.cache.get_path(file)):
             return open(cache_path, mode="rb")
-        
+
         assert not file.location
         # Don't pass version to fs.open for HTTP
         return FileWrapper(
@@ -224,9 +223,7 @@ class HTTPClient(Client):
         # Don't pass version_id to HTTP filesystem
         return await self.fs._get_file(lpath, rpath, callback=callback)
 
-    async def _fetch_dir(
-        self, prefix: str, pbar, result_queue
-    ) -> set[str]:
+    async def _fetch_dir(self, prefix: str, pbar, result_queue) -> set[str]:
         """
         Fetch directory listing via HTTP.
         This uses the HTTPFileSystem's HTML parsing capabilities.
@@ -243,7 +240,7 @@ class HTTPClient(Client):
                     # Extract the filename from the URL
                     parsed = urlparse(full_url)
                     filename = parsed.path.split("/")[-1] if parsed.path else "file"
-                    
+
                     # Create file info for this single file
                     file = self.info_to_file(info, prefix if prefix else filename)
                     await result_queue.put([file])
@@ -298,4 +295,3 @@ class HTTPClient(Client):
             # HTTP directory listing might not be available
             # Return empty set to indicate no subdirectories found
             return set()
-
