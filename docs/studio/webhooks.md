@@ -9,25 +9,12 @@ When you create a webhook, you specify a URL, and necessary information you want
 For example, you can subscribe your webhook to events that occur when a job is created, is complete, is failed, is running, and so on. You can then monitor whenever a job is failed through this webhook.
 
 ### Alternative
-
 As opposed to webhooks, you can also use [CLI command](../commands/index.md) to get the job information or some of our available [API endpoints](api/index.md) but webhook requires less effort than polling an API since it allows near real time updates.
 
-# Available event type
+## Available event type
 As of now, your server can receive two different types of events.
 
-## PING
-Whenever you add your webhook to your team, Studio sends a PING event to check the delivery to the server. You can check the recent deliveries to check if the webhook is successfully connected.
-
-Header: `http-x-datachain-event`: `PING`.
-
-Payload:
-```json
-{
-    "action": "PING"
-}
-```
-
-## JOB
+### JOB
 
 Whenever any job is created or any status is changed to the job, you will receive the JOB webhook event. The payload you get with the job webhook is as:
 
@@ -50,7 +37,20 @@ Payload:
     }
 ```
 
-# Creating webhooks
+### PING
+Whenever you add your webhook to your team, Studio sends a PING event to check the delivery to the server. You can check the recent deliveries to check if the webhook is successfully connected.
+
+Header: `http-x-datachain-event`: `PING`.
+
+Payload:
+```json
+{
+    "action": "PING"
+}
+```
+
+
+## Creating webhooks
 
 You should have admin access to a team to create the webhooks in the team. To create a webhook, go to settings for the team and under the section Webhooks, click on Add new Webhook.
 ![Webhook Settings](../assets/webhook_list.png)
@@ -81,11 +81,11 @@ Enter the necessary information to create the webhooks.
 ![Add webhook](../assets/webhook_dialog.png)
 
 
-# Handling webhook deliveries
+## Handling webhook deliveries
 
 When you create a webhook, you specify a URL and subscribe to event types. When any event that your webhook is subscribed to occurs, Datachain Studio will send an HTTP request with the data about the event to the event that you specified. If your server is setup at that URL, it can take action when it receives one.
 
-## Setup
+### Setup
 
 In order to test your webhook locally, you can use a webhook proxy URL to forward the webhooks from Studio to your computer or codespace. We are using [smee.io](http://smee.io) to provide a webhook proxy url and forward webhooks.
 
@@ -108,9 +108,9 @@ smee --path /webhook --port 3000 --url WEBHOOK_PROXY_URL
 
 You can use any programming languages that you can to run on your server.
 
-## Example Code
+### Example Code
 
-### Python
+#### Python
 
 This example uses the Python and Flask libraries to handle the routes and HTTP requests.
 
@@ -129,32 +129,41 @@ from flask import Flask, request
 # This defines the port where your server should listen.
 # 3000 matches the port that you specified for webhook forwarding.
 #
-# Once you deploy your code to a server, you should change this to match the port where your server is listening.
+# Once you deploy your code to a server,
+# Change this to match the port where your server is listening.
 port = 3000
 secret = "secretString"
 
 # This initializes a new Flask application.
 app = Flask(__name__)
 
-# This defines a POST route at the `/webhook` path. This path matches the path that you specified for the smee.io forwarding.
+# This defines a POST route at the `/webhook` path.
+# It matches the path you specified for the smee.io forwarding.
 #
-# Once you deploy your code to a server and update your webhook URL, you should change this to match the path portion of the URL for your webhook.
+# Once you deploy your code to a server and update your webhook URL,
+# Change this to match the path portion of the URL for your webhook.
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    # Respond to indicate that the delivery was successfully received.
-    # Your server should respond with a 2XX response within 10 seconds of receiving a webhook delivery.
-    # If your server takes longer than that to respond, then Studio terminates the connection and considers the delivery a failure.
+    # Respond to indicate that delivery was successfully received.
+    # Your server should respond with a 2XX response
+    # within 10 seconds of receiving a webhook delivery.
+    # If your server takes longer than that to respond,
+    # then Studio terminates the connection.
 
-    # Check the `http-x-datachain-event` header to learn what event type was sent.
+    # Check `http-x-datachain-event` header for the event type.
     datachain_event = request.headers.get('http-x-datachain-event')
 
-    # You should add logic to handle each event type that your webhook is subscribed to.
+    # You should add logic to handle each event type
+    # that your webhook is subscribed to.
     # For example, this code handles the `JOB` and `PING` events.
     if datachain_event == 'JOB':
         data = request.get_json()
         action = data.get('action')
         if action == 'job_status':
-            print(f"Job status for job {data['job']['id']} was changed to {data['job']['status']}")
+            print(
+                f"Job status for job {data['job']['id']} was" \
+                " changed to {data['job']['status']}"
+            )
         else:
             print(f"Unhandled action for the job event: {action}")
     elif datachain_event == 'PING':
@@ -164,7 +173,7 @@ def webhook():
 
     return '', 202  # 202 Accepted status code
 
-# This starts the server and tells it to listen at the specified port.
+# This starts the server.
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=port, debug=True)
     print(f"Server is running on port {port}")
@@ -185,7 +194,7 @@ Job status for job a852ee4a-091a-456f-ba1a-c809f7e804f3 was changed to RUNNING
 Job status for job a852ee4a-091a-456f-ba1a-c809f7e804f3 was changed to COMPLETE
 ```
 
-# Validating webhook deliveries
+## Validating webhook deliveries
 
 Once your server is configured to receive payloads, it will listen for any delivery that’s sent to the endpoint you configured. To ensure that your server only processes webhook deliveries that were sent by Datachain Studio and to ensure that the delivery was not tampered with, you should validate webhook signature before processing the delivery further.
 
@@ -208,27 +217,33 @@ import hmac
 from flask import abort
 
 def verify_signature(payload_body, secret_token, signature_header):
-    """Verify that the payload was sent from Studio by validating SHA256.
+    """Verify the payload was sent from Studio by validating SHA256.
 
     Raise and return 403 if not authorized.
 
     Args:
-        payload_body: original request body to verify (request.body())
+        payload_body: request body to verify (request.body())
         secret_token: Studio webhook token (WEBHOOK_SECRET)
-        signature_header: header received from Studio (x-datachain-signature-256)
+        signature_header: header (x-datachain-signature-256)
     """
     if not signature_header:
         abort(403, "X-datachain-signature-256 is missing!")
-    hash_object = hmac.new(secret_token.encode('utf-8'), msg=payload_body, digestmod=hashlib.sha256)
+    hash_object = hmac.new(
+        secret_token.encode('utf-8'),
+        msg=payload_body,
+        digestmod=hashlib.sha256
+    )
     expected_signature = "sha256=" + hash_object.hexdigest()
-    if not hmac.compare_digest(expected_signature, signature_header):
+    if not hmac.compare_digest(
+        expected_signature, signature_header
+    ):
         abort(403, "Request signatures didn't match!")
 ```
 
 Add the following call in the api receiver.
 
 ```python
-# Get the signature header - we can see it's X-Datachain-Signature-256
+# Get the signature header
 signature = request.headers.get('X-Datachain-Signature-256')
 
 # Re-enable signature verification with improved JSON handling
@@ -238,7 +253,7 @@ else:
     print("Warning: No signature header found")
 ```
 
-# Best practices for using Webhooks
+## Best practices for using Webhooks
 
 1. You should only subscribe to the webhook events that you need. This will reduce the amount of work your server needs to do.
 2. The webhook secret should be a random string of text with high entropy. You should securely store your webhook secret in a way that your server can access.
