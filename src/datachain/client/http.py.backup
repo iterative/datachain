@@ -38,10 +38,10 @@ class HTTPClient(Client):
         # Configure HTTPFileSystem options
         kwargs.setdefault("simple_links", True)
         kwargs.setdefault("same_scheme", True)
-        
+
         # HTTPFileSystem doesn't support version_aware, remove it if present
         kwargs.pop("version_aware", None)
-        
+
         # Create filesystem without calling super() to avoid version_aware
         fs = cls.FS_CLASS(**kwargs)
         fs.invalidate_cache()
@@ -70,19 +70,19 @@ class HTTPClient(Client):
         Split HTTP/HTTPS URL into domain and path.
         """
         parsed = urlparse(url)
-        
+
         # Domain includes host and port if present
         domain = parsed.netloc
-        
+
         # Path without leading slash
         path = parsed.path.lstrip("/")
-        
+
         # Include query and fragment if present
         if parsed.query:
             path += f"?{parsed.query}"
         if parsed.fragment:
             path += f"#{parsed.fragment}"
-        
+
         return domain, path
 
     @classmethod
@@ -107,10 +107,10 @@ class HTTPClient(Client):
                 # This looks like domain.com/path/file format
                 # Just prepend the protocol
                 return f"{self.protocol}://{rel_path}"
-        
+
         # Normal case: prepend protocol and name
         base_url = f"{self.protocol}://{self.name}"
-        
+
         if rel_path:
             # Ensure single slash between base and path
             if not base_url.endswith("/") and not rel_path.startswith("/"):
@@ -118,7 +118,7 @@ class HTTPClient(Client):
             full_url = base_url + rel_path
         else:
             full_url = base_url
-        
+
         return full_url
 
     def info_to_file(self, v: dict[str, Any], path: str) -> File:
@@ -127,7 +127,7 @@ class HTTPClient(Client):
         """
         # Extract ETag if available (remove quotes if present)
         etag = v.get("ETag", "").strip('"')
-        
+
         # Parse last modified time
         last_modified = v.get("last_modified")
         if last_modified:
@@ -143,7 +143,7 @@ class HTTPClient(Client):
                 last_modified = datetime.fromtimestamp(last_modified, timezone.utc)
         else:
             last_modified = datetime.now(timezone.utc)
-        
+
         return File(
             source=self.uri,
             path=path,
@@ -165,7 +165,7 @@ class HTTPClient(Client):
         # The error will be raised in _fetch_dir if needed
         async for files in super().scandir(start_prefix, method):
             yield files
-    
+
     async def _fetch_dir(
         self, prefix: str, pbar, result_queue
     ) -> set[str]:
@@ -173,13 +173,13 @@ class HTTPClient(Client):
         Override to handle single file downloads and reject directories.
         """
         full_url = self.get_full_path(prefix)
-        
+
         from aiohttp.client_exceptions import ClientResponseError
-        
+
         try:
             # Try to get file info
             info = await self.fs._info(full_url)
-            
+
             # Check if it's a file
             if info.get("type") == "file":
                 # This is a file, return it
@@ -187,12 +187,12 @@ class HTTPClient(Client):
                 await result_queue.put([file])
                 pbar.update(1)
                 return set()
-            
+
             # If type is directory or unknown, it's not a file
             raise NotImplementedError(
                 f"Cannot download file from {full_url}"
             )
-            
+
         except ClientResponseError as e:
             # HTTP errors (403, 404, etc)
             if e.status == 403:
