@@ -76,16 +76,16 @@ def test_fetch_dir_always_raises():
         NotImplementedError,
         match="Cannot download file from https://example.com/any-path",
     ):
-        await client._fetch_dir("any-path", None, None)
+        client._fetch_dir("any-path", None, None)
 
     # Test with different paths - all should raise
     with pytest.raises(
         NotImplementedError, match="Cannot download file from https://example.com"
     ):
-        await client._fetch_dir("", None, None)
+        client._fetch_dir("", None, None)
 
     with pytest.raises(
         NotImplementedError,
         match="Cannot download file from https://example.com/file.txt",
     ):
-        await client._fetch_dir("file.txt", None, None)
+        client._fetch_dir("file.txt", None, None)
