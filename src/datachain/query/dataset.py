@@ -1,4 +1,5 @@
 import contextlib
+import hashlib
 import inspect
 import logging
 import os
@@ -54,6 +55,7 @@ from datachain.query.session import Session
 from datachain.query.udf import UdfInfo
 from datachain.sql.functions.random import rand
 from datachain.sql.types import SQLType
+from datachain.sql.utils import hash_column_elements
 from datachain.utils import (
     determine_processes,
     determine_workers,
@@ -167,6 +169,16 @@ class Step(ABC):
     ) -> "StepResult":
         """Apply the processing step."""
 
+    @abstractmethod
+    def _hash(self) -> str:
+        """Calculates hash for this step without class name"""
+
+    def hash(self) -> str:
+        """Calculates hash for this step"""
+        return hashlib.sha256(
+            f"{self.__class__.__name__}|{self._hash()}".encode()
+        ).hexdigest()
+
 
 @frozen
 class QueryStep:
@@ -185,6 +197,9 @@ class QueryStep:
         return step_result(
             q, dr.columns, dependencies=[(self.dataset, self.dataset_version)]
         )
+
+    def hash(self) -> str:
+        return self.dataset.get_version(self.dataset_version).uuid
 
 
 def generator_then_call(generator, func: Callable):
@@ -255,6 +270,13 @@ class DatasetDiffOperation(Step):
 @frozen
 class Subtract(DatasetDiffOperation):
     on: Sequence[tuple[str, str]]
+
+    def _hash(self) -> str:
+        on_bytes = b"".join(
+            f"{a}:{b}".encode() for a, b in sorted(self.on, key=lambda t: (t[0], t[1]))
+        )
+
+        return hashlib.sha256(bytes.fromhex(self.dq.hash()) + on_bytes).hexdigest()
 
     def query(self, source_query: Select, target_query: Select) -> sa.Selectable:
         sq = source_query.alias("source_query")
@@ -653,6 +675,9 @@ class UDFSignal(UDFStep):
     min_task_size: Optional[int] = None
     batch_size: Optional[int] = None
 
+    def _hash(self) -> str:
+        raise NotImplementedError
+
     def create_udf_table(self, query: Select) -> "Table":
         udf_output_columns: list[sqlalchemy.Column[Any]] = [
             sqlalchemy.Column(col_name, col_type)
@@ -732,6 +757,9 @@ class RowGenerator(UDFStep):
     min_task_size: Optional[int] = None
     batch_size: Optional[int] = None
 
+    def _hash(self) -> str:
+        raise NotImplementedError
+
     def create_udf_table(self, query: Select) -> "Table":
         warehouse = self.catalog.warehouse
 
@@ -790,6 +818,9 @@ class SQLClause(Step, ABC):
 class SQLSelect(SQLClause):
     args: tuple[Union[Function, ColumnElement], ...]
 
+    def _hash(self) -> str:
+        return hash_column_elements(self.args)
+
     def apply_sql_clause(self, query) -> Select:
         subquery = query.subquery()
         args = [
@@ -806,6 +837,9 @@ class SQLSelect(SQLClause):
 class SQLSelectExcept(SQLClause):
     args: tuple[Union[Function, ColumnElement], ...]
 
+    def _hash(self) -> str:
+        return hash_column_elements(self.args)
+
     def apply_sql_clause(self, query: Select) -> Select:
         subquery = query.subquery()
         args = [c for c in subquery.c if c.name not in set(self.parse_cols(self.args))]
@@ -816,6 +850,9 @@ class SQLSelectExcept(SQLClause):
 class SQLMutate(SQLClause):
     args: tuple[Label, ...]
     new_schema: SignalSchema
+
+    def _hash(self) -> str:
+        return hash_column_elements(self.args)
 
     def apply_sql_clause(self, query: Select) -> Select:
         original_subquery = query.subquery()
@@ -846,6 +883,9 @@ class SQLMutate(SQLClause):
 class SQLFilter(SQLClause):
     expressions: tuple[Union[Function, ColumnElement], ...]
 
+    def _hash(self) -> str:
+        return hash_column_elements(self.expressions)
+
     def __and__(self, other):
         expressions = self.parse_cols(self.expressions)
         return self.__class__(expressions + other)
@@ -859,6 +899,9 @@ class SQLFilter(SQLClause):
 class SQLOrderBy(SQLClause):
     args: tuple[Union[Function, ColumnElement], ...]
 
+    def _hash(self) -> str:
+        return hash_column_elements(self.args)
+
     def apply_sql_clause(self, query: Select) -> Select:
         args = self.parse_cols(self.args)
         return query.order_by(*args)
@@ -868,6 +911,9 @@ class SQLOrderBy(SQLClause):
 class SQLLimit(SQLClause):
     n: int
 
+    def _hash(self) -> str:
+        return hashlib.sha256(str(self.n).encode()).hexdigest()
+
     def apply_sql_clause(self, query: Select) -> Select:
         return query.limit(self.n)
 
@@ -876,12 +922,18 @@ class SQLLimit(SQLClause):
 class SQLOffset(SQLClause):
     offset: int
 
+    def _hash(self) -> str:
+        return hashlib.sha256(str(self.offset).encode()).hexdigest()
+
     def apply_sql_clause(self, query: "GenerativeSelect"):
         return query.offset(self.offset)
 
 
 @frozen
 class SQLCount(SQLClause):
+    def _hash(self) -> str:
+        return ""
+
     def apply_sql_clause(self, query):
         return sqlalchemy.select(f.count(1)).select_from(query.subquery())
 
@@ -890,6 +942,9 @@ class SQLCount(SQLClause):
 class SQLDistinct(SQLClause):
     args: tuple[ColumnElement, ...]
     dialect: str
+
+    def _hash(self) -> str:
+        return hash_column_elements(self.args)
 
     def apply_sql_clause(self, query):
         if self.dialect == "sqlite":
@@ -902,6 +957,11 @@ class SQLDistinct(SQLClause):
 class SQLUnion(Step):
     query1: "DatasetQuery"
     query2: "DatasetQuery"
+
+    def _hash(self) -> str:
+        return hashlib.sha256(
+            bytes.fromhex(self.query1.hash()) + bytes.fromhex(self.query2.hash())
+        ).hexdigest()
 
     def apply(
         self, query_generator: QueryGenerator, temp_tables: list[str]
@@ -938,6 +998,24 @@ class SQLJoin(Step):
     inner: bool
     full: bool
     rname: str
+
+    def _hash(self) -> str:
+        predicates = (
+            (self.predicates,)
+            if not isinstance(self.predicates, tuple)
+            else self.predicates
+        )
+
+        parts = [
+            bytes.fromhex(self.query1.hash()),
+            bytes.fromhex(self.query2.hash()),
+            bytes.fromhex(hash_column_elements(predicates)),
+            str(self.inner).encode(),
+            str(self.full).encode(),
+            self.rname.encode("utf-8"),
+        ]
+
+        return hashlib.sha256(b"".join(parts)).hexdigest()
 
     def get_query(self, dq: "DatasetQuery", temp_tables: list[str]) -> sa.Subquery:
         query = dq.apply_steps().select()
@@ -1059,6 +1137,13 @@ class SQLJoin(Step):
 class SQLGroupBy(SQLClause):
     cols: Sequence[Union[str, Function, ColumnElement]]
     group_by: Sequence[Union[str, Function, ColumnElement]]
+
+    def _hash(self) -> str:
+        return hashlib.sha256(
+            bytes.fromhex(
+                hash_column_elements(self.cols) + hash_column_elements(self.group_by)
+            )
+        ).hexdigest()
 
     def apply_sql_clause(self, query) -> Select:
         if not self.cols:
@@ -1212,6 +1297,19 @@ class DatasetQuery:
 
     def __or__(self, other):
         return self.union(other)
+
+    def hash(self) -> str:
+        hasher = hashlib.sha256()
+        if self.starting_step:
+            hasher.update(self.starting_step.hash().encode("utf-8"))
+        else:
+            assert self.list_ds_name
+            hasher.update(self.list_ds_name.encode("utf-8"))
+
+        for step in self.steps:
+            hasher.update(step.hash().encode("utf-8"))
+
+        return hasher.hexdigest()
 
     @staticmethod
     def get_table() -> "TableClause":

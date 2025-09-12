@@ -207,6 +207,9 @@ class DataChain:
         self.print_schema(file=file)
         return file.getvalue()
 
+    def hash(self) -> str:
+        return self._query.hash()
+
     def _as_delta(
         self,
         on: Optional[Union[str, Sequence[str]]] = None,
