@@ -197,6 +197,33 @@ class HTTPClient(Client):
         info = self.fs.info(self.get_full_path(path))
         return self.info_to_file(info, path)
 
+    def open_object(
+        self, file: "File", use_cache: bool = True, cb = None
+    ):
+        """
+        Open an HTTP/HTTPS file.
+        Note: HTTP doesn't support versioning, so file.version is ignored.
+        """
+        from datachain.client.fileslice import FileWrapper
+        
+        if use_cache and (cache_path := self.cache.get_path(file)):
+            return open(cache_path, mode="rb")
+        
+        assert not file.location
+        # Don't pass version to fs.open for HTTP
+        return FileWrapper(
+            self.fs.open(self.get_full_path(file.get_path_normalized())),
+            cb or (lambda x: None),
+        )
+
+    async def get_file(self, lpath, rpath, callback, version_id: Optional[str] = None):
+        """
+        Download file from HTTP/HTTPS.
+        Note: version_id is ignored as HTTP doesn't support versioning.
+        """
+        # Don't pass version_id to HTTP filesystem
+        return await self.fs._get_file(lpath, rpath, callback=callback)
+
     async def _fetch_dir(
         self, prefix: str, pbar, result_queue
     ) -> set[str]:
