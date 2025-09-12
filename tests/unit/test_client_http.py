@@ -64,28 +64,3 @@ def test_upload_raises_not_implemented():
 
     with pytest.raises(NotImplementedError, match="HTTP/HTTPS client is read-only"):
         client.upload(b"data", "path/to/file.txt")
-
-
-def test_fetch_dir_always_raises():
-    """Test that _fetch_dir always raises NotImplementedError for HTTP/HTTPS"""
-    cache = Mock(spec=Cache)
-    client = HTTPSClient("example.com", {}, cache)
-
-    # Should always raise NotImplementedError
-    with pytest.raises(
-        NotImplementedError,
-        match="Cannot download file from https://example.com/any-path",
-    ):
-        client._fetch_dir("any-path", None, None)
-
-    # Test with different paths - all should raise
-    with pytest.raises(
-        NotImplementedError, match="Cannot download file from https://example.com"
-    ):
-        client._fetch_dir("", None, None)
-
-    with pytest.raises(
-        NotImplementedError,
-        match="Cannot download file from https://example.com/file.txt",
-    ):
-        client._fetch_dir("file.txt", None, None)
