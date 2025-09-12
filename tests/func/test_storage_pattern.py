@@ -77,7 +77,6 @@ def tmp_dir(tmp_path):
 
 
 def test_simple_wildcard(tmp_dir):
-    # Single level wildcard
     result = dc.read_storage(f"{tmp_dir}/deep/level1/temp/*.tmp")
     names = {f.name for f in result.to_values("file")}
     assert names == {"temp1.tmp", "temp2.tmp"}
@@ -262,20 +261,15 @@ def test_hugging_face_glob_patterns():
 
 
 def test_brace_expansion_numeric_ranges(tmp_dir):
-    """Test numeric range brace expansion in read_storage"""
-    # Create the deep directory first
     (tmp_dir / "deep").mkdir(exist_ok=True)
 
-    # Create test files with numeric names
     for i in range(1, 6):
         (tmp_dir / "deep" / f"file{i}.txt").write_text(f"content {i}")
 
-    # Test simple numeric range
     result = dc.read_storage(f"{tmp_dir}/deep/file{{1..3}}.txt")
     files = sorted(f.name for f in result.to_values("file"))
     assert files == ["file1.txt", "file2.txt", "file3.txt"]
 
-    # Test zero-padded range
     for i in range(1, 10):
         (tmp_dir / "deep" / f"data{str(i).zfill(2)}.log").write_text(f"log {i}")
 
@@ -291,40 +285,28 @@ def test_brace_expansion_numeric_ranges(tmp_dir):
 
 
 def test_brace_expansion_character_ranges(tmp_dir):
-    """Test character range brace expansion in read_storage"""
-    # Create the deep directory first
     (tmp_dir / "deep").mkdir(exist_ok=True)
-
-    # Create test directories with character names
     for char in "abcde":
         dir_path = tmp_dir / "deep" / f"dir-{char}"
         dir_path.mkdir()
         (dir_path / "file.txt").write_text(f"content {char}")
 
-    # Test character range
     result = dc.read_storage(f"{tmp_dir}/deep/dir-{{a..c}}/file.txt")
-    # Extract directory names from the source paths
     dirs = sorted(f.source.split("/")[-1] for f in result.to_values("file"))
     assert dirs == ["dir-a", "dir-b", "dir-c"]
 
 
 def test_brace_expansion_combined_patterns(tmp_dir):
-    """Test combined brace expansion patterns"""
-    # Create the deep directory first
     (tmp_dir / "deep").mkdir(exist_ok=True)
-
-    # Create test files for year-month pattern
     for year in ["2005"]:
         for month in range(1, 13):
             filename = f"data-{year}-{str(month).zfill(2)}.csv"
             (tmp_dir / "deep" / filename).write_text(f"data {year}-{month}")
 
-    # Test year-month pattern with zero-padded range
     result = dc.read_storage(f"{tmp_dir}/deep/data-2005-{{01..03}}.csv")
     files = sorted([f.name for f in result.to_values("file")])
     assert files == ["data-2005-01.csv", "data-2005-02.csv", "data-2005-03.csv"]
 
-    # Test combined with wildcards
     result = dc.read_storage(f"{tmp_dir}/deep/data-*-{{10..12}}.csv")
     files = sorted(f.name for f in result.to_values("file"))
     assert files == ["data-2005-10.csv", "data-2005-11.csv", "data-2005-12.csv"]

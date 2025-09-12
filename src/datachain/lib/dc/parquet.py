@@ -25,36 +25,44 @@ def read_parquet(
 ) -> "DataChain":
     """Generate chain from parquet files.
 
-        Parameters:
-            path: Storage path(s) or URI(s). Can be a local path or start with a
-                storage prefix like `s3://`, `gs://`, `az://`, `hf://` or "file:///"
-    .
-                Supports glob patterns:
-                  - `*` : wildcard
-                  - `**` : recursive wildcard
-                  - `?` : single character
-                  - `{a,b}` : brace expansion list
-                  - `{1..9}` : brace numeric or alphabetic range
-            partitioning: Any pyarrow partitioning schema.
-            output: Dictionary defining column names and their corresponding types.
-            column: Created column name.
-            model_name: Generated model name.
-            source: Whether to include info about the source file.
-            session: Session to use for the chain.
-            settings: Settings to use for the chain.
+    Parameters:
+        path: Storage path(s) or URI(s). Can be a local path or start with a
+            storage prefix like `s3://`, `gs://`, `az://`, `hf://` or "file:///".
+            Supports glob patterns:
+              - `*` : wildcard
+              - `**` : recursive wildcard
+              - `?` : single character
+              - `{a,b}` : brace expansion list
+              - `{1..9}` : brace numeric or alphabetic range
+        partitioning: Any pyarrow partitioning schema.
+        output: Dictionary defining column names and their corresponding types.
+        column: Created column name.
+        model_name: Generated model name.
+        source: Whether to include info about the source file.
+        session: Session to use for the chain.
+        settings: Settings to use for the chain.
 
-        Example:
-            Reading a single file:
-            ```py
-            import datachain as dc
-            dc.read_parquet("s3://mybucket/file.parquet")
-            ```
+    Example:
+        Reading a single file:
+        ```py
+        import datachain as dc
+        dc.read_parquet("s3://mybucket/file.parquet")
+        ```
 
-            Reading a partitioned dataset from a directory:
-            ```py
-            import datachain as dc
-            dc.read_parquet("s3://mybucket/dir")
-            ```
+        All files from a directory:
+        ```py
+        dc.read_parquet("s3://mybucket/dir/")
+        ```
+
+        Only parquet files from a directory, and all it's subdirectories:
+        ```py
+        dc.read_parquet("s3://mybucket/dir/**/*.parquet")
+        ```
+
+        Using filename patterns - numeric, list, starting with zeros:
+        ```py
+        dc.read_parquet("s3://mybucket/202{1..4}/{yellow,green}-{01..12}.parquet")
+        ```
     """
     from .storage import read_storage
 

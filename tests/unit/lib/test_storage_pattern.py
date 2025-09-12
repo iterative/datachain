@@ -1,11 +1,7 @@
-"""Tests for glob pattern support in read_storage()"""
-
-# Ensure the datasets module is loaded before we try to patch it
 from datachain.lib.dc.storage_pattern import expand_brace_pattern, split_uri_pattern
 
 
 def test_split_uri_pattern_no_pattern():
-    """URIs without patterns should return None for pattern"""
     assert split_uri_pattern("s3://bucket/dir") == ("s3://bucket/dir", None)
     assert split_uri_pattern("s3://bucket/dir/") == ("s3://bucket/dir/", None)
     assert split_uri_pattern("file:///home/user/data") == (
@@ -16,7 +12,6 @@ def test_split_uri_pattern_no_pattern():
 
 
 def test_split_uri_pattern_wildcard():
-    """Test basic wildcard patterns like *.mp3"""
     assert split_uri_pattern("s3://bucket/dir/*.mp3") == (
         "s3://bucket/dir",
         "*.mp3",
@@ -27,7 +22,6 @@ def test_split_uri_pattern_wildcard():
 
 
 def test_split_uri_pattern_globstar():
-    """Test recursive globstar patterns like **/*.mp3"""
     assert split_uri_pattern("s3://bucket/**/*.mp3") == ("s3://bucket", "**/*.mp3")
     assert split_uri_pattern("s3://bucket/dir/**/*.txt") == (
         "s3://bucket/dir",
@@ -40,7 +34,6 @@ def test_split_uri_pattern_globstar():
 
 
 def test_split_uri_pattern_brace_expansion():
-    """Test brace expansion patterns like *.{mp3,wav}"""
     assert split_uri_pattern("s3://bucket/*.{mp3,wav}") == (
         "s3://bucket",
         "*.{mp3,wav}",
@@ -56,7 +49,6 @@ def test_split_uri_pattern_brace_expansion():
 
 
 def test_split_uri_pattern_question_mark():
-    """Test question mark wildcards like file?.txt"""
     assert split_uri_pattern("s3://bucket/file?.txt") == (
         "s3://bucket",
         "file?.txt",
@@ -72,7 +64,6 @@ def test_split_uri_pattern_question_mark():
 
 
 def test_split_uri_pattern_combined():
-    """Test combinations of different glob patterns"""
     assert split_uri_pattern("s3://bucket/**/test?.{mp3,wav}") == (
         "s3://bucket",
         "**/test?.{mp3,wav}",
@@ -84,33 +75,21 @@ def test_split_uri_pattern_combined():
 
 
 def test_split_uri_pattern_edge_cases():
-    """Test edge cases and special scenarios"""
-    # Root level patterns
     assert split_uri_pattern("s3://bucket/*") == ("s3://bucket", "*")
     assert split_uri_pattern("s3://bucket/**") == ("s3://bucket", "**")
 
-    # Pattern only in filename part
     assert split_uri_pattern("s3://bucket/dir/subdir/*.mp3") == (
         "s3://bucket/dir/subdir",
         "*.mp3",
     )
 
-    # Multiple wildcards
     assert split_uri_pattern("s3://bucket/*/*.mp3") == ("s3://bucket", "*/*.mp3")
 
 
 def test_expand_brace_pattern():
-    """Test conversion of brace patterns to glob patterns"""
-    # Single brace expansion
     assert expand_brace_pattern("*.{mp3,wav}") == ["*.mp3", "*.wav"]
-
-    # Multiple extensions
     assert expand_brace_pattern("*.{jpg,png,gif}") == ["*.jpg", "*.png", "*.gif"]
-
-    # Nested patterns
     assert expand_brace_pattern("**/*.{json,jsonl}") == ["**/*.json", "**/*.jsonl"]
-
-    # No braces - return as is
     assert expand_brace_pattern("*.txt") == ["*.txt"]
 
     # Complex pattern
@@ -122,15 +101,12 @@ def test_expand_brace_pattern():
 
 
 def test_expand_brace_pattern_numeric_ranges():
-    """Test numeric range expansion"""
-    # Simple numeric range
     assert expand_brace_pattern("file{1..3}.txt") == [
         "file1.txt",
         "file2.txt",
         "file3.txt",
     ]
 
-    # Larger range
     assert expand_brace_pattern("file{10..13}") == [
         "file10",
         "file11",
@@ -138,14 +114,12 @@ def test_expand_brace_pattern_numeric_ranges():
         "file13",
     ]
 
-    # Zero-padded range
     assert expand_brace_pattern("file{01..03}.txt") == [
         "file01.txt",
         "file02.txt",
         "file03.txt",
     ]
 
-    # Mixed padding (should use max width)
     assert expand_brace_pattern("file{01..10}.txt") == [
         "file01.txt",
         "file02.txt",
@@ -159,7 +133,6 @@ def test_expand_brace_pattern_numeric_ranges():
         "file10.txt",
     ]
 
-    # Reverse range
     assert expand_brace_pattern("file{3..1}.txt") == [
         "file3.txt",
         "file2.txt",
@@ -168,24 +141,17 @@ def test_expand_brace_pattern_numeric_ranges():
 
 
 def test_expand_brace_pattern_character_ranges():
-    """Test character range expansion"""
-    # Simple character range
     assert expand_brace_pattern("file{a..c}.txt") == [
         "filea.txt",
         "fileb.txt",
         "filec.txt",
     ]
 
-    # Uppercase range
     assert expand_brace_pattern("file{A..C}") == ["fileA", "fileB", "fileC"]
-
-    # Reverse character range
     assert expand_brace_pattern("file{c..a}") == ["filec", "fileb", "filea"]
 
 
 def test_expand_brace_pattern_complex():
-    """Test complex brace patterns with multiple expansions"""
-    # Multiple brace patterns in one string
     assert expand_brace_pattern("{a..b}/file{1..2}.txt") == [
         "a/file1.txt",
         "a/file2.txt",
@@ -193,13 +159,11 @@ def test_expand_brace_pattern_complex():
         "b/file2.txt",
     ]
 
-    # Range in path component
     assert expand_brace_pattern("dir{1..2}/subdir/file.txt") == [
         "dir1/subdir/file.txt",
         "dir2/subdir/file.txt",
     ]
 
-    # Mix of comma-separated and range
     result = expand_brace_pattern("file{1..2}.{txt,log}")
     expected = ["file1.txt", "file1.log", "file2.txt", "file2.log"]
     assert sorted(result) == sorted(expected)
