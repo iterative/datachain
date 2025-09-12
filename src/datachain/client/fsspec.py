@@ -93,10 +93,11 @@ class Client(ABC):
         self.uri = self.get_uri(self.name)
 
     @staticmethod
-    def get_implementation(url: Union[str, os.PathLike[str]]) -> type["Client"]:
+    def get_implementation(url: Union[str, os.PathLike[str]]) -> type["Client"]:  # noqa: PLR0911
         from .azure import AzureClient
         from .gcs import GCSClient
         from .hf import HfClient
+        from .http import HTTPClient, HTTPSClient
         from .local import FileClient
         from .s3 import ClientS3
 
@@ -114,6 +115,10 @@ class Client(ABC):
             return FileClient
         if protocol == HfClient.protocol:
             return HfClient
+        if protocol == HTTPClient.protocol:
+            return HTTPClient
+        if protocol == HTTPSClient.protocol:
+            return HTTPSClient
 
         raise NotImplementedError(f"Unsupported protocol: {protocol}")
 
