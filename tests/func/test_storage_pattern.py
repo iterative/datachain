@@ -263,6 +263,9 @@ def test_hugging_face_glob_patterns():
 
 def test_brace_expansion_numeric_ranges(tmp_dir):
     """Test numeric range brace expansion in read_storage"""
+    # Create the deep directory first
+    (tmp_dir / "deep").mkdir(exist_ok=True)
+    
     # Create test files with numeric names
     for i in range(1, 6):
         (tmp_dir / "deep" / f"file{i}.txt").write_text(f"content {i}")
@@ -289,6 +292,9 @@ def test_brace_expansion_numeric_ranges(tmp_dir):
 
 def test_brace_expansion_character_ranges(tmp_dir):
     """Test character range brace expansion in read_storage"""
+    # Create the deep directory first
+    (tmp_dir / "deep").mkdir(exist_ok=True)
+    
     # Create test directories with character names
     for char in "abcde":
         dir_path = tmp_dir / "deep" / f"dir-{char}"
@@ -304,6 +310,9 @@ def test_brace_expansion_character_ranges(tmp_dir):
 
 def test_brace_expansion_combined_patterns(tmp_dir):
     """Test combined brace expansion patterns"""
+    # Create the deep directory first
+    (tmp_dir / "deep").mkdir(exist_ok=True)
+    
     # Create test files for year-month pattern
     for year in ["2005"]:
         for month in range(1, 13):
