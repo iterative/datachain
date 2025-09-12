@@ -91,7 +91,7 @@ datasets that evolve over time and may occasionally have processing errors.
     import datachain as dc
 
     def process_file(file: dc.File) -> tuple[str, str, str]:
-        """Analyze file a file, may occasionally fail."""
+        """Analyze a file, may occasionally fail."""
         try:
             # Your processing logic here
             content = file.read_text()
