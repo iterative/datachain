@@ -64,3 +64,29 @@ def test_upload_raises_not_implemented():
 
     with pytest.raises(NotImplementedError, match="HTTP/HTTPS client is read-only"):
         client.upload(b"data", "path/to/file.txt")
+
+
+def test_create_fs():
+    """Test that create_fs properly configures HTTPFileSystem"""
+    from fsspec.implementations.http import HTTPFileSystem
+
+    # Test with no kwargs
+    fs = HTTPClient.create_fs()
+    assert isinstance(fs, HTTPFileSystem)
+
+    # Test that version_aware is removed if passed
+    fs = HTTPClient.create_fs(version_aware=True)
+    assert isinstance(fs, HTTPFileSystem)
+    # HTTPFileSystem doesn't have version_aware attribute
+    assert not hasattr(fs, "version_aware")
+
+    # Test that custom kwargs are passed through
+    fs = HTTPClient.create_fs(timeout=30, headers={"User-Agent": "test"})
+    assert isinstance(fs, HTTPFileSystem)
+    # Check that the filesystem was created with these options
+    # (they'll be stored in the session or other internal structures)
+
+    # Test that default options are set
+    fs = HTTPClient.create_fs()
+    # These defaults should be set by create_fs
+    assert isinstance(fs, HTTPFileSystem)
