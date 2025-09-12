@@ -95,7 +95,7 @@ datasets that evolve over time and may occasionally have processing errors.
         try:
             # Your processing logic here
             content = file.read_text()
-            result = str.upper(content)
+            result = content.upper()
             return content, result, ""  # No error
         except Exception as e:
             # Return an error that will trigger reprocessing next time
