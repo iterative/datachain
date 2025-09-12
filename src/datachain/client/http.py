@@ -112,18 +112,23 @@ class HTTPClient(Client):
             # HTTP doesn't support versioning, ignore it silently
             pass
 
-        # Check if rel_path already contains the full URL path including domain
-        # This happens when File has source="https://" and path="domain.com/path/file"
-        if rel_path and "/" in rel_path:
-            # Check if the first part looks like a domain
-            first_part = rel_path.split("/")[0]
-            if "." in first_part and not first_part.startswith("."):
-                # This looks like domain.com/path/file format
-                # Just prepend the protocol
-                return f"{self.protocol}://{rel_path}"
+        # Check if self.name already contains the protocol (shouldn't happen but defensive)
+        if self.name.startswith(("http://", "https://")):
+            # Name already has protocol, use it as-is
+            base_url = self.name
+        else:
+            # Check if rel_path already contains the full URL path including domain
+            # This happens when File has source="https://" and path="domain.com/path/file"
+            if rel_path and "/" in rel_path:
+                # Check if the first part looks like a domain
+                first_part = rel_path.split("/")[0]
+                if "." in first_part and not first_part.startswith("."):
+                    # This looks like domain.com/path/file format
+                    # Just prepend the protocol
+                    return f"{self.protocol}://{rel_path}"
 
-        # Normal case: prepend protocol and name
-        base_url = f"{self.protocol}://{self.name}"
+            # Normal case: prepend protocol and name
+            base_url = f"{self.protocol}://{self.name}"
 
         if rel_path:
             # Ensure single slash between base and path
@@ -183,6 +188,15 @@ class HTTPClient(Client):
             "HTTP/HTTPS client is read-only. Upload operations are not supported."
         )
 
+    def get_file_info(self, path: str, version_id: Optional[str] = None) -> "File":
+        """
+        Get file info for HTTP/HTTPS file.
+        Note: version_id is ignored as HTTP doesn't support versioning.
+        """
+        # HTTP doesn't support versioning, don't pass version_id
+        info = self.fs.info(self.get_full_path(path))
+        return self.info_to_file(info, path)
+
     async def _fetch_dir(
         self, prefix: str, pbar, result_queue
     ) -> set[str]:
@@ -193,7 +207,26 @@ class HTTPClient(Client):
         full_url = self.get_full_path(prefix)
 
         try:
-            # Use the filesystem's ls method which parses HTML for links
+            # First, check if this might be a direct file URL (not a directory)
+            # Try to get file info directly
+            try:
+                info = await self.fs._info(full_url)
+                if info.get("type") == "file":
+                    # This is a direct file URL, not a directory
+                    # Extract the filename from the URL
+                    parsed = urlparse(full_url)
+                    filename = parsed.path.split("/")[-1] if parsed.path else "file"
+                    
+                    # Create file info for this single file
+                    file = self.info_to_file(info, prefix if prefix else filename)
+                    await result_queue.put([file])
+                    pbar.update(1)
+                    return set()  # No subdirectories for a single file
+            except (FileNotFoundError, OSError):
+                # Not a direct file, try directory listing
+                pass
+
+            # Try directory listing
             infos = await self.fs._ls(full_url, detail=True)
 
             files = []

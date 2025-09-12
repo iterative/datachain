@@ -103,6 +103,12 @@ class TestHTTPClient:
         client_empty = HTTPClient("", {}, cache, protocol="https")
         full_domain_path = "d37ci6vzurychx.cloudfront.net/trip-data/file.parquet"
         assert client_empty.get_full_path(full_domain_path) == f"https://{full_domain_path}"
+        
+        # Test case when client name already has protocol (defensive check)
+        client_with_protocol = HTTPClient("https://example.com", {}, cache, protocol="https")
+        assert client_with_protocol.get_full_path("file.txt") == "https://example.com/file.txt"
+        # Should not create double https://
+        assert "https://https://" not in client_with_protocol.get_full_path("file.txt")
 
     def test_get_full_path_http(self):
         """Test full path construction for HTTP"""
