@@ -208,7 +208,7 @@ def _expand_single_braces(pattern: str) -> list[str]:
     return expanded
 
 
-def _expand_range(range_spec: str) -> list[str]: # noqa: PLR0911
+def _expand_range(range_spec: str) -> list[str]:  # noqa: PLR0911
     """Expand range patterns like 1..10, 01..10, or a..z."""
     if ".." not in range_spec:
         return [range_spec]
