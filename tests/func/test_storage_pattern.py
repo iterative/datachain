@@ -298,7 +298,7 @@ def test_brace_expansion_character_ranges(tmp_dir):
     # Test character range
     result = dc.read_storage(f"{tmp_dir}/deep/dir-{{a..c}}/file.txt")
     # Extract directory names from the source paths
-    dirs = sorted(set(f.source.split("/")[-1] for f in result.to_values("file")))
+    dirs = sorted(f.source.split("/")[-1] for f in result.to_values("file"))
     assert dirs == ["dir-a", "dir-b", "dir-c"]
 
 
@@ -312,7 +312,7 @@ def test_brace_expansion_combined_patterns(tmp_dir):
 
     # Test year-month pattern with zero-padded range
     result = dc.read_storage(f"{tmp_dir}/deep/data-2005-{{01..03}}.csv")
-    files = sorted(f.name for f in result.to_values("file"))
+    files = sorted([f.name for f in result.to_values("file")])
     assert files == ["data-2005-01.csv", "data-2005-02.csv", "data-2005-03.csv"]
 
     # Test combined with wildcards
