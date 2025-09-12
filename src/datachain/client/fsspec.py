@@ -97,6 +97,7 @@ class Client(ABC):
         from .azure import AzureClient
         from .gcs import GCSClient
         from .hf import HfClient
+        from .http import HTTPClient
         from .local import FileClient
         from .s3 import ClientS3
 
@@ -114,6 +115,8 @@ class Client(ABC):
             return FileClient
         if protocol == HfClient.protocol:
             return HfClient
+        if protocol in ("http", "https"):
+            return HTTPClient
 
         raise NotImplementedError(f"Unsupported protocol: {protocol}")
 
