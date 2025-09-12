@@ -119,3 +119,87 @@ def test_expand_brace_pattern():
         "dir/*.wav",
         "dir/*.flac",
     ]
+
+
+def test_expand_brace_pattern_numeric_ranges():
+    """Test numeric range expansion"""
+    # Simple numeric range
+    assert expand_brace_pattern("file{1..3}.txt") == [
+        "file1.txt",
+        "file2.txt",
+        "file3.txt",
+    ]
+
+    # Larger range
+    assert expand_brace_pattern("file{10..13}") == [
+        "file10",
+        "file11",
+        "file12",
+        "file13",
+    ]
+
+    # Zero-padded range
+    assert expand_brace_pattern("file{01..03}.txt") == [
+        "file01.txt",
+        "file02.txt",
+        "file03.txt",
+    ]
+
+    # Mixed padding (should use max width)
+    assert expand_brace_pattern("file{01..10}.txt") == [
+        "file01.txt",
+        "file02.txt",
+        "file03.txt",
+        "file04.txt",
+        "file05.txt",
+        "file06.txt",
+        "file07.txt",
+        "file08.txt",
+        "file09.txt",
+        "file10.txt",
+    ]
+
+    # Reverse range
+    assert expand_brace_pattern("file{3..1}.txt") == [
+        "file3.txt",
+        "file2.txt",
+        "file1.txt",
+    ]
+
+
+def test_expand_brace_pattern_character_ranges():
+    """Test character range expansion"""
+    # Simple character range
+    assert expand_brace_pattern("file{a..c}.txt") == [
+        "filea.txt",
+        "fileb.txt",
+        "filec.txt",
+    ]
+
+    # Uppercase range
+    assert expand_brace_pattern("file{A..C}") == ["fileA", "fileB", "fileC"]
+
+    # Reverse character range
+    assert expand_brace_pattern("file{c..a}") == ["filec", "fileb", "filea"]
+
+
+def test_expand_brace_pattern_complex():
+    """Test complex brace patterns with multiple expansions"""
+    # Multiple brace patterns in one string
+    assert expand_brace_pattern("{a..b}/file{1..2}.txt") == [
+        "a/file1.txt",
+        "a/file2.txt",
+        "b/file1.txt",
+        "b/file2.txt",
+    ]
+
+    # Range in path component
+    assert expand_brace_pattern("dir{1..2}/subdir/file.txt") == [
+        "dir1/subdir/file.txt",
+        "dir2/subdir/file.txt",
+    ]
+
+    # Mix of comma-separated and range
+    result = expand_brace_pattern("file{1..2}.{txt,log}")
+    expected = ["file1.txt", "file1.log", "file2.txt", "file2.log"]
+    assert sorted(result) == sorted(expected)

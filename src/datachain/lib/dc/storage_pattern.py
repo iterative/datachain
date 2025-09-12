@@ -140,8 +140,12 @@ def should_use_recursion(pattern: str, user_recursive: bool) -> bool:
 
 def expand_brace_pattern(pattern: str) -> list[str]:
     """
-    Recursively expand brace patterns like *.{mp3,wav} into multiple glob patterns.
-    Handles nested and multiple brace patterns.
+    Recursively expand brace patterns into multiple glob patterns.
+    Supports:
+    - Comma-separated lists: *.{mp3,wav}
+    - Numeric ranges: file{1..10}
+    - Zero-padded numeric ranges: file{01..10}
+    - Character ranges: file{a..z}
 
     Args:
         pattern: Pattern that may contain brace expansion
@@ -151,9 +155,10 @@ def expand_brace_pattern(pattern: str) -> list[str]:
 
     Examples:
         "*.{mp3,wav}" -> ["*.mp3", "*.wav"]
+        "file{1..3}" -> ["file1", "file2", "file3"]
+        "file{01..03}" -> ["file01", "file02", "file03"]
+        "file{a..c}" -> ["filea", "fileb", "filec"]
         "{a,b}/{c,d}" -> ["a/c", "a/d", "b/c", "b/d"]
-        "*.txt" -> ["*.txt"]
-        "{{a,b}}" -> ["{a}", "{b}"]  # Handle double braces
     """
     if "{" not in pattern or "}" not in pattern:
         return [pattern]
@@ -184,16 +189,69 @@ def _expand_single_braces(pattern: str) -> list[str]:
 
     prefix = pattern[:start]
     suffix = pattern[end + 1 :]
-    options = pattern[start + 1 : end].split(",")
+    brace_content = pattern[start + 1 : end]
+
+    # Check if it's a range pattern (contains ..)
+    if ".." in brace_content:
+        options = _expand_range(brace_content)
+    else:
+        # Regular comma-separated list
+        options = [opt.strip() for opt in brace_content.split(",")]
 
     # Generate all combinations and recursively expand
     expanded = []
     for option in options:
-        combined = prefix + option.strip() + suffix
+        combined = prefix + option + suffix
         # Recursively expand any remaining braces
         expanded.extend(_expand_single_braces(combined))
 
     return expanded
+
+
+def _expand_range(range_spec: str) -> list[str]:
+    """Expand range patterns like 1..10, 01..10, or a..z."""
+    if ".." not in range_spec:
+        return [range_spec]
+
+    parts = range_spec.split("..")
+    if len(parts) != 2:
+        # Invalid range format, return as-is
+        return [range_spec]
+
+    start, end = parts[0], parts[1]
+
+    # Check if it's a numeric range
+    if start.isdigit() and end.isdigit():
+        # Determine if we need zero-padding
+        pad_width = max(len(start), len(end)) if start[0] == "0" or end[0] == "0" else 0
+        start_num = int(start)
+        end_num = int(end)
+
+        if start_num <= end_num:
+            if pad_width > 0:
+                return [str(i).zfill(pad_width) for i in range(start_num, end_num + 1)]
+            else:
+                return [str(i) for i in range(start_num, end_num + 1)]
+        else:
+            # Reverse range
+            if pad_width > 0:
+                return [str(i).zfill(pad_width) for i in range(start_num, end_num - 1, -1)]
+            else:
+                return [str(i) for i in range(start_num, end_num - 1, -1)]
+
+    # Check if it's a single character range
+    elif len(start) == 1 and len(end) == 1 and start.isalpha() and end.isalpha():
+        start_ord = ord(start)
+        end_ord = ord(end)
+
+        if start_ord <= end_ord:
+            return [chr(i) for i in range(start_ord, end_ord + 1)]
+        else:
+            # Reverse range
+            return [chr(i) for i in range(start_ord, end_ord - 1, -1)]
+
+    # Unknown range format, return as-is
+    return [range_spec]
 
 
 def convert_globstar_to_glob(filter_pattern: str) -> str:
