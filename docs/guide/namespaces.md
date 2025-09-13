@@ -163,7 +163,7 @@ ds.show()
 
 ## Removing Namespaces and Projects
 
-Use `delete_namespace` to remove an empty namespace or an empty project within a namespace.
+Use `delete_namespace` to remove an empty namespace or an empty project within a namespace. Delete will fail if the target is not empty.
 
 ### Signature
 
@@ -171,10 +171,8 @@ Use `delete_namespace` to remove an empty namespace or an empty project within a
 def delete_namespace(name: str, session: Optional[Session]) -> None:
 ```
 
-- **`<namespace>`** — deletes the namespace (must contain no projects or datasets)
-- **`<namespace>.<project>`** — deletes the project (must contain no datasets)
-- Call fails if target is not empty
-- Deletion is permanent
+- **`<namespace>`** — deletes the namespace (must contain no projects or datasets).
+- **`<namespace>.<project>`** — deletes the project (must contain no datasets).
 
 ### Examples
 

@@ -19,6 +19,8 @@ for examples of how to create a chain.
 
 ::: datachain.lib.dc.datasets.move_dataset
 
+::: datachain.lib.namespaces.delete
+
 ::: datachain.lib.dc.hf.read_hf
 
 ::: datachain.lib.dc.json.read_json
