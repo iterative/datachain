@@ -102,6 +102,7 @@ postgres = [
 tests = [
   "datachain[torch,audio,remote,vector,hf,video,postgres]",
   "pytest>=8,<9",
+  "pytest-asyncio",
   "pytest-sugar>=0.9.6",
   "pytest-cov>=4.1.0",
   "pytest-mock>=3.12.0",
