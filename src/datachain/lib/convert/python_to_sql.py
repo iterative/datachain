@@ -1,7 +1,13 @@
 import inspect
+import sys
 from datetime import datetime
 from enum import Enum
 from typing import Annotated, Literal, Union, get_args, get_origin
+
+if sys.version_info >= (3, 10):
+    from types import UnionType
+else:
+    UnionType = None
 
 from pydantic import BaseModel
 from typing_extensions import Literal as LiteralEx
@@ -32,6 +38,10 @@ PYTHON_TO_SQL = {
     list: Array,
     dict: JSON,
 }
+
+
+def _is_union(orig) -> bool:
+    return orig == Union or (UnionType and orig is UnionType)
 
 
 def python_to_sql(typ):  # noqa: PLR0911
@@ -69,9 +79,10 @@ def python_to_sql(typ):  # noqa: PLR0911
     if inspect.isclass(orig) and issubclass(dict, orig):
         return JSON
 
-    if orig == Union:
+    if _is_union(orig):
         if len(args) == 2 and (type(None) in args):
-            return python_to_sql(args[0])
+            non_none_arg = args[0] if args[0] is not type(None) else args[1]
+            return python_to_sql(non_none_arg)
 
         if _is_union_str_literal(orig, args):
             return String
@@ -95,7 +106,7 @@ def list_of_args_to_type(args) -> SQLType:
 
 
 def _is_json_inside_union(orig, args) -> bool:
-    if orig == Union and len(args) >= 2:
+    if _is_union(orig) and len(args) >= 2:
         # List in JSON: Union[dict, list[dict]]
         args_no_nones = [arg for arg in args if arg != type(None)]  # noqa: E721
         if len(args_no_nones) == 2:
@@ -112,6 +123,6 @@ def _is_json_inside_union(orig, args) -> bool:
 
 
 def _is_union_str_literal(orig, args) -> bool:
-    if orig != Union:
+    if not _is_union(orig):
         return False
     return all(arg is str or get_origin(arg) in (Literal, LiteralEx) for arg in args)

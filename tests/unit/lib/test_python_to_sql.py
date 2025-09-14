@@ -1,3 +1,4 @@
+import sys
 from collections.abc import Mapping
 from typing import Literal, Optional, Union
 
@@ -43,3 +44,20 @@ def test_list_of_tuples_object():
         python_to_sql(list[tuple[float, MyModel]]).to_dict()
         == Array(Array(JSON)).to_dict()
     )
+
+
+@pytest.mark.skipif(sys.version_info < (3, 10), reason="PEP 604 requires Python 3.10+")
+def test_pep_604_union_syntax():
+    # Import at runtime to avoid syntax errors in Python < 3.10
+    from datachain.sql.types import Int64
+
+    # Create union types without eval
+    if sys.version_info >= (3, 10):
+        # Use runtime type creation for Python 3.10+
+        str_or_none = str | None
+        int_or_none = int | None
+        dict_or_list_dict = dict | list[dict]
+
+        assert python_to_sql(str_or_none) == String
+        assert python_to_sql(int_or_none) == Int64
+        assert python_to_sql(dict_or_list_dict) == JSON
