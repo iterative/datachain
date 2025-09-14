@@ -60,5 +60,5 @@ def test_pep_604_union_syntax():
         assert python_to_sql(int_or_none) == Int64
         assert python_to_sql(dict_or_list_dict) == JSON
 
-        str_literal_union = Literal["a"] | Literal["b"]
+        str_literal_union = Literal["a", "b"]
         assert python_to_sql(str_literal_union) == String
