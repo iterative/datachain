@@ -17,10 +17,15 @@ def test_protocol_detection_https():
     assert client_class == HTTPClient
 
 
-def test_split_url_https():
+def test_split_url():
     domain, path = HTTPClient.split_url("https://example.com/path/to/file.txt")
     assert domain == "example.com"
     assert path == "path/to/file.txt"
+
+    # URL with query and fragment
+    domain, path = HTTPClient.split_url("https://example.com/api?key=123#anchor")
+    assert domain == "example.com"
+    assert path == "api?key=123#anchor"
 
 
 def test_is_root_url():
@@ -136,3 +141,27 @@ def test_open_object():
     client.fs.open = Mock()
     client.open_object(file, use_cache=False)
     client.fs.open.assert_called_once()  # Should fetch from remote, not cache
+
+
+def test_url():
+    cache = Mock(spec=Cache)
+    client = HTTPSClient("example.com", {}, cache)
+    assert client.url("file.txt") == "https://example.com/file.txt"
+
+
+def test_get_file_info():
+    cache = Mock(spec=Cache)
+    client = HTTPSClient("example.com", {}, cache)
+    client.fs.info = Mock(return_value={"size": 2048})
+
+    file = client.get_file_info("file.txt")
+    assert file.path == "file.txt"
+    assert file.size == 2048
+
+
+async def test_fetch_dir():
+    cache = Mock(spec=Cache)
+    client = HTTPSClient("example.com", {}, cache)
+
+    with pytest.raises(NotImplementedError):
+        await client._fetch_dir("prefix", None, None)
