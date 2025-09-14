@@ -1,4 +1,8 @@
-from datachain.lib.dc.storage_pattern import expand_brace_pattern, split_uri_pattern
+from datachain.lib.dc.storage_pattern import (
+    _expand_range,
+    expand_brace_pattern,
+    split_uri_pattern,
+)
 
 
 def test_split_uri_pattern_no_pattern():
@@ -167,3 +171,17 @@ def test_expand_brace_pattern_complex():
     result = expand_brace_pattern("file{1..2}.{txt,log}")
     expected = ["file1.txt", "file1.log", "file2.txt", "file2.log"]
     assert sorted(result) == sorted(expected)
+
+
+def test_expand_brace_pattern_edge_cases():
+    assert _expand_range("abc") == ["abc"]
+    assert _expand_range("1..2..3") == ["1..2..3"]
+
+    # reverse numeric with zero-padding
+    assert expand_brace_pattern("f{03..01}") == ["f03", "f02", "f01"]
+
+    # unknown range format
+    assert _expand_range("aa..zz") == ["aa..zz"]
+
+    # malformed braces - no closing brace
+    assert expand_brace_pattern("f{abc") == ["f{abc"]
