@@ -19,7 +19,7 @@ for examples of how to create a chain.
 
 ::: datachain.lib.dc.datasets.move_dataset
 
-::: datachain.lib.namespaces.delete
+::: datachain.lib.namespaces.delete_namespace
 
 ::: datachain.lib.dc.hf.read_hf
 

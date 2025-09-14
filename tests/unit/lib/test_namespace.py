@@ -7,7 +7,7 @@ from datachain.error import (
     NamespaceNotFoundError,
 )
 from datachain.lib.namespaces import create as create_namespace
-from datachain.lib.namespaces import delete as delete_namespace
+from datachain.lib.namespaces import delete_namespace
 from datachain.lib.namespaces import get as get_namespace
 from datachain.lib.namespaces import ls as ls_namespaces
 from datachain.lib.projects import create as create_project
