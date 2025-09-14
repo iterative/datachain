@@ -45,6 +45,7 @@ from datachain.data_storage.schema import (
 from datachain.dataset import DatasetDependency, DatasetStatus, RowDict
 from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.func.base import Function
+from datachain.hash_utils import hash_column_elements
 from datachain.lib.listing import is_listing_dataset, listing_dataset_expired
 from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf import UDFAdapter, _get_cache
@@ -55,7 +56,6 @@ from datachain.query.session import Session
 from datachain.query.udf import UdfInfo
 from datachain.sql.functions.random import rand
 from datachain.sql.types import SQLType
-from datachain.sql.utils import hash_column_elements
 from datachain.utils import (
     determine_processes,
     determine_workers,

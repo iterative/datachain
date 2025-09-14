@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from datachain.asyn import AsyncMapper
 from datachain.cache import temporary_cache
 from datachain.dataset import RowDict
+from datachain.hash_utils import hash_callable
 from datachain.lib.convert.flatten import flatten
 from datachain.lib.file import DataModel, File
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
@@ -23,7 +24,7 @@ from datachain.query.batch import (
     Partition,
     RowsOutputBatch,
 )
-from datachain.utils import hash_callable, safe_closing
+from datachain.utils import safe_closing
 
 if TYPE_CHECKING:
     from collections import abc
