@@ -156,11 +156,14 @@ class UDFBase(AbstractUDF):
         self._func = None
 
     def hash(self) -> str:
-        func_hash = hash_callable(self._func)
-        output_hash = self.output.hash()
+        parts = [
+            hash_callable(self._func),
+            self.params.hash() if self.params else "",
+            self.output.hash(),
+        ]
 
         return hashlib.sha256(
-            bytes.fromhex(func_hash) + bytes.fromhex(output_hash)
+            b"".join([bytes.fromhex(part) for part in parts])
         ).hexdigest()
 
     def process(self, *args, **kwargs):

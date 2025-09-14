@@ -1,13 +1,17 @@
+import math
+
 import pytest
 import sqlalchemy as sa
+from pydantic import BaseModel
 
 import datachain as dc
 from datachain import C, func
 from datachain.func.func import Func
 from datachain.lib.signal_schema import SignalSchema
-from datachain.lib.udf import Mapper
+from datachain.lib.udf import Aggregator, Generator, Mapper
 from datachain.lib.udf_signature import UdfSignature
 from datachain.query.dataset import (
+    RowGenerator,
     SQLCount,
     SQLDistinct,
     SQLFilter,
@@ -23,6 +27,31 @@ from datachain.query.dataset import (
     Subtract,
     UDFSignal,
 )
+
+
+class CustomFeature(BaseModel):
+    sqrt: float
+    my_name: str
+
+
+def double(x):
+    return x * 2
+
+
+def double_gen(x):
+    yield x * 2
+
+
+def double_gen_multi_arg(x, y):
+    yield x * 2
+    yield y * 2
+
+
+def custom_feature_gen(m_fr):
+    yield CustomFeature(
+        sqrt=math.sqrt(m_fr.count),
+        my_name=m_fr.nnn + "_suf",
+    )
 
 
 @pytest.fixture
@@ -293,31 +322,108 @@ def test_subtract_hash(test_session, numbers_dataset, on, result):
 
 
 @pytest.mark.parametrize(
-    "udf_class,step_class,is_generator,func,params,output,partition_by,result",
+    "func,params,output,result",
     [
         (
-            Mapper,
-            UDFSignal,
-            False,
             lambda x: x * 2,
             ["x"],
             {"double": int},
-            [],
-            "516bdeced4c86baacb1e0e3cc2710e2880715b6658759e60108b6765626de3ce",
+            "decb3165f496aa7df8203d27d58b884a60b2dcec25edcc02d251be78c5cdf834",
+        ),
+        (
+            lambda y: y * 2,
+            ["y"],
+            {"double": int},
+            "47d64007cf9cd8d46efe75e9f18b75a8f974634a5eea739d95692dd499ee247e",
+        ),
+        (
+            double,
+            ["x"],
+            {"double": int},
+            "5b38846a0582d96d20d6eb7b633c1f6024aabd98dab86bb0636d33e12b4232cd",
+        ),
+        (
+            lambda m_fr: CustomFeature(
+                sqrt=math.sqrt(m_fr.count),
+                my_name=m_fr.nnn + "_suf",
+            ),
+            ["t1"],
+            {"x": CustomFeature},
+            "c877e5f489a3adbe9fa94df79767d24dc6b64b404f68d910ea59fe4a8510cb60",
         ),
     ],
 )
-def test_udf_hash(
-    test_session,
-    udf_class,
-    step_class,
-    is_generator,
+def test_udf_mapper_hash(
+    func,
+    params,
+    output,
+    result,
+):
+    sign = UdfSignature.parse("", {}, func, params, output, False)
+    udf_adapter = Mapper._create(sign, SignalSchema(sign.params)).to_udf_wrapper()
+    assert UDFSignal(udf_adapter, None).hash() == result
+
+
+@pytest.mark.parametrize(
+    "func,params,output,result",
+    [
+        (
+            double_gen,
+            ["x"],
+            {"double": int},
+            "ecf2a08ba539c174857215b563933612830fb311eb3c030d7bc1deb1bbe24c55",
+        ),
+        (
+            double_gen_multi_arg,
+            ["x", "y"],
+            {"double": int},
+            "e6ab21fef879b0e5992f27c2834e34fedccd8ffed9b668593c5cf4efd3431929",
+        ),
+        (
+            custom_feature_gen,
+            ["t1"],
+            {"x": CustomFeature},
+            "967d649d5385c8d3d1231daa57d066e0c1dfcbb02c871a57960ed148e5223317",
+        ),
+    ],
+)
+def test_udf_generator_hash(
+    func,
+    params,
+    output,
+    result,
+):
+    sign = UdfSignature.parse("", {}, func, params, output, False)
+    udf_adapter = Generator._create(sign, SignalSchema(sign.params)).to_udf_wrapper()
+    assert RowGenerator(udf_adapter, None).hash() == result
+
+
+@pytest.mark.parametrize(
+    "func,params,output,partition_by,result",
+    [
+        (
+            double_gen,
+            ["x"],
+            {"double": int},
+            [C("x")],
+            "9ade6a992886adad25d3ab1e00cea23f3dc5d15cf27a86558fd744646393bad1",
+        ),
+        (
+            custom_feature_gen,
+            ["t1"],
+            {"x": CustomFeature},
+            [C.t1.my_name],
+            "73968e35606d694e6cd4b98c168560427e888f66fa9c1b4f90ed6af8ec482795",
+        ),
+    ],
+)
+def test_udf_aggregator_hash(
     func,
     params,
     output,
     partition_by,
     result,
 ):
-    sign = UdfSignature.parse("", {}, func, params, output, is_generator)
-    udf_adapter = udf_class._create(sign, SignalSchema(sign.params)).to_udf_wrapper()
-    assert step_class(udf_adapter, partition_by).hash() == result
+    sign = UdfSignature.parse("", {}, func, params, output, False)
+    udf_adapter = Aggregator._create(sign, SignalSchema(sign.params)).to_udf_wrapper()
+    assert RowGenerator(udf_adapter, None, partition_by=partition_by).hash() == result
