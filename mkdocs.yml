@@ -119,6 +119,7 @@ nav:
           - Local DB Migrations: guide/db_migrations.md
       - 🔗 Studio:
           - API: studio/api/index.md
+          - Webhooks: studio/webhooks.md
       - 🤝 Contributing: contributing.md
 
   - DataChain Website ↗: https://datachain.ai" target="_blank"
