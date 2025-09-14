@@ -43,7 +43,8 @@ PYTHON_TO_SQL = {
 def _is_union(orig) -> bool:
     if orig == Union:
         return True
-    return UnionType is not None and orig is UnionType
+    # some code is unreachab in python<3.10
+    return UnionType is not None and orig is UnionType  # type: ignore[unreachable]
 
 
 def python_to_sql(typ):  # noqa: PLR0911
