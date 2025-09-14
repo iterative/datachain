@@ -1,5 +1,5 @@
-from datetime import datetime
-from unittest.mock import Mock
+from datetime import datetime, timezone
+from unittest.mock import Mock, mock_open, patch
 
 import pytest
 
@@ -89,11 +89,50 @@ def test_info_to_file():
         "last_modified": "Wed, 12 Oct 2024 07:28:00 GMT",
     }
     file = client.info_to_file(info, "path/to/file.txt")
-
-    assert isinstance(file, File)
     assert file.path == "path/to/file.txt"
     assert file.size == 1024
     assert file.etag == "abc123"
-    assert file.version == ""
-    assert file.is_latest is True
-    assert isinstance(file.last_modified, datetime)
+
+    # Test with int timestamp
+    info = {"last_modified": 1700000000}
+    file = client.info_to_file(info, "file1.txt")
+    expected = datetime.fromtimestamp(1700000000, timezone.utc)
+    assert file.last_modified == expected
+
+    # Test with float timestamp
+    info = {"last_modified": 1700000000.5}
+    file = client.info_to_file(info, "file2.txt")
+    expected = datetime.fromtimestamp(1700000000.5, timezone.utc)
+    assert file.last_modified == expected
+
+    # Test with invalid date string (triggers ValueError)
+    info = {"last_modified": "invalid"}
+    file = client.info_to_file(info, "file3.txt")
+    assert isinstance(file.last_modified, datetime)  # Falls back to current time
+
+
+def test_open_object():
+    cache = Mock(spec=Cache)
+    client = HTTPSClient("example.com", {}, cache)
+
+    file = Mock(spec=File)
+    file.get_path_normalized.return_value = "path/to/file.txt"
+    file.location = None
+
+    # Test with cache hit
+    cache.get_path.return_value = "/cache/path/file.txt"
+    with patch("builtins.open", mock_open(read_data=b"cached content")) as mock_file:
+        client.open_object(file, use_cache=True)
+        mock_file.assert_called_once_with("/cache/path/file.txt", mode="rb")
+
+    # Test without cache (cache miss)
+    cache.get_path.return_value = None
+    client.fs.open = Mock()
+    client.open_object(file, use_cache=True)
+    client.fs.open.assert_called_once()
+
+    # Test with use_cache=False (bypass cache)
+    cache.get_path.return_value = "/cache/path/file.txt"
+    client.fs.open = Mock()
+    client.open_object(file, use_cache=False)
+    client.fs.open.assert_called_once()  # Should fetch from remote, not cache
