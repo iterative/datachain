@@ -88,8 +88,8 @@ def delete_namespace(name: str, session: Optional[Session]) -> None:
             as these cannot be removed.
 
     Parameters:
-        name : The name of the namespace.
-        session : Session to use for getting project.
+        name: The name of the namespace.
+        session: Session to use for getting project.
 
     Example:
         ```py
