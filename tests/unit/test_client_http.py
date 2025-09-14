@@ -159,6 +159,7 @@ def test_get_file_info():
     assert file.size == 2048
 
 
+@pytest.mark.asyncio
 async def test_fetch_dir():
     cache = Mock(spec=Cache)
     client = HTTPSClient("example.com", {}, cache)
