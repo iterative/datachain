@@ -41,7 +41,7 @@ PYTHON_TO_SQL = {
 
 
 def _is_union(orig) -> bool:
-    return orig == Union or (UnionType and orig is UnionType)
+    return orig == Union or (UnionType is not None and orig is UnionType)
 
 
 def python_to_sql(typ):  # noqa: PLR0911
