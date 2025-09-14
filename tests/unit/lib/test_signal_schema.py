@@ -1563,3 +1563,27 @@ def test_to_partial_complex_signal_error_invalid_field():
         SignalSchemaError, match="Field nonexistent not found in custom type"
     ):
         schema.to_partial("file.nonexistent")
+
+
+@pytest.mark.parametrize(
+    "schema,result",
+    [
+        (
+            {
+                "name": Optional[str],
+                "feature": Optional[MyType1],
+            },
+            "73aa5b0c9e511027dc3aca0baea50b43a5451aad33f3261cc04c600649ff44ed",
+        ),
+        (
+            {"file": File},
+            "26a08b3793e738814f199c89c4582f9bde052ff3dcba84c2020535063df4c36c",
+        ),
+        (
+            {},
+            "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        ),
+    ],
+)
+def test_hash(schema, result):
+    assert SignalSchema(schema).hash() == result

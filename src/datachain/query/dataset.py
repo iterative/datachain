@@ -59,6 +59,7 @@ from datachain.sql.utils import hash_column_elements
 from datachain.utils import (
     determine_processes,
     determine_workers,
+    ensure_sequence,
     filtered_cloudpickle_dumps,
     get_datachain_executable,
     safe_closing,
@@ -415,9 +416,15 @@ class UDFStep(Step, ABC):
     min_task_size: Optional[int] = None
     batch_size: Optional[int] = None
 
-
     def _hash(self) -> str:
-        raise NotImplementedError
+        partition_by = ensure_sequence(self.partition_by or [])
+        parts = [
+            bytes.fromhex(self.udf.hash()),
+            bytes.fromhex(hash_column_elements(partition_by)),
+            str(self.is_generator).encode(),
+        ]
+
+        return hashlib.sha256(b"".join(parts)).hexdigest()
 
     @abstractmethod
     def create_udf_table(self, query: Select) -> "Table":
@@ -679,9 +686,6 @@ class UDFSignal(UDFStep):
     min_task_size: Optional[int] = None
     batch_size: Optional[int] = None
 
-    def _hash(self) -> str:
-        raise NotImplementedError
-
     def create_udf_table(self, query: Select) -> "Table":
         udf_output_columns: list[sqlalchemy.Column[Any]] = [
             sqlalchemy.Column(col_name, col_type)
@@ -760,9 +764,6 @@ class RowGenerator(UDFStep):
     workers: Union[bool, int] = False
     min_task_size: Optional[int] = None
     batch_size: Optional[int] = None
-
-    def _hash(self) -> str:
-        raise NotImplementedError
 
     def create_udf_table(self, query: Select) -> "Table":
         warehouse = self.catalog.warehouse

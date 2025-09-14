@@ -5,6 +5,8 @@ import datachain as dc
 from datachain import C, func
 from datachain.func.func import Func
 from datachain.lib.signal_schema import SignalSchema
+from datachain.lib.udf import Mapper
+from datachain.lib.udf_signature import UdfSignature
 from datachain.query.dataset import (
     SQLCount,
     SQLDistinct,
@@ -19,6 +21,7 @@ from datachain.query.dataset import (
     SQLSelectExcept,
     SQLUnion,
     Subtract,
+    UDFSignal,
 )
 
 
@@ -287,3 +290,34 @@ def test_group_by_hash(columns, partition_by, result):
 def test_subtract_hash(test_session, numbers_dataset, on, result):
     chain = dc.read_dataset("numbers").filter(C("num") > 50).limit(20)
     assert Subtract(chain._query, test_session.catalog, on).hash() == result
+
+
+@pytest.mark.parametrize(
+    "udf_class,step_class,is_generator,func,params,output,partition_by,result",
+    [
+        (
+            Mapper,
+            UDFSignal,
+            False,
+            lambda x: x * 2,
+            ["x"],
+            {"double": int},
+            [],
+            "516bdeced4c86baacb1e0e3cc2710e2880715b6658759e60108b6765626de3ce",
+        ),
+    ],
+)
+def test_udf_hash(
+    test_session,
+    udf_class,
+    step_class,
+    is_generator,
+    func,
+    params,
+    output,
+    partition_by,
+    result,
+):
+    sign = UdfSignature.parse("", {}, func, params, output, is_generator)
+    udf_adapter = udf_class._create(sign, SignalSchema(sign.params)).to_udf_wrapper()
+    assert step_class(udf_adapter, partition_by).hash() == result

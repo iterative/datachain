@@ -1,4 +1,5 @@
 import glob
+import hashlib
 import io
 import json
 import logging
@@ -537,3 +538,21 @@ def getenv_bool(name: str, default: bool = False) -> bool:
     if val is None:
         return default
     return val.lower() in ("1", "true", "yes", "on")
+
+
+def hash_callable(func):
+    """Calculate hash from callable (e.g function)"""
+    if not callable(func):
+        raise TypeError("Expected a callable")
+    h = hashlib.sha256()
+    h.update(func.__name__.encode())
+    h.update(func.__code__.co_code)
+    h.update(str(func.__defaults__).encode())
+    h.update(str(func.__annotations__).encode())
+    return h.hexdigest()
+
+
+def ensure_sequence(x):
+    if isinstance(x, Sequence) and not isinstance(x, (str, bytes)):
+        return x
+    return [x]

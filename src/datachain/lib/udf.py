@@ -1,3 +1,4 @@
+import hashlib
 import sys
 import traceback
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -22,7 +23,7 @@ from datachain.query.batch import (
     Partition,
     RowsOutputBatch,
 )
-from datachain.utils import safe_closing
+from datachain.utils import hash_callable, safe_closing
 
 if TYPE_CHECKING:
     from collections import abc
@@ -60,6 +61,9 @@ class UDFAdapter:
     output: UDFOutputSpec
     batch_size: Optional[int] = None
     batch: int = 1
+
+    def hash(self) -> str:
+        return self.inner.hash()
 
     def get_batching(self, use_partitioning: bool = False) -> BatchingStrategy:
         if use_partitioning:
@@ -150,6 +154,14 @@ class UDFBase(AbstractUDF):
         self.params: Optional[SignalSchema] = None
         self.output = None
         self._func = None
+
+    def hash(self) -> str:
+        func_hash = hash_callable(self._func)
+        output_hash = self.output.hash()
+
+        return hashlib.sha256(
+            bytes.fromhex(func_hash) + bytes.fromhex(output_hash)
+        ).hexdigest()
 
     def process(self, *args, **kwargs):
         """Processing function that needs to be defined by user"""
