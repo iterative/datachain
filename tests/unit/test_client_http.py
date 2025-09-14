@@ -166,3 +166,21 @@ async def test_fetch_dir():
 
     with pytest.raises(NotImplementedError):
         await client._fetch_dir("prefix", None, None)
+
+
+@pytest.mark.asyncio
+async def test_get_file():
+    cache = Mock(spec=Cache)
+    client = HTTPSClient("example.com", {}, cache)
+
+    async def mock_get_file(lpath, rpath, callback):
+        return "data"
+
+    client.fs._get_file = mock_get_file
+    result = await client.get_file("/local", "/remote", None)
+    assert result == "data"
+
+
+def test_get_uri():
+    assert str(HTTPClient.get_uri("https://example.com")) == "https://example.com"
+    assert str(HTTPClient.get_uri("example.com")) == "https://example.com"
