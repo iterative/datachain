@@ -1,3 +1,4 @@
+from datetime import datetime
 from unittest.mock import Mock
 
 import pytest
@@ -5,6 +6,7 @@ import pytest
 from datachain.cache import Cache
 from datachain.client.fsspec import Client
 from datachain.client.http import HTTPClient, HTTPSClient
+from datachain.lib.file import File
 
 
 def test_protocol_detection_https():
@@ -75,3 +77,23 @@ def test_create_fs():
 
     fs = HTTPClient.create_fs()
     assert isinstance(fs, HTTPFileSystem)
+
+
+def test_info_to_file():
+    cache = Mock(spec=Cache)
+    client = HTTPSClient("example.com", {}, cache)
+
+    info = {
+        "size": 1024,
+        "ETag": '"abc123"',
+        "last_modified": "Wed, 12 Oct 2024 07:28:00 GMT",
+    }
+    file = client.info_to_file(info, "path/to/file.txt")
+
+    assert isinstance(file, File)
+    assert file.path == "path/to/file.txt"
+    assert file.size == 1024
+    assert file.etag == "abc123"
+    assert file.version == ""
+    assert file.is_latest is True
+    assert isinstance(file.last_modified, datetime)
