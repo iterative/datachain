@@ -2,7 +2,19 @@ import pytest
 import sqlalchemy as sa
 
 from datachain import C, func
-from datachain.hash_utils import hash_column_elements
+from datachain.hash_utils import hash_callable, hash_column_elements
+
+
+def double(x):
+    return x * 2
+
+
+def double_arg_annot(x: int):
+    return x * 2
+
+
+def double_arg_and_return_annot(x: int) -> int:
+    return x * 2
 
 
 @pytest.mark.parametrize(
@@ -36,3 +48,28 @@ from datachain.hash_utils import hash_column_elements
 )
 def test_hash_column_elements(expr, result):
     assert hash_column_elements(expr) == result
+
+
+@pytest.mark.parametrize(
+    "func,result",
+    [
+        (
+            lambda x: x * 2,
+            "da39989827ad84f945c7352676ff0b9ad388888ab5d1aa7d0b7dcbc3def83f11",
+        ),
+        (
+            double,
+            "85e734c651a38c659c5cd1ff21df3fa015427613354a2a5c24b15781227b30ad",
+        ),
+        (
+            double_arg_annot,
+            "bcd3314b4b2c08a171f1ee9c8d7c6434c052f46ab98136ca8262fc9cea6fb29a",
+        ),
+        (
+            double_arg_and_return_annot,
+            "77b4f4159e8f83586dbd09e0665c36155030696bbd0053539f7cab6bf7a32e05",
+        ),
+    ],
+)
+def test_hash_callable(func, result):
+    assert hash_callable(func) == result
