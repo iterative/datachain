@@ -77,7 +77,7 @@ def ls(session: Optional[Session] = None) -> list[Namespace]:
     return Session.get(session).catalog.metastore.list_namespaces()
 
 
-def delete_namespace(name: str, session: Optional[Session]) -> None:
+def delete_namespace(name: str, session: Optional[Session] = None) -> None:
     """
     Removes a namespace by name.
 
