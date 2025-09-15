@@ -1,4 +1,5 @@
 import math
+from dataclasses import replace
 
 import pytest
 import sqlalchemy as sa
@@ -11,6 +12,7 @@ from datachain.lib.signal_schema import SignalSchema
 from datachain.lib.udf import Aggregator, Generator, Mapper
 from datachain.lib.udf_signature import UdfSignature
 from datachain.query.dataset import (
+    QueryStep,
     RowGenerator,
     SQLCount,
     SQLDistinct,
@@ -427,3 +429,43 @@ def test_udf_aggregator_hash(
     sign = UdfSignature.parse("", {}, func, params, output, False)
     udf_adapter = Aggregator._create(sign, SignalSchema(sign.params)).to_udf_wrapper()
     assert RowGenerator(udf_adapter, None, partition_by=partition_by).hash() == result
+
+
+@pytest.mark.parametrize(
+    "namespace_name,project_name,name,version,result",
+    [
+        (
+            "default",
+            "default",
+            "numbers",
+            "1.0.4",
+            "8173fb1d88df5cca3e904cbd17a9b80a0c8a682425c32cd95e32e1e196b7eff8",
+        ),
+        (
+            "dev",
+            "animals",
+            "cats",
+            "1.0.1",
+            "e0aec7fe323ae3482ee2e74030a87ebb73dbb823ce970e15fdfcbd43e7abe2da",
+        ),
+        (
+            "system",
+            "listing",
+            "lst__s3://bucket",
+            "1.0.1",
+            "19dff9f21030312c7469de7284cac2841063c22c62a7948a68f25ca018777c6d",
+        ),
+    ],
+)
+def test_query_step_hash(
+    dataset_record, namespace_name, project_name, name, version, result
+):
+    namespace = replace(dataset_record.project.namespace, name=namespace_name)
+    project = dataset_record.project
+    project = replace(project, namespace=namespace)
+    project = replace(project, name=project_name)
+    dataset_record.project = project
+    dataset_record.name = name
+    dataset_record.versions[0].version = version
+
+    assert QueryStep(None, dataset_record, version).hash() == result
