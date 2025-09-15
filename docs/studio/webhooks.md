@@ -253,6 +253,14 @@ else:
     print("Warning: No signature header found")
 ```
 
+## Slack Integration
+
+You can use this webhook feature to send a message to slack as well. To integrate slack with Studio,
+
+1. Using the guide as described in [Slack documentation](https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/) , create an incoming webhook and copy the webhook address in the following format `https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX` .
+2. Use the address to create a webhook in Studio as described [above](#creating-webhooks)
+3. You should now be able to view the message in Slack channel connected.
+
 ## Best practices for using Webhooks
 
 1. You should only subscribe to the webhook events that you need. This will reduce the amount of work your server needs to do.
