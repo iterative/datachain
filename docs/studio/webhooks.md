@@ -28,12 +28,14 @@ Payload:
             "id": "da59df47-d121-4eb6-aa76-dc452755544e",
             "status": "COMPLETE",
             "error_message": "",
+            "name": "job_query.py",
             "created_at": "2021-07-27T16:02:08.070557",
             "updated_at": "2021-07-27T16:22:08.070557",
             "finished_at": "2021-07-27T16:22:08.070557",
             "url": "https://studio.datachain.ai/team/TeamName/datasets/jobs/da59df47-d121-4eb6-aa76-dc452755544e"
         },
         "timestamp": "2021-07-27T16:22:08.070557",
+        "text": "Job job_query.py (da59df47-d121-4eb6-aa76-dc452755544e) changed its status to COMPLETE"
     }
 ```
 
@@ -45,7 +47,8 @@ Header: `http-x-datachain-event`: `PING`.
 Payload:
 ```json
 {
-    "action": "PING"
+    "action": "PING",
+    "message": "Webhook connection test successful"
 }
 ```
 
