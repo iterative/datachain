@@ -88,6 +88,13 @@ def test_delete_namespace(test_session, dev_namespace):
         get_namespace(dev_namespace.name, session=test_session)
 
 
+def test_delete_namespace_no_session():
+    create_namespace("dev", "Dev namespace")
+    delete_namespace("dev")
+    with pytest.raises(NamespaceNotFoundError):
+        get_namespace("dev")
+
+
 def test_delete_namespace_not_found(test_session, dev_namespace):
     with pytest.raises(NamespaceNotFoundError):
         delete_namespace("missing", session=test_session)
