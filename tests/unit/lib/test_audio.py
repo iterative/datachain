@@ -178,7 +178,7 @@ def test_save_audio_validation(audio_file, tmp_path):
     with pytest.raises(ValueError, match="start time must be non-negative"):
         save_audio(audio_file, output=str(tmp_path), start=-1.0, end=1.0)
 
-    with pytest.raises(ValueError, match="Can't save audio.*invalid time range"):
+    with pytest.raises(ValueError, match=r"Can't save audio.*invalid time range"):
         save_audio(audio_file, output=str(tmp_path), start=2.0, end=1.0)
 
 

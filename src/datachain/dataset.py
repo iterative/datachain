@@ -619,7 +619,7 @@ class DatasetRecord:
         if not self.versions:
             return "1.0.0"
 
-        major, minor, patch = semver.parse(self.latest_version)
+        major, _, _ = semver.parse(self.latest_version)
         return semver.create(major + 1, 0, 0)
 
     @property
@@ -630,7 +630,7 @@ class DatasetRecord:
         if not self.versions:
             return "1.0.0"
 
-        major, minor, patch = semver.parse(self.latest_version)
+        major, minor, _ = semver.parse(self.latest_version)
         return semver.create(major, minor + 1, 0)
 
     @property
