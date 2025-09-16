@@ -62,7 +62,7 @@ class HTTPClient(Client):
     @classmethod
     def get_uri(cls, name: str) -> "StorageURI":
         if not name.startswith(("http://", "https://")):
-            return StorageURI(f"https://{name}")
+            return StorageURI(f"{cls.PREFIX}{name}")
         return StorageURI(name)
 
     @classmethod
