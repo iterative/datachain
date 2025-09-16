@@ -73,7 +73,7 @@ def numbers_dataset(test_session):
 
 
 @pytest.mark.parametrize(
-    "inputs,result",
+    "inputs,_hash",
     [
         (
             (C("name"), C("age") * 10, func.avg("id"), C("country").label("country")),
@@ -87,12 +87,12 @@ def numbers_dataset(test_session):
         (("name",), "46eeec88c5f842bd478d3ec87032c49b22adcdd46572463b0acde4b2bac0900a"),
     ],
 )
-def test_select_hash(inputs, result):
-    assert SQLSelect(inputs).hash() == result
+def test_select_hash(inputs, _hash):
+    assert SQLSelect(inputs).hash() == _hash
 
 
 @pytest.mark.parametrize(
-    "inputs,result",
+    "inputs,_hash",
     [
         (
             (C("name"), C("age") * 10, func.avg("id"), C("country").label("country")),
@@ -106,12 +106,12 @@ def test_select_hash(inputs, result):
         (("name",), "e26923a0433e549e680a4bcbc5cb95bb9a523c4b47ae23b07b2a928a609fc498"),
     ],
 )
-def test_select_except_hash(inputs, result):
-    assert SQLSelectExcept(inputs).hash() == result
+def test_select_except_hash(inputs, _hash):
+    assert SQLSelectExcept(inputs).hash() == _hash
 
 
 @pytest.mark.parametrize(
-    "inputs,result",
+    "inputs,_hash",
     [
         (
             (sa.and_(C("name") != "John", C("age") * 10 > 100)),
@@ -124,12 +124,12 @@ def test_select_except_hash(inputs, result):
         ),
     ],
 )
-def test_filter_hash(inputs, result):
-    assert SQLFilter(inputs).hash() == result
+def test_filter_hash(inputs, _hash):
+    assert SQLFilter(inputs).hash() == _hash
 
 
 @pytest.mark.parametrize(
-    "inputs,schema,result",
+    "inputs,schema,_hash",
     [
         (
             {"new_id": func.sum("id")},
@@ -148,17 +148,17 @@ def test_filter_hash(inputs, result):
         ),
     ],
 )
-def test_mutate_hash(inputs, schema, result):
+def test_mutate_hash(inputs, schema, _hash):
     # transforming input into format SQLMutate expects
     inputs = (
         v.label(k).get_column(schema) if isinstance(v, Func) else v.label(k)
         for k, v in inputs.items()
     )
-    assert SQLMutate(inputs, new_schema=None).hash() == result
+    assert SQLMutate(inputs, new_schema=None).hash() == _hash
 
 
 @pytest.mark.parametrize(
-    "inputs,result",
+    "inputs,_hash",
     [
         (
             (C("name"), C("age")),
@@ -172,45 +172,45 @@ def test_mutate_hash(inputs, schema, result):
         ((), "c525013178ef24a807af6d4dd44d108c20a5224eb3ab88b84c55c635ec32ba04"),
     ],
 )
-def test_order_by_hash(inputs, result):
-    assert SQLOrderBy(inputs).hash() == result
+def test_order_by_hash(inputs, _hash):
+    assert SQLOrderBy(inputs).hash() == _hash
 
 
 @pytest.mark.parametrize(
-    "inputs,result",
+    "inputs,_hash",
     [
         (5, "9fc462c7b5fe66106c8056b9f361817523de5c9f8d4e4b847e79cb02feba1351"),
         (0, "1da7ad424bfdb853e852352fbb853722eb5fdc119592a778679aa00ba29f971a"),
     ],
 )
-def test_limit_hash(inputs, result):
-    assert SQLLimit(inputs).hash() == result
+def test_limit_hash(inputs, _hash):
+    assert SQLLimit(inputs).hash() == _hash
 
 
 @pytest.mark.parametrize(
-    "inputs,result",
+    "inputs,_hash",
     [
         (5, "ff65be6bef149f6f2568f33c2bd0ac3362018a504caadf52c221a2e64acc5bb3"),
         (0, "e88121711a1fa5da46ea2305e0d6fbeebe63f5b575450c628e7bf6f81e73aa46"),
     ],
 )
-def test_offset_hash(inputs, result):
-    assert SQLOffset(inputs).hash() == result
+def test_offset_hash(inputs, _hash):
+    assert SQLOffset(inputs).hash() == _hash
 
 
 @pytest.mark.parametrize(
-    "result",
+    "_hash",
     [
         "8867973da58bd4d14c023fa9bad98dc50c18ba69240347216f7a8a1c7e70d377",
         "8867973da58bd4d14c023fa9bad98dc50c18ba69240347216f7a8a1c7e70d377",
     ],
 )
-def test_count_hash(result):
-    assert SQLCount().hash() == result
+def test_count_hash(_hash):
+    assert SQLCount().hash() == _hash
 
 
 @pytest.mark.parametrize(
-    "inputs,result",
+    "inputs,_hash",
     [
         (("name",), "bb0a1acba3bce39d31cc05dc01e57fc7265e451154187a6f93fbcf2001525c51"),
         (
@@ -220,8 +220,8 @@ def test_count_hash(result):
         ((), "7d4efeefbe9d1694bb89e7bf8b2d3f1d96ed0603e312b48d247d0ed3c881bf48"),
     ],
 )
-def test_distinct_hash(inputs, result):
-    assert SQLDistinct(inputs, dialect=None).hash() == result
+def test_distinct_hash(inputs, _hash):
+    assert SQLDistinct(inputs, dialect=None).hash() == _hash
 
 
 def test_union_hash(test_session, numbers_dataset):
@@ -234,7 +234,7 @@ def test_union_hash(test_session, numbers_dataset):
 
 
 @pytest.mark.parametrize(
-    "predicates,inner,full,rname,result",
+    "predicates,inner,full,rname,_hash",
     [
         (
             "id",
@@ -253,7 +253,7 @@ def test_union_hash(test_session, numbers_dataset):
     ],
 )
 def test_join_hash(
-    test_session, numbers_dataset, predicates, inner, full, rname, result
+    test_session, numbers_dataset, predicates, inner, full, rname, _hash
 ):
     chain1 = dc.read_dataset("numbers").filter(C("num") > 50).limit(10)
     chain2 = dc.read_dataset("numbers").filter(C("num") < 50).limit(20)
@@ -268,12 +268,12 @@ def test_join_hash(
             full,
             rname,
         ).hash()
-        == result
+        == _hash
     )
 
 
 @pytest.mark.parametrize(
-    "columns,partition_by,result",
+    "columns,partition_by,_hash",
     [
         (
             {"cnt": func.count(), "sum": func.sum("id")},
@@ -294,15 +294,15 @@ def test_join_hash(
         ),
     ],
 )
-def test_group_by_hash(columns, partition_by, result):
+def test_group_by_hash(columns, partition_by, _hash):
     schema = SignalSchema({"id": int})
     # transforming inputs into format SQLGroupBy expects
     columns = [v.get_column(schema, label=k) for k, v in columns.items()]
-    assert SQLGroupBy(columns, partition_by).hash() == result
+    assert SQLGroupBy(columns, partition_by).hash() == _hash
 
 
 @pytest.mark.parametrize(
-    "on,result",
+    "on,_hash",
     [
         (
             [("id", "id")],
@@ -318,13 +318,13 @@ def test_group_by_hash(columns, partition_by, result):
         ),
     ],
 )
-def test_subtract_hash(test_session, numbers_dataset, on, result):
+def test_subtract_hash(test_session, numbers_dataset, on, _hash):
     chain = dc.read_dataset("numbers").filter(C("num") > 50).limit(20)
-    assert Subtract(chain._query, test_session.catalog, on).hash() == result
+    assert Subtract(chain._query, test_session.catalog, on).hash() == _hash
 
 
 @pytest.mark.parametrize(
-    "func,params,output,result",
+    "func,params,output,_hash",
     [
         (
             lambda x: x * 2,
@@ -359,15 +359,15 @@ def test_udf_mapper_hash(
     func,
     params,
     output,
-    result,
+    _hash,
 ):
     sign = UdfSignature.parse("", {}, func, params, output, False)
     udf_adapter = Mapper._create(sign, SignalSchema(sign.params)).to_udf_wrapper()
-    assert UDFSignal(udf_adapter, None).hash() == result
+    assert UDFSignal(udf_adapter, None).hash() == _hash
 
 
 @pytest.mark.parametrize(
-    "func,params,output,result",
+    "func,params,output,_hash",
     [
         (
             double_gen,
@@ -393,15 +393,15 @@ def test_udf_generator_hash(
     func,
     params,
     output,
-    result,
+    _hash,
 ):
     sign = UdfSignature.parse("", {}, func, params, output, False)
     udf_adapter = Generator._create(sign, SignalSchema(sign.params)).to_udf_wrapper()
-    assert RowGenerator(udf_adapter, None).hash() == result
+    assert RowGenerator(udf_adapter, None).hash() == _hash
 
 
 @pytest.mark.parametrize(
-    "func,params,output,partition_by,result",
+    "func,params,output,partition_by,_hash",
     [
         (
             double_gen,
@@ -424,15 +424,15 @@ def test_udf_aggregator_hash(
     params,
     output,
     partition_by,
-    result,
+    _hash,
 ):
     sign = UdfSignature.parse("", {}, func, params, output, False)
     udf_adapter = Aggregator._create(sign, SignalSchema(sign.params)).to_udf_wrapper()
-    assert RowGenerator(udf_adapter, None, partition_by=partition_by).hash() == result
+    assert RowGenerator(udf_adapter, None, partition_by=partition_by).hash() == _hash
 
 
 @pytest.mark.parametrize(
-    "namespace_name,project_name,name,version,result",
+    "namespace_name,project_name,name,version,_hash",
     [
         (
             "default",
@@ -458,7 +458,7 @@ def test_udf_aggregator_hash(
     ],
 )
 def test_query_step_hash(
-    dataset_record, namespace_name, project_name, name, version, result
+    dataset_record, namespace_name, project_name, name, version, _hash
 ):
     namespace = replace(dataset_record.project.namespace, name=namespace_name)
     project = dataset_record.project
@@ -468,4 +468,4 @@ def test_query_step_hash(
     dataset_record.name = name
     dataset_record.versions[0].version = version
 
-    assert QueryStep(None, dataset_record, version).hash() == result
+    assert QueryStep(None, dataset_record, version).hash() == _hash
