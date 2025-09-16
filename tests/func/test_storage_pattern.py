@@ -224,18 +224,23 @@ def test_mixed_pattern_types(tmp_dir):
 
 def test_glob_pattern_in_bucket_name_raises_error():
     with pytest.raises(
-        ValueError, match="Glob patterns in bucket names are not supported.*bucket-\\*"
+        ValueError, match=r"Glob patterns in bucket names are not supported.*bucket-\*"
     ):
         dc.read_storage("s3://bucket-*/data/file.txt")
 
     with pytest.raises(
-        ValueError, match="Glob patterns in bucket names are not supported.*bucket-\\?"
+        ValueError, match=r"Glob patterns in bucket names are not supported.*bucket-\?"
     ):
         dc.read_storage("s3://bucket-?/files/*.txt")
 
     with pytest.raises(
         ValueError,
-        match="Glob patterns in bucket names are not supported.*bucket-\\{dev,prod\\}",
+        # Brace expansion appears literally in the message, we only need to
+        # escape braces for the regex engine, not double escape like before.
+        match=(
+            r"Glob patterns in bucket names are not supported.*"
+            r"bucket-\{dev,prod\}/logs/.*"
+        ),
     ):
         dc.read_storage("s3://bucket-{dev,prod}/logs/*.log")
 
@@ -256,6 +261,6 @@ def test_hugging_face_glob_patterns():
 
     with pytest.raises(
         ValueError,
-        match="Glob patterns in bucket names are not supported.*hf://datasets",
+        match=r"Glob patterns in bucket names are not supported.*hf://datasets",
     ):
         validate_cloud_bucket_name("hf://datasets*/username/repo-name/data/file.txt")
