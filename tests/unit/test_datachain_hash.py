@@ -127,7 +127,12 @@ def test_all_possible_steps(test_session):
         .sample(10)
         .offset(2)
         .limit(5)
-        .group_by(avg=func.avg("persons.age"), partition_by="persons.name")
-        .select("persons.name")
+        .group_by(age_avg=func.avg("persons.age"), partition_by="persons.name")
+        .select("persons.name", "age_avg")
+        .subtract(
+            players_chain,
+            on=["persons.name"],
+            right_on=["player.name"],
+        )
         .hash()
-    ) == "db1b7bf05f771bddc85b67c69eece3098f89f60b7baad47d52b8fab8476fbfdb"
+    ) == "9e41a74dbc99e6b778ab7926aecd73ea978f547fe1fb123e42b17d07c03204e8"
