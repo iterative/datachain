@@ -914,12 +914,12 @@ class AbstractDBMetastore(AbstractMetastore):
         """
         Gets a list of projects inside some namespace, or in all namespaces
         """
-        n = self._namespaces
+        p = self._projects
 
         query = self._projects_base_query()
 
         if namespace_id:
-            query = query.where(n.c.id == namespace_id)
+            query = query.where(p.c.namespace_id == namespace_id)
 
         rows = list(self.db.execute(query, conn=conn))
 
