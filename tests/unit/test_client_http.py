@@ -182,5 +182,5 @@ async def test_get_file():
 
 
 def test_get_uri():
-    assert str(HTTPClient.get_uri("https://example.com")) == "https://example.com"
-    assert str(HTTPClient.get_uri("example.com")) == "https://example.com"
+    assert str(HTTPSClient.get_uri("https://example.com")) == "https://example.com"
+    assert str(HTTPSClient.get_uri("example.com")) == "https://example.com"
