@@ -689,9 +689,6 @@ class AbstractDBMetastore(AbstractMetastore):
             return self._projects.select()
         return select(*columns)
 
-    def _projects_update(self) -> "Update":
-        return self._projects.update()
-
     def _projects_delete(self) -> "Delete":
         return self._projects.delete()
 
@@ -839,6 +836,16 @@ class AbstractDBMetastore(AbstractMetastore):
 
         return self.get_project(name, namespace.name)
 
+    def _projects_base_query(self) -> "Select":
+        n = self._namespaces
+        p = self._projects
+
+        query = self._projects_select(
+            *(getattr(n.c, f) for f in self._namespaces_fields),
+            *(getattr(p.c, f) for f in self._projects_fields),
+        )
+        return query.select_from(n.join(p, n.c.id == p.c.namespace_id))
+
     def get_project(
         self, name: str, namespace_name: str, create: bool = False, conn=None
     ) -> Project:
@@ -854,11 +861,7 @@ class AbstractDBMetastore(AbstractMetastore):
             create = True
             validate = False
 
-        query = self._projects_select(
-            *(getattr(n.c, f) for f in self._namespaces_fields),
-            *(getattr(p.c, f) for f in self._projects_fields),
-        )
-        query = query.select_from(n.join(p, n.c.id == p.c.namespace_id)).where(
+        query = self._projects_base_query().where(
             p.c.name == name, n.c.name == namespace_name
         )
 
@@ -873,16 +876,9 @@ class AbstractDBMetastore(AbstractMetastore):
 
     def get_project_by_id(self, project_id: int, conn=None) -> Project:
         """Gets a single project by id"""
-        n = self._namespaces
         p = self._projects
 
-        query = self._projects_select(
-            *(getattr(n.c, f) for f in self._namespaces_fields),
-            *(getattr(p.c, f) for f in self._projects_fields),
-        )
-        query = query.select_from(n.join(p, n.c.id == p.c.namespace_id)).where(
-            p.c.id == project_id
-        )
+        query = self._projects_base_query().where(p.c.id == project_id)
 
         rows = list(self.db.execute(query, conn=conn))
         if not rows:
@@ -891,7 +887,8 @@ class AbstractDBMetastore(AbstractMetastore):
 
     def count_projects(self, namespace_id: Optional[int] = None) -> int:
         p = self._projects
-        query = self._projects_select()
+
+        query = self._projects_base_query()
         if namespace_id:
             query = query.where(p.c.namespace_id == namespace_id)
 
@@ -917,17 +914,12 @@ class AbstractDBMetastore(AbstractMetastore):
         """
         Gets a list of projects inside some namespace, or in all namespaces
         """
-        n = self._namespaces
         p = self._projects
 
-        query = self._projects_select(
-            *(getattr(n.c, f) for f in self._namespaces_fields),
-            *(getattr(p.c, f) for f in self._projects_fields),
-        )
-        query = query.select_from(n.join(p, n.c.id == p.c.namespace_id))
+        query = self._projects_base_query()
 
         if namespace_id:
-            query = query.where(n.c.id == namespace_id)
+            query = query.where(p.c.namespace_id == namespace_id)
 
         rows = list(self.db.execute(query, conn=conn))
 
