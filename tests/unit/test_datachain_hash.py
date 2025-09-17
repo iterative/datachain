@@ -50,7 +50,6 @@ players = [
 @pytest.fixture
 def mock_get_listing():
     with patch("datachain.lib.dc.storage.get_listing") as mock:
-        # Optionally set a default return value so you don't have to repeat it in tests
         mock.return_value = ("lst__s3://my-bucket", "", "", True)
         yield mock
 

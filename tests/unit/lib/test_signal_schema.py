@@ -1566,7 +1566,7 @@ def test_to_partial_complex_signal_error_invalid_field():
 
 
 @pytest.mark.parametrize(
-    "schema,result",
+    "schema,_hash",
     [
         (
             {
@@ -1585,5 +1585,5 @@ def test_to_partial_complex_signal_error_invalid_field():
         ),
     ],
 )
-def test_hash(schema, result):
-    assert SignalSchema(schema).hash() == result
+def test_hash(schema, _hash):
+    assert SignalSchema(schema).hash() == _hash

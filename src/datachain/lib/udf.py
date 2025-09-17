@@ -157,6 +157,10 @@ class UDFBase(AbstractUDF):
         self._func = None
 
     def hash(self) -> str:
+        """
+        Creates SHA hash of this UDF function. It takes into account function,
+        inputs and outputs.
+        """
         parts = [
             hash_callable(self._func),
             self.params.hash() if self.params else "",
@@ -239,10 +243,6 @@ class UDFBase(AbstractUDF):
         batch_size: Optional[int] = None,
         batch: int = 1,
     ) -> UDFAdapter:
-        """
-        Use self._func and self.output.to_udf_spec() to calculate hash
-        There is a way to calc hash of a function
-        """
         return UDFAdapter(
             self,
             self.output.to_udf_spec(),

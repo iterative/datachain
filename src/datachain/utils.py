@@ -539,7 +539,7 @@ def getenv_bool(name: str, default: bool = False) -> bool:
     return val.lower() in ("1", "true", "yes", "on")
 
 
-def ensure_sequence(x):
+def ensure_sequence(x) -> Sequence:
     if isinstance(x, Sequence) and not isinstance(x, (str, bytes)):
         return x
     return [x]

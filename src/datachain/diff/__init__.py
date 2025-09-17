@@ -1,5 +1,3 @@
-import random
-import string
 from collections.abc import Sequence
 from enum import Enum
 from typing import TYPE_CHECKING, Optional, Union
@@ -11,16 +9,7 @@ from datachain.query.schema import Column
 if TYPE_CHECKING:
     from datachain.lib.dc import DataChain
 
-
 C = Column
-
-
-def get_status_col_name() -> str:
-    """Returns new unique status col name"""
-    return "diff_" + "".join(
-        random.choice(string.ascii_letters)  # noqa: S311
-        for _ in range(10)
-    )
 
 
 STATUS_COL_NAME = "diff_7aeed3aa17ba4d50b8d1c368c76e16a6"
@@ -232,7 +221,7 @@ def compare_and_split(
         )
         ```
     """
-    status_col = get_status_col_name()
+    status_col = STATUS_COL_NAME
 
     res = _compare(
         left,

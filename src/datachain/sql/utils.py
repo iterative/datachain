@@ -1,12 +1,4 @@
-from typing import TypeVar, Union
-
 from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.sql.elements import (
-    ClauseElement,
-)
-
-T = TypeVar("T", bound=ClauseElement)
-ColumnLike = Union[str, T]
 
 
 def compiler_not_implemented(func, *spec):

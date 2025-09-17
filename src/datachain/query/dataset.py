@@ -1308,6 +1308,10 @@ class DatasetQuery:
         return self.union(other)
 
     def hash(self) -> str:
+        """
+        Calculates hash of this class taking into account hash of starting step
+        and hashes of each following steps. Ordering is important.
+        """
         hasher = hashlib.sha256()
         if self.starting_step:
             hasher.update(self.starting_step.hash().encode("utf-8"))
