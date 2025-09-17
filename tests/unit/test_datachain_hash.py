@@ -143,12 +143,6 @@ def test_all_possible_steps(test_session):
 
 
 def test_diff(test_session):
-    pytest.skip(
-        "Test is currently inconsistent because in the process of diff / compare"
-        " logic we create columns with random name using mutate and that changes"
-        " the hash value every time"
-    )
-
     dc.read_values(person=persons, session=test_session).save("persons")
     dc.read_values(player=players, session=test_session).save("players")
 
@@ -163,4 +157,4 @@ def test_diff(test_session):
             status_col="diff",
         )
         .hash()
-    ) == ""
+    ) == "5a6a9b7161100f21eee3df434d4c0ce76a83666f4c3335b09d9e57cfc8eaadc8"
