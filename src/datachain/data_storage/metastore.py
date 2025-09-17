@@ -22,6 +22,7 @@ from sqlalchemy import (
     UniqueConstraint,
     select,
 )
+from sqlalchemy.sql import func as f
 
 from datachain.data_storage import JobQueryType, JobStatus
 from datachain.data_storage.serializer import Serializable
@@ -37,7 +38,9 @@ from datachain.dataset import (
 from datachain.error import (
     DatasetNotFoundError,
     DatasetVersionNotFoundError,
+    NamespaceDeleteNotAllowedError,
     NamespaceNotFoundError,
+    ProjectDeleteNotAllowedError,
     ProjectNotFoundError,
     TableMissingError,
 )
@@ -142,6 +145,10 @@ class AbstractMetastore(ABC, Serializable):
         """Gets a single namespace by name"""
 
     @abstractmethod
+    def remove_namespace(self, namespace_id: int, conn=None) -> None:
+        """Removes a single namespace by id"""
+
+    @abstractmethod
     def list_namespaces(self, conn=None) -> list[Namespace]:
         """Gets a list of all namespaces"""
 
@@ -190,9 +197,29 @@ class AbstractMetastore(ABC, Serializable):
         It also creates project if not found and create flag is set to True.
         """
 
+    def is_default_project(self, project_name: str, namespace_name: str) -> bool:
+        return (
+            project_name == self.default_project_name
+            and namespace_name == self.default_namespace_name
+        )
+
+    def is_listing_project(self, project_name: str, namespace_name: str) -> bool:
+        return (
+            project_name == self.listing_project_name
+            and namespace_name == self.system_namespace_name
+        )
+
     @abstractmethod
     def get_project_by_id(self, project_id: int, conn=None) -> Project:
         """Gets a single project by id"""
+
+    @abstractmethod
+    def count_projects(self, namespace_id: Optional[int] = None) -> int:
+        """Counts projects in some namespace or in general."""
+
+    @abstractmethod
+    def remove_project(self, project_id: int, conn=None) -> None:
+        """Removes a single project by id"""
 
     @abstractmethod
     def list_projects(self, namespace_id: Optional[int], conn=None) -> list[Project]:
@@ -269,6 +296,10 @@ class AbstractMetastore(ABC, Serializable):
         self, project_id: Optional[int] = None
     ) -> Iterator[DatasetListRecord]:
         """Lists all datasets in some project or in all projects."""
+
+    @abstractmethod
+    def count_datasets(self, project_id: Optional[int] = None) -> int:
+        """Counts datasets in some project or in all projects."""
 
     @abstractmethod
     def list_datasets_by_prefix(
@@ -658,9 +689,6 @@ class AbstractDBMetastore(AbstractMetastore):
             return self._projects.select()
         return select(*columns)
 
-    def _projects_update(self) -> "Update":
-        return self._projects.update()
-
     def _projects_delete(self) -> "Delete":
         return self._projects.delete()
 
@@ -735,6 +763,18 @@ class AbstractDBMetastore(AbstractMetastore):
 
         return self.get_namespace(name)
 
+    def remove_namespace(self, namespace_id: int, conn=None) -> None:
+        num_projects = self.count_projects(namespace_id)
+        if num_projects > 0:
+            raise NamespaceDeleteNotAllowedError(
+                f"Namespace cannot be removed. It contains {num_projects} project(s). "
+                "Please remove the project(s) first."
+            )
+
+        n = self._namespaces
+        with self.db.transaction():
+            self.db.execute(self._namespaces_delete().where(n.c.id == namespace_id))
+
     def get_namespace(self, name: str, conn=None) -> Namespace:
         """Gets a single namespace by name"""
         n = self._namespaces
@@ -796,17 +836,15 @@ class AbstractDBMetastore(AbstractMetastore):
 
         return self.get_project(name, namespace.name)
 
-    def _is_listing_project(self, project_name: str, namespace_name: str) -> bool:
-        return (
-            project_name == self.listing_project_name
-            and namespace_name == self.system_namespace_name
-        )
+    def _projects_base_query(self) -> "Select":
+        n = self._namespaces
+        p = self._projects
 
-    def _is_default_project(self, project_name: str, namespace_name: str) -> bool:
-        return (
-            project_name == self.default_project_name
-            and namespace_name == self.default_namespace_name
+        query = self._projects_select(
+            *(getattr(n.c, f) for f in self._namespaces_fields),
+            *(getattr(p.c, f) for f in self._projects_fields),
         )
+        return query.select_from(n.join(p, n.c.id == p.c.namespace_id))
 
     def get_project(
         self, name: str, namespace_name: str, create: bool = False, conn=None
@@ -816,18 +854,14 @@ class AbstractDBMetastore(AbstractMetastore):
         p = self._projects
         validate = True
 
-        if self._is_listing_project(name, namespace_name) or self._is_default_project(
+        if self.is_listing_project(name, namespace_name) or self.is_default_project(
             name, namespace_name
         ):
             # we are always creating default and listing projects if they don't exist
             create = True
             validate = False
 
-        query = self._projects_select(
-            *(getattr(n.c, f) for f in self._namespaces_fields),
-            *(getattr(p.c, f) for f in self._projects_fields),
-        )
-        query = query.select_from(n.join(p, n.c.id == p.c.namespace_id)).where(
+        query = self._projects_base_query().where(
             p.c.name == name, n.c.name == namespace_name
         )
 
@@ -842,37 +876,50 @@ class AbstractDBMetastore(AbstractMetastore):
 
     def get_project_by_id(self, project_id: int, conn=None) -> Project:
         """Gets a single project by id"""
-        n = self._namespaces
         p = self._projects
 
-        query = self._projects_select(
-            *(getattr(n.c, f) for f in self._namespaces_fields),
-            *(getattr(p.c, f) for f in self._projects_fields),
-        )
-        query = query.select_from(n.join(p, n.c.id == p.c.namespace_id)).where(
-            p.c.id == project_id
-        )
+        query = self._projects_base_query().where(p.c.id == project_id)
 
         rows = list(self.db.execute(query, conn=conn))
         if not rows:
             raise ProjectNotFoundError(f"Project with id {project_id} not found.")
         return self.project_class.parse(*rows[0])
 
-    def list_projects(self, namespace_id: Optional[int], conn=None) -> list[Project]:
+    def count_projects(self, namespace_id: Optional[int] = None) -> int:
+        p = self._projects
+
+        query = self._projects_base_query()
+        if namespace_id:
+            query = query.where(p.c.namespace_id == namespace_id)
+
+        query = select(f.count(1)).select_from(query.subquery())
+
+        return next(self.db.execute(query))[0]
+
+    def remove_project(self, project_id: int, conn=None) -> None:
+        num_datasets = self.count_datasets(project_id)
+        if num_datasets > 0:
+            raise ProjectDeleteNotAllowedError(
+                f"Project cannot be removed. It contains {num_datasets} dataset(s). "
+                "Please remove the dataset(s) first."
+            )
+
+        p = self._projects
+        with self.db.transaction():
+            self.db.execute(self._projects_delete().where(p.c.id == project_id))
+
+    def list_projects(
+        self, namespace_id: Optional[int] = None, conn=None
+    ) -> list[Project]:
         """
         Gets a list of projects inside some namespace, or in all namespaces
         """
-        n = self._namespaces
         p = self._projects
 
-        query = self._projects_select(
-            *(getattr(n.c, f) for f in self._namespaces_fields),
-            *(getattr(p.c, f) for f in self._projects_fields),
-        )
-        query = query.select_from(n.join(p, n.c.id == p.c.namespace_id))
+        query = self._projects_base_query()
 
         if namespace_id:
-            query = query.where(n.c.id == namespace_id)
+            query = query.where(p.c.namespace_id == namespace_id)
 
         rows = list(self.db.execute(query, conn=conn))
 
@@ -1189,7 +1236,6 @@ class AbstractDBMetastore(AbstractMetastore):
     def list_datasets(
         self, project_id: Optional[int] = None
     ) -> Iterator["DatasetListRecord"]:
-        """Lists all datasets."""
         d = self._datasets
         query = self._base_list_datasets_query().order_by(
             self._datasets.c.name, self._datasets_versions.c.version
@@ -1197,6 +1243,16 @@ class AbstractDBMetastore(AbstractMetastore):
         if project_id:
             query = query.where(d.c.project_id == project_id)
         yield from self._parse_dataset_list(self.db.execute(query))
+
+    def count_datasets(self, project_id: Optional[int] = None) -> int:
+        d = self._datasets
+        query = self._datasets_select()
+        if project_id:
+            query = query.where(d.c.project_id == project_id)
+
+        query = select(f.count(1)).select_from(query.subquery())
+
+        return next(self.db.execute(query))[0]
 
     def list_datasets_by_prefix(
         self, prefix: str, project_id: Optional[int] = None, conn=None

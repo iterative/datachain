@@ -282,7 +282,7 @@ def test_remove_dataset(metastore):
     }
 
     metastore.remove_dataset(ds)
-    with pytest.raises(Exception, match="Dataset .+ not found"):
+    with pytest.raises(Exception, match=r"Dataset .+ not found"):
         metastore.get_dataset(ds.name)
 
     # dependencies should also be deleted and cleaned up

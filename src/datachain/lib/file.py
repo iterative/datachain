@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from datachain.catalog import Catalog
     from datachain.client.fsspec import Client
     from datachain.dataset import RowDict
+    from datachain.query.session import Session
 
 sha256 = partial(hashlib.sha256, usedforsecurity=False)
 
@@ -252,6 +253,15 @@ class File(DataModel):
         "last_modified",
     ]
 
+    # Allowed kwargs we forward to TextIOWrapper
+    _TEXT_WRAPPER_ALLOWED: ClassVar[tuple[str, ...]] = (
+        "encoding",
+        "errors",
+        "newline",
+        "line_buffering",
+        "write_through",
+    )
+
     @staticmethod
     def _validate_dict(
         v: Optional[Union[str, dict, list[dict]]],
@@ -322,22 +332,50 @@ class File(DataModel):
 
     @classmethod
     def upload(
-        cls, data: bytes, path: str, catalog: Optional["Catalog"] = None
+        cls,
+        data: bytes,
+        path: Union[str, os.PathLike[str]],
+        catalog: Optional["Catalog"] = None,
     ) -> "Self":
         if catalog is None:
             from datachain.catalog.loader import get_catalog
 
             catalog = get_catalog()
-
         from datachain.client.fsspec import Client
 
-        client_cls = Client.get_implementation(path)
-        source, rel_path = client_cls.split_url(path)
+        path_str = stringify_path(path)
+
+        client_cls = Client.get_implementation(path_str)
+        source, rel_path = client_cls.split_url(path_str)
 
         client = catalog.get_client(client_cls.get_uri(source))
         file = client.upload(data, rel_path)
         if not isinstance(file, cls):
             file = cls(**file.model_dump())
+        file._set_stream(catalog)
+        return file
+
+    @classmethod
+    def at(
+        cls, uri: Union[str, os.PathLike[str]], session: Optional["Session"] = None
+    ) -> "Self":
+        """Construct a File from a full URI in one call.
+
+        Example:
+            file = File.at("s3://bucket/path/to/output.png")
+            with file.open("wb") as f: ...
+        """
+        from datachain.client.fsspec import Client
+        from datachain.query.session import Session
+
+        if session is None:
+            session = Session.get()
+        catalog = session.catalog
+        uri_str = stringify_path(uri)
+
+        client_cls = Client.get_implementation(uri_str)
+        source, rel_path = client_cls.split_url(uri_str)
+        file = cls(source=client_cls.get_uri(source), path=rel_path)
         file._set_stream(catalog)
         return file
 
@@ -354,28 +392,70 @@ class File(DataModel):
         return str(PurePosixPath(self.path).parent)
 
     @contextmanager
-    def open(self, mode: Literal["rb", "r"] = "rb") -> Iterator[Any]:
-        """Open the file and return a file object."""
-        if self.location:
-            with VFileRegistry.open(self, self.location) as f:  # type: ignore[arg-type]
-                yield f
+    def open(self, mode: str = "rb", **open_kwargs) -> Iterator[Any]:
+        """Open the file and return a file-like object.
 
-        else:
+        Supports both read ("rb", "r") and write modes (e.g. "wb", "w", "ab").
+        When opened in a write mode, metadata is refreshed after closing.
+        """
+        writing = any(ch in mode for ch in "wax+")
+        if self.location and writing:
+            raise VFileError(
+                "Writing to virtual file is not supported",
+                self.source,
+                self.path,
+            )
+
+        if self._catalog is None:
+            raise RuntimeError("Cannot open file: catalog is not set")
+
+        client: Client = self._catalog.get_client(self.source)
+
+        if not writing:
+            if self.location:
+                with VFileRegistry.open(self, self.location) as f:  # type: ignore[arg-type]
+                    yield self._wrap_text(f, mode, open_kwargs)
+                return
             if self._caching_enabled:
                 self.ensure_cached()
-            client: Client = self._catalog.get_client(self.source)
             with client.open_object(
                 self, use_cache=self._caching_enabled, cb=self._download_cb
             ) as f:
-                yield io.TextIOWrapper(f) if mode == "r" else f
+                yield self._wrap_text(f, mode, open_kwargs)
+            return
+
+        # write path
+        full_path = client.get_full_path(self.get_path_normalized())
+        with client.fs.open(full_path, mode, **open_kwargs) as f:
+            yield self._wrap_text(f, mode, open_kwargs)
+
+        # refresh metadata
+        info = client.fs.info(full_path)
+        refreshed = client.info_to_file(info, self.get_path_normalized())
+        for k, v in refreshed.model_dump().items():
+            setattr(self, k, v)
+
+    def _wrap_text(self, f: Any, mode: str, open_kwargs: dict[str, Any]) -> Any:
+        """Return stream possibly wrapped for text."""
+        if "b" in mode or isinstance(f, io.TextIOBase):
+            return f
+        filtered = {
+            k: open_kwargs[k] for k in self._TEXT_WRAPPER_ALLOWED if k in open_kwargs
+        }
+        return io.TextIOWrapper(f, **filtered)
 
     def read_bytes(self, length: int = -1):
         """Returns file contents as bytes."""
         with self.open() as stream:
             return stream.read(length)
 
-    def read_text(self):
-        """Returns file contents as text."""
+    def read_text(self, **open_kwargs):
+        """Return file contents decoded as text.
+
+        **open_kwargs : Any
+            Extra keyword arguments forwarded to ``open(mode="r", ...)``
+            (e.g. ``encoding="utf-8"``, ``errors="ignore"``)
+        """
         if self.location:
             raise VFileError(
                 "Reading text from virtual file is not supported",
@@ -383,7 +463,7 @@ class File(DataModel):
                 self.path,
             )
 
-        with self.open(mode="r") as stream:
+        with self.open(mode="r", **open_kwargs) as stream:
             return stream.read()
 
     def read(self, length: int = -1):
@@ -701,14 +781,19 @@ class TextFile(File):
     """`DataModel` for reading text files."""
 
     @contextmanager
-    def open(self, mode: Literal["rb", "r"] = "r"):
-        """Open the file and return a file object (default to text mode)."""
-        with super().open(mode=mode) as stream:
+    def open(self, mode: str = "r", **open_kwargs) -> Iterator[Any]:
+        """Open the file and return a file-like object.
+        Default to text mode"""
+        with super().open(mode=mode, **open_kwargs) as stream:
             yield stream
 
-    def read_text(self):
-        """Returns file contents as text."""
-        with self.open() as stream:
+    def read_text(self, **open_kwargs):
+        """Return file contents as text.
+
+        **open_kwargs : Any
+            Extra keyword arguments forwarded to ``open()`` (e.g. encoding).
+        """
+        with self.open(**open_kwargs) as stream:
             return stream.read()
 
     def save(self, destination: str, client_config: Optional[dict] = None):

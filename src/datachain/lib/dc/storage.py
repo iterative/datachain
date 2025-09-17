@@ -51,7 +51,8 @@ def read_storage(
               - `*` : wildcard
               - `**` : recursive wildcard
               - `?` : single character
-              - `{a,b}` : brace expansion
+              - `{a,b}` : brace expansion list
+              - `{1..9}` : brace numeric or alphabetic range
         type: read file as "binary", "text", or "image" data. Default is "binary".
         recursive: search recursively for the given path.
         column: Column name that will contain File objects. Default is "file".
@@ -88,27 +89,32 @@ def read_storage(
         Simple call from s3:
         ```python
         import datachain as dc
-        chain = dc.read_storage("s3://my-bucket/my-dir")
+        dc.read_storage("s3://my-bucket/my-dir")
         ```
 
         Match all .json files recursively using glob pattern
         ```py
-        chain = dc.read_storage("gs://bucket/meta/**/*.json")
+        dc.read_storage("gs://bucket/meta/**/*.json")
         ```
 
         Match image file extensions for directories with pattern
         ```py
-        chain = dc.read_storage("s3://bucket/202?/**/*.{jpg,jpeg,png}")
+        dc.read_storage("s3://bucket/202?/**/*.{jpg,jpeg,png}")
+        ```
+
+        By ranges in filenames:
+        ```py
+        dc.read_storage("s3://bucket/202{1..4}/**/*.{jpg,jpeg,png}")
         ```
 
         Multiple URIs:
         ```python
-        chain = dc.read_storage(["s3://my-bkt/dir1", "s3://bucket2/dir2/dir3"])
+        dc.read_storage(["s3://my-bkt/dir1", "s3://bucket2/dir2/dir3"])
         ```
 
         With AWS S3-compatible storage:
         ```python
-        chain = dc.read_storage(
+        dc.read_storage(
             "s3://my-bucket/my-dir",
             client_config = {"aws_endpoint_url": "<minio-endpoint-url>"}
         )

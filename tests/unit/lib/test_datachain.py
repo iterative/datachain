@@ -2182,18 +2182,18 @@ def test_union_different_columns(test_session):
     chain2 = dc.read_values(value=[3, 4], session=test_session)
     chain3 = dc.read_values(other=["a", "different", "thing"], session=test_session)
     with pytest.raises(
-        ValueError, match="Cannot perform union. name only present in left"
+        ValueError, match=r"Cannot perform union. name only present in left"
     ):
         chain1.union(chain2).show()
     with pytest.raises(
-        ValueError, match="Cannot perform union. name only present in right"
+        ValueError, match=r"Cannot perform union. name only present in right"
     ):
         chain2.union(chain1).show()
     with pytest.raises(
         ValueError,
-        match="Cannot perform union. "
-        "other only present in left. "
-        "name, value only present in right",
+        match=r"Cannot perform union. "
+        r"other only present in left. "
+        r"name, value only present in right",
     ):
         chain3.union(chain1).show()
 
