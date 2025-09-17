@@ -229,7 +229,7 @@ def test_union_hash(test_session, numbers_dataset):
     chain2 = dc.read_dataset("numbers").filter(C("num") < 50).limit(20)
 
     assert SQLUnion(chain1._query, chain2._query).hash() == (
-        "ac9c210ba6c599d5ce8155692fccb5d56ec45562d87aedbc7853a283739880b3"
+        "d61ad213851bd9714d1f6bcbf058de4aa4d0eee0582de1f2dd1d2f00fbfc8b7f"
     )
 
 
@@ -241,14 +241,14 @@ def test_union_hash(test_session, numbers_dataset):
             True,
             False,
             "{name}_right",
-            "bcac0223d91650c419cea1626502dbb77bf3deabf6b522b0d0dc1cdafd8d488a",
+            "b8a1e0000a6dbb9304186b9bcce625d3215ddf09f92805f80276c69640431c90",
         ),
         (
             ("id", "name"),
             False,
             True,
             "{name}_r",
-            "035a972f3f830ceea1ef14781e2a2bdbaa3bf3db2320a5147826d1768bd64315",
+            "4febef87db3f788473159077b71eaf95988969f2f7764e44a59697302ffb8bfb",
         ),
     ],
 )
@@ -306,15 +306,15 @@ def test_group_by_hash(columns, partition_by, _hash):
     [
         (
             [("id", "id")],
-            "416c1de08bcb423fbcf300d65b86387d83133d5d8e8d285fb09fec9b748165e8",
+            "fd2907206ee98df0c899cf58c189ffc009a396775aa85bc5b1a0aa1dfba1ba4c",
         ),
         (
             [("id", "id"), ("name", "name")],
-            "f30681465b8a6e9c7f3c752fc0c12e7a642ca78077cd36b66075209665e9f0ac",
+            "0814e7055c63668fece7fd0054995c5d6a7a4ae8182f8376845eefe2ae19dad6",
         ),
         (
             [],
-            "c53881a69a3bb95de8d7348b895a443978b48fa3e7f5129d40719d1a74db16e2",
+            "d9ad73ac997d8dbd6d7e2afd80657811e2ecaff3c8017d336ac9993dba8e8a78",
         ),
     ],
 )
