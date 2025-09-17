@@ -13,6 +13,7 @@ from uuid import uuid4
 from sqlalchemy import (
     JSON,
     BigInteger,
+    Boolean,
     Column,
     DateTime,
     ForeignKey,
@@ -24,6 +25,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.sql import func as f
 
+from datachain.checkpoint import Checkpoint
 from datachain.data_storage import JobQueryType, JobStatus
 from datachain.data_storage.serializer import Serializable
 from datachain.dataset import (
@@ -75,6 +77,7 @@ class AbstractMetastore(ABC, Serializable):
     dataset_list_version_class: type[DatasetListVersion] = DatasetListVersion
     dependency_class: type[DatasetDependency] = DatasetDependency
     job_class: type[Job] = Job
+    checkpoint_class: type[Checkpoint] = Checkpoint
 
     def __init__(
         self,
@@ -431,6 +434,35 @@ class AbstractMetastore(ABC, Serializable):
     def get_job_status(self, job_id: str) -> Optional[JobStatus]:
         """Returns the status of the given job."""
 
+    #
+    # Checkpoints
+    #
+
+    @abstractmethod
+    def list_checkpoints(self, job_id: str, conn=None) -> Iterator["Checkpoint"]:
+        """Returns all checkpoints related to some job"""
+
+    @abstractmethod
+    def get_checkpoint(self, checkpoint_id: str, conn=None) -> Optional[Checkpoint]:
+        """Gets single checkpoint by id"""
+
+    def find_checkpoint(
+        self, job_id: str, _hash: str, partial: bool = False, conn=None
+    ) -> Optional[Checkpoint]:
+        """
+        Tries to find checkpoint for a job with specific hash and optionally partial
+        """
+
+    @abstractmethod
+    def create_checkpoint(
+        self,
+        job_id: str,
+        _hash: str,
+        partial: bool = False,
+        conn: Optional[Any] = None,
+    ) -> str:
+        """Creates new checkpoint"""
+
 
 class AbstractDBMetastore(AbstractMetastore):
     """
@@ -446,6 +478,7 @@ class AbstractDBMetastore(AbstractMetastore):
     DATASET_VERSION_TABLE = "datasets_versions"
     DATASET_DEPENDENCY_TABLE = "datasets_dependencies"
     JOBS_TABLE = "jobs"
+    CHECKPOINTS_TABLE = "checkpoints"
 
     db: "DatabaseEngine"
 
@@ -1663,3 +1696,113 @@ class AbstractDBMetastore(AbstractMetastore):
         if not results:
             return None
         return results[0][0]
+
+    #
+    # Checkpoints
+    #
+
+    @staticmethod
+    def _checkpoints_columns() -> "list[SchemaItem]":
+        return [
+            Column(
+                "id",
+                Text,
+                default=uuid4,
+                primary_key=True,
+                nullable=False,
+            ),
+            Column("job_id", Text, nullable=True),
+            Column("hash", Text, nullable=False),
+            Column("partial", Boolean, default=False),
+            Column("created_at", DateTime(timezone=True), nullable=False),
+            UniqueConstraint("job_id", "hash"),
+        ]
+
+    @cached_property
+    def _checkpoints_fields(self) -> list[str]:
+        return [c.name for c in self._checkpoints_columns() if c.name]  # type: ignore[attr-defined]
+
+    @cached_property
+    def _checkpoints(self) -> "Table":
+        return Table(
+            self.CHECKPOINTS_TABLE,
+            self.db.metadata,
+            *self._checkpoints_columns(),
+        )
+
+    @abstractmethod
+    def _checkpoints_insert(self) -> "Insert": ...
+
+    def _checkpoints_select(self, *columns) -> "Select":
+        if not columns:
+            return self._checkpoints.select()
+        return select(*columns)
+
+    def _checkpoints_update(self, *where) -> "Update":
+        if not where:
+            return self._checkpoints.update()
+        return self._checkpoints.update().where(*where)
+
+    def _parse_checkpoint(self, rows) -> Checkpoint:
+        return self.checkpoint_class.parse(*rows)
+
+    def _parse_checkpoints(self, rows) -> Iterator["Checkpoint"]:
+        for _, g in groupby(rows, lambda r: r[1]):
+            yield self._parse_checkpoint(*list(g))
+
+    def _checkpoints_query(self):
+        return self._checkpoints_select(
+            *[getattr(self._checkpoints.c, f) for f in self._checkpoints_fields]
+        )
+
+    def list_checkpoints(self, job_id: str, conn=None) -> Iterator["Checkpoint"]:
+        """List checkpoints by job id."""
+        query = self._checkpoints_query().where(self._checkpoints.c.job_id == job_id)
+        yield from self._parse_checkpoints(self.db.execute(query, conn=conn))
+
+    def create_checkpoint(
+        self,
+        job_id: str,
+        _hash: str,
+        partial: bool = False,
+        conn: Optional[Any] = None,
+    ) -> str:
+        """
+        Creates a new job query step.
+        """
+        checkpoint_id = str(uuid4())
+        self.db.execute(
+            self._checkpoints_insert().values(
+                id=checkpoint_id,
+                job_id=job_id,
+                hash=_hash,
+                partial=partial,
+                created_at=datetime.now(timezone.utc),
+            ),
+            conn=conn,
+        )
+        return checkpoint_id
+
+    def get_checkpoint(self, checkpoint_id: str, conn=None) -> Optional[Checkpoint]:
+        """Returns the checkpoint with the given ID."""
+        ch = self._checkpoints
+        query = self._checkpoints_select(ch).where(ch.c.id == checkpoint_id)
+        results = list(self.db.execute(query, conn=conn))
+        if not results:
+            return None
+        return self._parse_checkpoint(results[0])
+
+    def find_checkpoint(
+        self, job_id: str, _hash: str, partial: bool = False, conn=None
+    ) -> Optional[Checkpoint]:
+        """
+        Tries to find checkpoint for a job with specific hash and optionally partial
+        """
+        ch = self._checkpoints
+        query = self._checkpoints_select(ch).where(
+            ch.c.job_id == job_id, ch.c.hash == _hash, ch.c.partial == partial
+        )
+        results = list(self.db.execute(query, conn=conn))
+        if not results:
+            return None
+        return self._parse_checkpoint(results[0])
