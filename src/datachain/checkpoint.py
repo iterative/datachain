@@ -9,12 +9,17 @@ from typing import (
 @dataclass
 class Checkpoint:
     """
-    Class that represents checkpoint in job run. Checkpoint means that job has
-    successfully ran until that point and in a case of a failure, it can continue
-    from that.
-    Checkpoint has also a special "mode" called partial which means that it's not
-    completely done, e.g in half way of running UDF something fails but we save
-    already calculated results and continue with it on restart.
+    Represents a checkpoint within a job run.
+
+    A checkpoint marks a successfully completed stage of execution. In the event
+    of a failure, the job can resume from the most recent checkpoint rather than
+    starting over from the beginning.
+
+    Checkpoints can also be created in a "partial" mode, which indicates that the
+    work at this stage was only partially completed. For example, if a failure
+    occurs halfway through running a UDF, already computed results can still be
+    saved, allowing the job to resume from that partially completed state on
+    restart.
     """
 
     id: str
