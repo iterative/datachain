@@ -171,13 +171,15 @@ class Step(ABC):
         """Apply the processing step."""
 
     @abstractmethod
-    def _hash(self) -> str:
-        """Calculates hash for this step without class name"""
+    def hash_inputs(self) -> str:
+        """Calculates hash of step inputs"""
 
     def hash(self) -> str:
-        """Calculates hash for this step"""
+        """
+        Calculates hash for step which includes step name and hash of it's inputs
+        """
         return hashlib.sha256(
-            f"{self.__class__.__name__}|{self._hash()}".encode()
+            f"{self.__class__.__name__}|{self.hash_inputs()}".encode()
         ).hexdigest()
 
 
@@ -274,7 +276,7 @@ class DatasetDiffOperation(Step):
 class Subtract(DatasetDiffOperation):
     on: Sequence[tuple[str, str]]
 
-    def _hash(self) -> str:
+    def hash_inputs(self) -> str:
         on_bytes = b"".join(
             f"{a}:{b}".encode() for a, b in sorted(self.on, key=lambda t: (t[0], t[1]))
         )
@@ -418,7 +420,7 @@ class UDFStep(Step, ABC):
     min_task_size: Optional[int] = None
     batch_size: Optional[int] = None
 
-    def _hash(self) -> str:
+    def hash_inputs(self) -> str:
         partition_by = ensure_sequence(self.partition_by or [])
         parts = [
             bytes.fromhex(self.udf.hash()),
@@ -825,7 +827,7 @@ class SQLClause(Step, ABC):
 class SQLSelect(SQLClause):
     args: tuple[Union[Function, ColumnElement], ...]
 
-    def _hash(self) -> str:
+    def hash_inputs(self) -> str:
         return hash_column_elements(self.args)
 
     def apply_sql_clause(self, query) -> Select:
@@ -844,7 +846,7 @@ class SQLSelect(SQLClause):
 class SQLSelectExcept(SQLClause):
     args: tuple[Union[Function, ColumnElement], ...]
 
-    def _hash(self) -> str:
+    def hash_inputs(self) -> str:
         return hash_column_elements(self.args)
 
     def apply_sql_clause(self, query: Select) -> Select:
@@ -858,7 +860,7 @@ class SQLMutate(SQLClause):
     args: tuple[Label, ...]
     new_schema: SignalSchema
 
-    def _hash(self) -> str:
+    def hash_inputs(self) -> str:
         return hash_column_elements(self.args)
 
     def apply_sql_clause(self, query: Select) -> Select:
@@ -890,7 +892,7 @@ class SQLMutate(SQLClause):
 class SQLFilter(SQLClause):
     expressions: tuple[Union[Function, ColumnElement], ...]
 
-    def _hash(self) -> str:
+    def hash_inputs(self) -> str:
         return hash_column_elements(self.expressions)
 
     def __and__(self, other):
@@ -906,7 +908,7 @@ class SQLFilter(SQLClause):
 class SQLOrderBy(SQLClause):
     args: tuple[Union[Function, ColumnElement], ...]
 
-    def _hash(self) -> str:
+    def hash_inputs(self) -> str:
         return hash_column_elements(self.args)
 
     def apply_sql_clause(self, query: Select) -> Select:
@@ -918,7 +920,7 @@ class SQLOrderBy(SQLClause):
 class SQLLimit(SQLClause):
     n: int
 
-    def _hash(self) -> str:
+    def hash_inputs(self) -> str:
         return hashlib.sha256(str(self.n).encode()).hexdigest()
 
     def apply_sql_clause(self, query: Select) -> Select:
@@ -929,7 +931,7 @@ class SQLLimit(SQLClause):
 class SQLOffset(SQLClause):
     offset: int
 
-    def _hash(self) -> str:
+    def hash_inputs(self) -> str:
         return hashlib.sha256(str(self.offset).encode()).hexdigest()
 
     def apply_sql_clause(self, query: "GenerativeSelect"):
@@ -938,7 +940,7 @@ class SQLOffset(SQLClause):
 
 @frozen
 class SQLCount(SQLClause):
-    def _hash(self) -> str:
+    def hash_inputs(self) -> str:
         return ""
 
     def apply_sql_clause(self, query):
@@ -950,7 +952,7 @@ class SQLDistinct(SQLClause):
     args: tuple[ColumnElement, ...]
     dialect: str
 
-    def _hash(self) -> str:
+    def hash_inputs(self) -> str:
         return hash_column_elements(self.args)
 
     def apply_sql_clause(self, query):
@@ -965,7 +967,7 @@ class SQLUnion(Step):
     query1: "DatasetQuery"
     query2: "DatasetQuery"
 
-    def _hash(self) -> str:
+    def hash_inputs(self) -> str:
         return hashlib.sha256(
             bytes.fromhex(self.query1.hash()) + bytes.fromhex(self.query2.hash())
         ).hexdigest()
@@ -1006,7 +1008,7 @@ class SQLJoin(Step):
     full: bool
     rname: str
 
-    def _hash(self) -> str:
+    def hash_inputs(self) -> str:
         predicates = (
             (self.predicates,)
             if not isinstance(self.predicates, tuple)
@@ -1145,7 +1147,7 @@ class SQLGroupBy(SQLClause):
     cols: Sequence[Union[str, Function, ColumnElement]]
     group_by: Sequence[Union[str, Function, ColumnElement]]
 
-    def _hash(self) -> str:
+    def hash_inputs(self) -> str:
         return hashlib.sha256(
             bytes.fromhex(
                 hash_column_elements(self.cols) + hash_column_elements(self.group_by)
