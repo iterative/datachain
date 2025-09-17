@@ -17,7 +17,7 @@ T = TypeVar("T", bound=ColumnElement)
 ColumnLike = Union[str, T]
 
 
-def serialize_expression(expr: str | ColumnElement) -> dict:  # noqa: PLR0911
+def serialize_column_element(expr: str | ColumnElement) -> dict:  # noqa: PLR0911
     """
     Recursively serialize a SQLAlchemy ColumnElement into a deterministic structure.
     """
@@ -32,8 +32,8 @@ def serialize_expression(expr: str | ColumnElement) -> dict:  # noqa: PLR0911
         return {
             "type": "binary",
             "op": op,
-            "left": serialize_expression(expr.left),
-            "right": serialize_expression(expr.right),
+            "left": serialize_column_element(expr.left),
+            "right": serialize_column_element(expr.right),
         }
 
     # Unary operations: -col, NOT col, etc.
@@ -47,7 +47,7 @@ def serialize_expression(expr: str | ColumnElement) -> dict:  # noqa: PLR0911
         return {
             "type": "unary",
             "op": op,
-            "element": serialize_expression(expr.element),  # type: ignore[arg-type]
+            "element": serialize_column_element(expr.element),  # type: ignore[arg-type]
         }
 
     # Function calls: func.lower(col), func.count(col), etc.
@@ -55,19 +55,19 @@ def serialize_expression(expr: str | ColumnElement) -> dict:  # noqa: PLR0911
         return {
             "type": "function",
             "name": expr.name,
-            "clauses": [serialize_expression(c) for c in expr.clauses],
+            "clauses": [serialize_column_element(c) for c in expr.clauses],
         }
 
     # Window functions: func.row_number().over(partition_by=..., order_by=...)
     if isinstance(expr, Over):
         return {
             "type": "window",
-            "function": serialize_expression(expr.element),
+            "function": serialize_column_element(expr.element),
             "partition_by": [
-                serialize_expression(p) for p in getattr(expr, "partition_by", [])
+                serialize_column_element(p) for p in getattr(expr, "partition_by", [])
             ],
             "order_by": [
-                serialize_expression(o) for o in getattr(expr, "order_by", [])
+                serialize_column_element(o) for o in getattr(expr, "order_by", [])
             ],
         }
 
@@ -76,7 +76,7 @@ def serialize_expression(expr: str | ColumnElement) -> dict:  # noqa: PLR0911
         return {
             "type": "label",
             "name": expr.name,
-            "element": serialize_expression(expr.element),
+            "element": serialize_column_element(expr.element),
         }
 
     # Bound values (constants)
@@ -96,15 +96,16 @@ def hash_column_elements(columns: Sequence[ColumnLike]) -> str:
     Hash a list of ColumnElements deterministically, dialect agnostic.
     Only accepts ordered iterables (like list or tuple).
     """
-    serialized = [serialize_expression(c) for c in columns]
+    serialized = [serialize_column_element(c) for c in columns]
     json_str = json.dumps(serialized, sort_keys=True)  # stable JSON
     return hashlib.sha256(json_str.encode("utf-8")).hexdigest()
 
 
 def hash_callable(func):
-    """Calculate hash from callable (e.g function)"""
+    """Calculate hash from a callable (e.g function or lambda)"""
     if not callable(func):
         raise TypeError("Expected a callable")
+
     h = hashlib.sha256()
     h.update(func.__name__.encode())
     h.update(func.__code__.co_code)
