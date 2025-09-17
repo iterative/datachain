@@ -6,18 +6,18 @@ from typing import TypeVar, Union
 from sqlalchemy.sql.elements import (
     BinaryExpression,
     BindParameter,
-    ClauseElement,
+    ColumnElement,
     Label,
     Over,
     UnaryExpression,
 )
 from sqlalchemy.sql.functions import Function
 
-T = TypeVar("T", bound=ClauseElement)
+T = TypeVar("T", bound=ColumnElement)
 ColumnLike = Union[str, T]
 
 
-def serialize_expression(expr: str | ClauseElement) -> dict:  # noqa: PLR0911
+def serialize_expression(expr: str | ColumnElement) -> dict:  # noqa: PLR0911
     """
     Recursively serialize a SQLAlchemy ColumnElement into a deterministic structure.
     """
@@ -47,7 +47,7 @@ def serialize_expression(expr: str | ClauseElement) -> dict:  # noqa: PLR0911
         return {
             "type": "unary",
             "op": op,
-            "element": serialize_expression(expr.element),
+            "element": serialize_expression(expr.element),  # type: ignore[arg-type]
         }
 
     # Function calls: func.lower(col), func.count(col), etc.
