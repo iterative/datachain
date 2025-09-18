@@ -38,6 +38,7 @@ from datachain.dataset import (
     StorageURI,
 )
 from datachain.error import (
+    CheckpointNotFoundError,
     DatasetNotFoundError,
     DatasetVersionNotFoundError,
     NamespaceDeleteNotAllowedError,
@@ -443,7 +444,7 @@ class AbstractMetastore(ABC, Serializable):
         """Returns all checkpoints related to some job"""
 
     @abstractmethod
-    def get_checkpoint(self, checkpoint_id: str, conn=None) -> Optional[Checkpoint]:
+    def get_checkpoint_by_id(self, checkpoint_id: str, conn=None) -> Checkpoint:
         """Gets single checkpoint by id"""
 
     def find_checkpoint(
@@ -460,7 +461,7 @@ class AbstractMetastore(ABC, Serializable):
         _hash: str,
         partial: bool = False,
         conn: Optional[Any] = None,
-    ) -> str:
+    ) -> Checkpoint:
         """Creates new checkpoint"""
 
 
@@ -1743,22 +1744,10 @@ class AbstractDBMetastore(AbstractMetastore):
             return self._checkpoints.update()
         return self._checkpoints.update().where(*where)
 
-    def _parse_checkpoint(self, rows) -> Checkpoint:
-        return self.checkpoint_class.parse(*rows)
-
-    def _parse_checkpoints(self, rows) -> Iterator["Checkpoint"]:
-        for _, g in groupby(rows, lambda r: r[1]):
-            yield self._parse_checkpoint(*list(g))
-
     def _checkpoints_query(self):
         return self._checkpoints_select(
             *[getattr(self._checkpoints.c, f) for f in self._checkpoints_fields]
         )
-
-    def list_checkpoints(self, job_id: str, conn=None) -> Iterator["Checkpoint"]:
-        """List checkpoints by job id."""
-        query = self._checkpoints_query().where(self._checkpoints.c.job_id == job_id)
-        yield from self._parse_checkpoints(self.db.execute(query, conn=conn))
 
     def create_checkpoint(
         self,
@@ -1766,7 +1755,7 @@ class AbstractDBMetastore(AbstractMetastore):
         _hash: str,
         partial: bool = False,
         conn: Optional[Any] = None,
-    ) -> str:
+    ) -> Checkpoint:
         """
         Creates a new job query step.
         """
@@ -1781,16 +1770,23 @@ class AbstractDBMetastore(AbstractMetastore):
             ),
             conn=conn,
         )
-        return checkpoint_id
+        return self.get_checkpoint_by_id(checkpoint_id)
 
-    def get_checkpoint(self, checkpoint_id: str, conn=None) -> Optional[Checkpoint]:
+    def list_checkpoints(self, job_id: str, conn=None) -> Iterator["Checkpoint"]:
+        """List checkpoints by job id."""
+        query = self._checkpoints_query().where(self._checkpoints.c.job_id == job_id)
+        rows = list(self.db.execute(query, conn=conn))
+
+        yield from [self.checkpoint_class.parse(*r) for r in rows]
+
+    def get_checkpoint_by_id(self, checkpoint_id: str, conn=None) -> Checkpoint:
         """Returns the checkpoint with the given ID."""
         ch = self._checkpoints
         query = self._checkpoints_select(ch).where(ch.c.id == checkpoint_id)
-        results = list(self.db.execute(query, conn=conn))
-        if not results:
-            return None
-        return self._parse_checkpoint(results[0])
+        rows = list(self.db.execute(query, conn=conn))
+        if not rows:
+            raise CheckpointNotFoundError(f"Checkpoint {checkpoint_id} not found")
+        return self.checkpoint_class.parse(*rows[0])
 
     def find_checkpoint(
         self, job_id: str, _hash: str, partial: bool = False, conn=None
@@ -1802,7 +1798,7 @@ class AbstractDBMetastore(AbstractMetastore):
         query = self._checkpoints_select(ch).where(
             ch.c.job_id == job_id, ch.c.hash == _hash, ch.c.partial == partial
         )
-        results = list(self.db.execute(query, conn=conn))
-        if not results:
+        rows = list(self.db.execute(query, conn=conn))
+        if not rows:
             return None
-        return self._parse_checkpoint(results[0])
+        return self.checkpoint_class.parse(*rows[0])
