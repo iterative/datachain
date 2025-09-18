@@ -38,14 +38,23 @@ def test_atomicity_feature_file(tmp_dir, catalog_tmpfile):
         create_rows=True,
     )
 
+    from datachain.data_storage.config import (
+        SQLiteMetastoreConfig,
+        SQLiteWarehouseConfig,
+    )
+
     process = subprocess.Popen(  # noqa: S603
         command,
         shell=False,
         encoding="utf-8",
         env={
             **os.environ,
-            "DATACHAIN__METASTORE": catalog_tmpfile.metastore.serialize(),
-            "DATACHAIN__WAREHOUSE": catalog_tmpfile.warehouse.serialize(),
+            "DATACHAIN__METASTORE": SQLiteMetastoreConfig.from_instance(
+                catalog_tmpfile.metastore
+            ).model_dump_json(),
+            "DATACHAIN__WAREHOUSE": SQLiteWarehouseConfig.from_instance(
+                catalog_tmpfile.warehouse
+            ).model_dump_json(),
         },
         **popen_args,
     )

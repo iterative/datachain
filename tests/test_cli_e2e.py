@@ -214,6 +214,11 @@ def verify_files(files, base=""):
 
 def run_step(step, catalog):
     """Run an end-to-end test step with a command and expected output."""
+    from datachain.data_storage.config import (
+        SQLiteMetastoreConfig,
+        SQLiteWarehouseConfig,
+    )
+
     result = subprocess.run(  # noqa: S603
         step["command"],
         shell=False,
@@ -222,8 +227,12 @@ def run_step(step, catalog):
         encoding="utf-8",
         env={
             **os.environ,
-            "DATACHAIN__METASTORE": catalog.metastore.serialize(),
-            "DATACHAIN__WAREHOUSE": catalog.warehouse.serialize(),
+            "DATACHAIN__METASTORE": SQLiteMetastoreConfig.from_instance(
+                catalog.metastore
+            ).model_dump_json(),
+            "DATACHAIN__WAREHOUSE": SQLiteWarehouseConfig.from_instance(
+                catalog.warehouse
+            ).model_dump_json(),
         },
     )
 
