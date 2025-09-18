@@ -174,6 +174,11 @@ def run_step(step, catalog):  # noqa: PLR0912
         # additional code duplication, as a file is only opened if needed.
         stdin_file = open(step["stdin_file"])  # noqa: SIM115
     try:
+        from datachain.data_storage.config import (
+            SQLiteMetastoreConfig,
+            SQLiteWarehouseConfig,
+        )
+
         process = subprocess.Popen(  # noqa: S603
             command,
             shell=False,
@@ -183,8 +188,12 @@ def run_step(step, catalog):  # noqa: PLR0912
             encoding="utf-8",
             env={
                 **os.environ,
-                "DATACHAIN__METASTORE": catalog.metastore.serialize(),
-                "DATACHAIN__WAREHOUSE": catalog.warehouse.serialize(),
+                "DATACHAIN__METASTORE": SQLiteMetastoreConfig.from_instance(
+                    catalog.metastore
+                ).model_dump_json(),
+                "DATACHAIN__WAREHOUSE": SQLiteWarehouseConfig.from_instance(
+                    catalog.warehouse
+                ).model_dump_json(),
             },
             **popen_args,
         )

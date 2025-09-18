@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 from importlib import import_module
@@ -24,18 +25,36 @@ IN_MEMORY_ERROR_MESSAGE = "In-memory is only supported on SQLite"
 
 
 def get_metastore(in_memory: bool = False) -> "AbstractMetastore":
-    from datachain.data_storage import AbstractMetastore
-    from datachain.data_storage.serializer import deserialize
+    from datachain.data_storage.config import (
+        SQLiteDatabaseEngineConfig,
+        SQLiteMetastoreConfig,
+    )
 
     metastore_serialized = os.environ.get(METASTORE_SERIALIZED)
     if metastore_serialized:
-        metastore_obj = deserialize(metastore_serialized)
-        if not isinstance(metastore_obj, AbstractMetastore):
-            raise RuntimeError(
-                "Deserialized Metastore is not an instance of AbstractMetastore: "
-                f"{metastore_obj}"
-            )
-        return metastore_obj
+        data = json.loads(metastore_serialized)
+        if not isinstance(data, dict) or "kind" not in data:
+            raise RuntimeError("Unsupported metastore config payload")
+        kind = data.get("kind")
+        if kind == "sqlite_metastore":
+            return SQLiteMetastoreConfig.model_validate(data).build()
+        if kind in {"api_metastore", "postgresql_metastore"}:
+            try:
+                from datachain_server.config import (
+                    APIMetastoreConfig,
+                    PostgreSQLMetastoreConfig,
+                )
+                cfg_map = {
+                    "api_metastore": APIMetastoreConfig,
+                    "postgresql_metastore": PostgreSQLMetastoreConfig,
+                }
+                cfg_cls = cfg_map[kind]
+                return cfg_cls.model_validate(data).build()
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Metastore kind '{kind}' requires Studio runtime present"
+                ) from exc
+        raise RuntimeError(f"Unsupported metastore config payload kind: {kind}")
 
     metastore_import_path = os.environ.get(METASTORE_IMPORT_PATH)
     metastore_arg_envs = get_envs_by_prefix(METASTORE_ARG_PREFIX)
@@ -45,10 +64,16 @@ def get_metastore(in_memory: bool = False) -> "AbstractMetastore":
     }
 
     if not metastore_import_path:
-        from datachain.data_storage.sqlite import SQLiteMetastore
-
-        metastore_args["in_memory"] = in_memory
-        return SQLiteMetastore(**metastore_args)
+        # Use config builder for default SQLite metastore
+        db_cfg = SQLiteDatabaseEngineConfig(
+            db_file=metastore_args.get("db_file"),
+            in_memory=in_memory or bool(metastore_args.get("in_memory")),
+        )
+        ms_cfg = SQLiteMetastoreConfig(
+            uri=str(metastore_args.get("uri", "")),
+            db=db_cfg,
+        )
+        return ms_cfg.build()
     if in_memory:
         raise RuntimeError(IN_MEMORY_ERROR_MESSAGE)
     # Metastore paths are specified as (for example):
@@ -64,18 +89,32 @@ def get_metastore(in_memory: bool = False) -> "AbstractMetastore":
 
 
 def get_warehouse(in_memory: bool = False) -> "AbstractWarehouse":
-    from datachain.data_storage import AbstractWarehouse
-    from datachain.data_storage.serializer import deserialize
+    from datachain.data_storage.config import (
+        SQLiteDatabaseEngineConfig,
+        SQLiteWarehouseConfig,
+    )
 
     warehouse_serialized = os.environ.get(WAREHOUSE_SERIALIZED)
     if warehouse_serialized:
-        warehouse_obj = deserialize(warehouse_serialized)
-        if not isinstance(warehouse_obj, AbstractWarehouse):
-            raise RuntimeError(
-                "Deserialized Warehouse is not an instance of AbstractWarehouse: "
-                f"{warehouse_obj}"
-            )
-        return warehouse_obj
+        data = json.loads(warehouse_serialized)
+        if not isinstance(data, dict) or "kind" not in data:
+            raise RuntimeError("Unsupported warehouse config payload")
+        kind = data.get("kind")
+        if kind == "sqlite_warehouse":
+            return SQLiteWarehouseConfig.model_validate(data).build()
+        if kind in {"clickhouse_warehouse"}:
+            try:
+                from datachain_server.config import (
+                    ClickHouseWarehouseConfig,
+                )
+                cfg_map = {"clickhouse_warehouse": ClickHouseWarehouseConfig}
+                cfg_cls = cfg_map[kind]
+                return cfg_cls.model_validate(data).build()
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Warehouse kind '{kind}' requires Studio runtime present"
+                ) from exc
+        raise RuntimeError(f"Unsupported warehouse config payload kind: {kind}")
 
     warehouse_import_path = os.environ.get(WAREHOUSE_IMPORT_PATH)
     warehouse_arg_envs = get_envs_by_prefix(WAREHOUSE_ARG_PREFIX)
@@ -85,10 +124,13 @@ def get_warehouse(in_memory: bool = False) -> "AbstractWarehouse":
     }
 
     if not warehouse_import_path:
-        from datachain.data_storage.sqlite import SQLiteWarehouse
-
-        warehouse_args["in_memory"] = in_memory
-        return SQLiteWarehouse(**warehouse_args)
+        # Use config builder for default SQLite warehouse
+        db_cfg = SQLiteDatabaseEngineConfig(
+            db_file=warehouse_args.get("db_file"),
+            in_memory=in_memory or bool(warehouse_args.get("in_memory")),
+        )
+        wh_cfg = SQLiteWarehouseConfig(db=db_cfg)
+        return wh_cfg.build()
     if in_memory:
         raise RuntimeError(IN_MEMORY_ERROR_MESSAGE)
     # Warehouse paths are specified as (for example):
