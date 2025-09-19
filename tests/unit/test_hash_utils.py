@@ -33,6 +33,14 @@ def double_arg_and_return_annot(x: int) -> int:
             "ddc23abe88c722954e568f7db548ddcbd060eed1a1a815bfcaabd1dce8add3aa",
         ),
         (
+            [func.row_number().over(C("age"))],
+            "9da0e1581399e92f628c00879422835fc05ada2584e9962c0edb20f87637e8bf",
+        ),
+        (
+            [C("age").label("user_age")],
+            "8a0a3d4e99972dc5fdc462b9981b309bbc6b0cc86d73880d56108ef0553bd426",
+        ),
+        (
             [C("age") > 20],
             "6ba1c4384c710fe439e84749d7d08d675cb03d4c3683eb55bce11efd42372b67",
         ),

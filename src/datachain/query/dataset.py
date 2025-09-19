@@ -1010,9 +1010,9 @@ class SQLJoin(Step):
 
     def hash_inputs(self) -> str:
         predicates = (
-            (self.predicates,)
-            if not isinstance(self.predicates, tuple)
-            else self.predicates
+            self.predicates
+            if isinstance(self.predicates, tuple)
+            else (self.predicates,)
         )
 
         parts = [
