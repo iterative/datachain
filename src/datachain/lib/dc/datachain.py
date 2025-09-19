@@ -207,6 +207,14 @@ class DataChain:
         self.print_schema(file=file)
         return file.getvalue()
 
+    def hash(self) -> str:
+        """
+        Calculates SHA hash of this chain. Hash calculation is fast and consistent.
+        It takes into account all the steps added to the chain and their inputs.
+        Order of the steps is important.
+        """
+        return self._query.hash()
+
     def _as_delta(
         self,
         on: Optional[Union[str, Sequence[str]]] = None,

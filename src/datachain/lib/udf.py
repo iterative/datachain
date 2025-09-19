@@ -1,3 +1,4 @@
+import hashlib
 import sys
 import traceback
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -12,6 +13,7 @@ from pydantic import BaseModel
 from datachain.asyn import AsyncMapper
 from datachain.cache import temporary_cache
 from datachain.dataset import RowDict
+from datachain.hash_utils import hash_callable
 from datachain.lib.convert.flatten import flatten
 from datachain.lib.file import DataModel, File
 from datachain.lib.utils import AbstractUDF, DataChainError, DataChainParamsError
@@ -60,6 +62,9 @@ class UDFAdapter:
     output: UDFOutputSpec
     batch_size: Optional[int] = None
     batch: int = 1
+
+    def hash(self) -> str:
+        return self.inner.hash()
 
     def get_batching(self, use_partitioning: bool = False) -> BatchingStrategy:
         if use_partitioning:
@@ -150,6 +155,21 @@ class UDFBase(AbstractUDF):
         self.params: Optional[SignalSchema] = None
         self.output = None
         self._func = None
+
+    def hash(self) -> str:
+        """
+        Creates SHA hash of this UDF function. It takes into account function,
+        inputs and outputs.
+        """
+        parts = [
+            hash_callable(self._func),
+            self.params.hash() if self.params else "",
+            self.output.hash(),
+        ]
+
+        return hashlib.sha256(
+            b"".join([bytes.fromhex(part) for part in parts])
+        ).hexdigest()
 
     def process(self, *args, **kwargs):
         """Processing function that needs to be defined by user"""

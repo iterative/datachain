@@ -25,7 +25,7 @@ from datachain.data_storage.sqlite import (
     SQLiteMetastore,
     SQLiteWarehouse,
 )
-from datachain.dataset import DatasetRecord
+from datachain.dataset import DatasetRecord, DatasetVersion
 from datachain.lib.dc import Sys
 from datachain.namespace import Namespace
 from datachain.project import Project
@@ -612,7 +612,25 @@ def dataset_record():
         name=f"ds_{uuid.uuid4().hex}",
         description="",
         attrs=[],
-        versions=[],
+        versions=[
+            DatasetVersion(
+                id=1,
+                uuid=uuid.uuid4().hex,
+                dataset_id=1,
+                version="1.0.0",
+                status=1,
+                created_at=datetime.now(),
+                finished_at=datetime.now(),
+                error_message="",
+                error_stack="",
+                num_objects=6,
+                size=100,
+                feature_schema=None,
+                script_output="",
+                schema=None,
+                _preview_data=[],
+            )
+        ],
         status=1,
         schema={},
         feature_schema={},
