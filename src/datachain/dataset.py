@@ -1,5 +1,6 @@
 import builtins
 import json
+import re
 from dataclasses import dataclass, fields
 from datetime import datetime
 from functools import cached_property
@@ -10,7 +11,6 @@ from typing import (
     TypeVar,
     Union,
 )
-from urllib.parse import urlparse
 
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
@@ -43,25 +43,58 @@ DATASET_NAME_REPLACEMENT_CHAR = "_"
 StorageURI = NewType("StorageURI", str)
 
 
-def parse_dataset_uri(uri: str) -> tuple[str, Optional[str]]:
+def parse_dataset_uri(uri: str) -> tuple[str, str, str, str | None]:
     """
-    Parse dataser uri to extract name and version out of it (if version is defined)
-    Example:
-        Input: ds://zalando@v3.0.1
-        Output: (zalando, 3.0.1)
+    Parse a dataset URI of the form:
+
+        ds://<namespace>.<project>.<name>[@v<semver>]
+
+    Components:
+    - `ds://`        : required prefix identifying dataset URIs.
+    - `namespace`    : required namespace, may start with '@' (e.g., "@user").
+    - `project`      : required project name inside the namespace.
+    - `name`         : required dataset name.
+    - `@v<semver>`   : optional version suffix. Must start with '@v' and
+                       be a semantic version string MAJOR.MINOR.PATCH
+                       (e.g., "1.0.4").
+
+    Returns:
+        tuple[str, str, str, str | None]:
+            (namespace, project, name, version) where version is None
+            if not provided.
+
+    Raises:
+        ValueError: if the URI does not start with 'ds://' or does not
+                    match the expected format.
     """
-    p = urlparse(uri)
-    if p.scheme != "ds":
-        raise Exception("Dataset uri should start with ds://")
-    s = p.netloc.split("@v")
-    name = s[0]
-    if len(s) == 1:
-        return name, None
-    if len(s) != 2:
-        raise Exception(
-            "Wrong dataset uri format, it should be: ds://<name>@v<version>"
-        )
-    return name, s[1]
+
+    if not uri.startswith("ds://"):
+        raise ValueError(f"Invalid dataset URI: {uri}")
+
+    body = uri[len("ds://") :]
+
+    pattern = re.compile(
+        r"""
+        ^(?P<namespace>@?\w+)      # namespace, may start with '@'
+        \. (?P<project>\w+)        # project
+        \. (?P<name>\w+)           # dataset name
+        (?:@v                      # optional version prefix must be '@v'
+            (?P<version>\d+\.\d+\.\d+)
+        )?$                        # end of string
+        """,
+        re.VERBOSE,
+    )
+
+    match = pattern.match(body)
+    if not match:
+        raise ValueError(f"Invalid dataset URI format: {uri}")
+
+    return (
+        match.group("namespace"),
+        match.group("project"),
+        match.group("name"),
+        match.group("version"),
+    )
 
 
 def create_dataset_uri(
