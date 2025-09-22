@@ -43,29 +43,16 @@ DATASET_NAME_REPLACEMENT_CHAR = "_"
 StorageURI = NewType("StorageURI", str)
 
 
-def parse_dataset_uri(uri: str) -> tuple[str, str, str, str | None]:
+def parse_dataset_uri(
+    uri: str,
+) -> tuple[Optional[str], Optional[str], str, Optional[str]]:
     """
     Parse a dataset URI of the form:
 
-        ds://<namespace>.<project>.<name>[@v<semver>]
-
-    Components:
-    - `ds://`        : required prefix identifying dataset URIs.
-    - `namespace`    : required namespace, may start with '@' (e.g., "@user").
-    - `project`      : required project name inside the namespace.
-    - `name`         : required dataset name.
-    - `@v<semver>`   : optional version suffix. Must start with '@v' and
-                       be a semantic version string MAJOR.MINOR.PATCH
-                       (e.g., "1.0.4").
+        ds://[<namespace>.][<project>.]<name>[@v<semver>]
 
     Returns:
-        tuple[str, str, str, str | None]:
-            (namespace, project, name, version) where version is None
-            if not provided.
-
-    Raises:
-        ValueError: if the URI does not start with 'ds://' or does not
-                    match the expected format.
+        (namespace, project, name, version)
     """
 
     if not uri.startswith("ds://"):
@@ -73,28 +60,17 @@ def parse_dataset_uri(uri: str) -> tuple[str, str, str, str | None]:
 
     body = uri[len("ds://") :]
 
-    pattern = re.compile(
-        r"""
-        ^(?P<namespace>@?\w+)      # namespace, may start with '@'
-        \. (?P<project>\w+)        # project
-        \. (?P<name>\w+)           # dataset name
-        (?:@v                      # optional version prefix must be '@v'
-            (?P<version>\d+\.\d+\.\d+)
-        )?$                        # end of string
-        """,
-        re.VERBOSE,
-    )
-
-    match = pattern.match(body)
+    # Split off optional @v<version>
+    match = re.match(r"^(?P<name>.+?)(?:@v(?P<version>\d+\.\d+\.\d+))?$", body)
     if not match:
         raise ValueError(f"Invalid dataset URI format: {uri}")
 
-    return (
-        match.group("namespace"),
-        match.group("project"),
-        match.group("name"),
-        match.group("version"),
-    )
+    dataset_name = match.group("name")
+    version = match.group("version")
+
+    namespace, project, name = parse_dataset_name(dataset_name)
+
+    return namespace, project, name, version
 
 
 def create_dataset_uri(

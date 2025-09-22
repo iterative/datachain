@@ -186,29 +186,19 @@ def test_parse_dataset_name_empty_name():
 @pytest.mark.parametrize(
     "uri,namespace,project,name,version",
     [
+        ("ds://result", None, None, "result", None),
+        ("ds://result@v1.0.5", None, None, "result", "1.0.5"),
+        ("ds://dev.result", None, "dev", "result", None),
+        ("ds://dev.result@v1.0.5", None, "dev", "result", "1.0.5"),
         ("ds://global.dev.result", "global", "dev", "result", None),
         ("ds://global.dev.result@v1.0.5", "global", "dev", "result", "1.0.5"),
         ("ds://@ilongin.dev.result", "@ilongin", "dev", "result", None),
         ("ds://@ilongin.dev.result@v1.0.4", "@ilongin", "dev", "result", "1.0.4"),
         ("ds://@vlad.dev.result", "@vlad", "dev", "result", None),
         ("ds://@vlad.dev.result@v1.0.5", "@vlad", "dev", "result", "1.0.5"),
+        ("ds://@vlad.@vlad.result@v1.0.5", "@vlad", "@vlad", "result", "1.0.5"),
+        ("ds://@vlad.@vlad.@vlad@v1.0.5", "@vlad", "@vlad", "@vlad", "1.0.5"),
     ],
 )
 def test_parse_dataset_uri(uri, namespace, project, name, version):
     assert parse_dataset_uri(uri) == (namespace, project, name, version)
-
-
-@pytest.mark.parametrize(
-    "uri",
-    [
-        "ds://result",
-        "ds://result@v1.0.2",
-        "ds://@user@v1.0.5",
-        "ds://@user.dev.result@1.0.5",
-    ],
-)
-def test_parse_dataset_uri_invalid_format(uri):
-    with pytest.raises(ValueError) as excinfo:
-        parse_dataset_uri(uri)
-
-    assert str(excinfo.value) == f"Invalid dataset URI format: {uri}"
