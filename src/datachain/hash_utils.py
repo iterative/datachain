@@ -17,7 +17,7 @@ T = TypeVar("T", bound=ColumnElement)
 ColumnLike = Union[str, T]
 
 
-def serialize_column_element(expr: str | ColumnElement) -> dict:  # noqa: PLR0911
+def serialize_column_element(expr: Union[str, ColumnElement]) -> dict:  # noqa: PLR0911
     """
     Recursively serialize a SQLAlchemy ColumnElement into a deterministic structure.
     """
