@@ -1739,10 +1739,8 @@ class AbstractDBMetastore(AbstractMetastore):
             return self._checkpoints.select()
         return select(*columns)
 
-    def _checkpoints_update(self, *where) -> "Update":
-        if not where:
-            return self._checkpoints.update()
-        return self._checkpoints.update().where(*where)
+    def _checkpoints_delete(self) -> "Delete":
+        return self._checkpoints.delete()
 
     def _checkpoints_query(self):
         return self._checkpoints_select(
