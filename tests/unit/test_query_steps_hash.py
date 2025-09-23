@@ -53,6 +53,14 @@ def double_gen_multi_arg(x, y):
     yield y * 2
 
 
+def double_default(x, y=2):
+    return x * y
+
+
+def double_kwonly(x, *, factor=3):
+    return x * factor
+
+
 def map_custom_feature(m_fr):
     return CustomFeature(
         sqrt=math.sqrt(m_fr.count),
@@ -140,6 +148,10 @@ def test_select_except_hash(inputs, _hash):
         (
             (C("files.path").glob("*.jpg"),),
             "c77898b24747f5106fd3793862d6c227e0423e096c6859ac95c27a9f7f7a824b",
+        ),
+        (
+            sa.or_(C("age") > 50, C("country") == "US"),
+            "025880292c522fe7d3cf1163a11dc33b12c333e53d09efb12e40be08f31f95a2",
         ),
     ],
 )
@@ -356,6 +368,18 @@ def test_subtract_hash(test_session, numbers_dataset, on, _hash):
             ["y"],
             {"double": int},
             "674838e9557ad24b9fc68c6146b781e02fd7e0ad64361cc20c055f47404f0a95",
+        ),
+        (
+            double_default,
+            ["x"],
+            {"double": int},
+            "f25afd25ebb5f054bab721bea9126c5173c299abb0cbb3fd37d5687a7693a655",
+        ),
+        (
+            double_kwonly,
+            ["x"],
+            {"double": int},
+            "12f3620f703c541e0913c27cd828a8fe6e446f62f3d0b2a4ccfa5a1d9e2472e7",
         ),
         (
             map_custom_feature,
