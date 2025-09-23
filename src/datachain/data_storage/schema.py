@@ -51,7 +51,7 @@ def dedup_columns(columns: Iterable[sa.Column]) -> list[sa.Column]:
     """
     c_set: dict[str, sa.Column] = {}
     for c in columns:
-        if (ec := c_set.get(c.name, None)) is not None:
+        if (ec := c_set.get(c.name)) is not None:
             if str(ec.type) != str(c.type):
                 raise ValueError(
                     f"conflicting types for column {c.name}:{c.type!s} and {ec.type!s}"
