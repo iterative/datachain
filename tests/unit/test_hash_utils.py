@@ -38,7 +38,11 @@ lambda3 = lambda z: z - 1  # noqa: E731
             "ddc23abe88c722954e568f7db548ddcbd060eed1a1a815bfcaabd1dce8add3aa",
         ),
         (
-            [func.row_number().over(C("age"))],
+            [
+                func.row_number().over(
+                    func.window(partition_by="file.name", order_by="file.name")
+                )
+            ],
             "9da0e1581399e92f628c00879422835fc05ada2584e9962c0edb20f87637e8bf",
         ),
         (
