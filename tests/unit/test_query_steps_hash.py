@@ -334,19 +334,19 @@ def test_subtract_hash(test_session, numbers_dataset, on, _hash):
             lambda x: x * 2,
             ["x"],
             {"double": int},
-            "decb3165f496aa7df8203d27d58b884a60b2dcec25edcc02d251be78c5cdf834",
+            "cad33fb5ebae6d77809082043f119cdbceb07e38ea828386b4870a40ca453303",
         ),
         (
             lambda y: y * 2,
             ["y"],
             {"double": int},
-            "47d64007cf9cd8d46efe75e9f18b75a8f974634a5eea739d95692dd499ee247e",
+            "ad3116be4c79d2b9210f007133c1c49ce5812e088327470c76e65886728095cc",
         ),
         (
             double,
             ["x"],
             {"double": int},
-            "5b38846a0582d96d20d6eb7b633c1f6024aabd98dab86bb0636d33e12b4232cd",
+            "c62dcb3c110b1cadb47dd3b6499d7f4da351417fbe806a3e835237928a468708",
         ),
         (
             lambda m_fr: CustomFeature(
@@ -355,7 +355,7 @@ def test_subtract_hash(test_session, numbers_dataset, on, _hash):
             ),
             ["t1"],
             {"x": CustomFeature},
-            "c877e5f489a3adbe9fa94df79767d24dc6b64b404f68d910ea59fe4a8510cb60",
+            "a4b7e5c78807c028df227cc9846a9b9e66ecb21d4b642b575102f2423c06e916",
         ),
     ],
 )
@@ -377,19 +377,19 @@ def test_udf_mapper_hash(
             double_gen,
             ["x"],
             {"double": int},
-            "ecf2a08ba539c174857215b563933612830fb311eb3c030d7bc1deb1bbe24c55",
+            "c7ae1a50df841da2012c8422be87bfb29b101113030c43309ab6619011cdcc1c",
         ),
         (
             double_gen_multi_arg,
             ["x", "y"],
             {"double": int},
-            "e6ab21fef879b0e5992f27c2834e34fedccd8ffed9b668593c5cf4efd3431929",
+            "850352183532e057ec9c914bda906f15eb2223298e2cbd0c3585bf95a54e15e9",
         ),
         (
             custom_feature_gen,
             ["t1"],
             {"x": CustomFeature},
-            "967d649d5385c8d3d1231daa57d066e0c1dfcbb02c871a57960ed148e5223317",
+            "7ff702d242612cbb83cbd1777aa79d2792fb2a341db5ea406cd9fd3f42543b9c",
         ),
     ],
 )
@@ -412,14 +412,14 @@ def test_udf_generator_hash(
             ["x"],
             {"double": int},
             [C("x")],
-            "9ade6a992886adad25d3ab1e00cea23f3dc5d15cf27a86558fd744646393bad1",
+            "27f07777802865d1f78bba78edce4233cc1b155dbce1b0af3d1e93b290fba04e",
         ),
         (
             custom_feature_gen,
             ["t1"],
             {"x": CustomFeature},
             [C.t1.my_name],
-            "73968e35606d694e6cd4b98c168560427e888f66fa9c1b4f90ed6af8ec482795",
+            "f3d2861f9c080529fe1ab33106c59f157e48ed6422dfb84c3e62e12b62db7fa7",
         ),
     ],
 )

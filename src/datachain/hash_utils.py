@@ -1,4 +1,5 @@
 import hashlib
+import inspect
 import json
 from collections.abc import Sequence
 from typing import TypeVar, Union
@@ -102,13 +103,30 @@ def hash_column_elements(columns: Sequence[ColumnLike]) -> str:
 
 
 def hash_callable(func):
-    """Calculate hash from a callable (e.g function or lambda)"""
+    """
+    Calculate a hash from a callable (e.g function or lambda)
+    ."""
     if not callable(func):
         raise TypeError("Expected a callable")
 
+    try:
+        # Prefer source code for stability across Python versions
+        payload = inspect.getsource(func).strip()
+    except (OSError, TypeError):
+        # Fallback: use bytecode (not cross-version stable, but deterministic in
+        # same runtime)
+        payload = func.__code__.co_code
+
+    # Add some extra context so two different funcs with identical bodies still differ
+    extras = {
+        "name": func.__name__,
+        "defaults": func.__defaults__,
+        "annotations": {
+            k: getattr(v, "__name__", str(v)) for k, v in func.__annotations__.items()
+        },
+    }
+
     h = hashlib.sha256()
-    h.update(func.__name__.encode())
-    h.update(func.__code__.co_code)
-    h.update(str(func.__defaults__).encode())
-    h.update(str(func.__annotations__).encode())
+    h.update(str(payload).encode() if isinstance(payload, str) else payload)
+    h.update(str(extras).encode())
     return h.hexdigest()

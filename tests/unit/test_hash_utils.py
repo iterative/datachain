@@ -63,19 +63,19 @@ def test_hash_column_elements(expr, result):
     [
         (
             lambda x: x * 2,
-            "da39989827ad84f945c7352676ff0b9ad388888ab5d1aa7d0b7dcbc3def83f11",
+            "e8a73fb6c830b1818c0278a914c2fef7fb33951fa9bb90112c4a2ef7ac902c22",
         ),
         (
             double,
-            "85e734c651a38c659c5cd1ff21df3fa015427613354a2a5c24b15781227b30ad",
+            "aba077bec793c25e277923cde6905636a80595d1cb9a92a2c53432fc620d2f44",
         ),
         (
             double_arg_annot,
-            "bcd3314b4b2c08a171f1ee9c8d7c6434c052f46ab98136ca8262fc9cea6fb29a",
+            "391b2bfe41cfb76a9bb7e72c5ab4333f89124cd256d87cee93378739d078400f",
         ),
         (
             double_arg_and_return_annot,
-            "77b4f4159e8f83586dbd09e0665c36155030696bbd0053539f7cab6bf7a32e05",
+            "5f6c61c05d2c01a1b3745a69580cbf573ecdce2e09cce332cb83db0b270ff870",
         ),
     ],
 )
