@@ -44,6 +44,7 @@ def get_metastore(in_memory: bool = False) -> "AbstractMetastore":
                     APIMetastoreConfig,
                     PostgreSQLMetastoreConfig,
                 )
+
                 cfg_map = {
                     "api_metastore": APIMetastoreConfig,
                     "postgresql_metastore": PostgreSQLMetastoreConfig,
@@ -107,6 +108,7 @@ def get_warehouse(in_memory: bool = False) -> "AbstractWarehouse":
                 from datachain_server.config import (
                     ClickHouseWarehouseConfig,
                 )
+
                 cfg_map = {"clickhouse_warehouse": ClickHouseWarehouseConfig}
                 cfg_cls = cfg_map[kind]
                 return cfg_cls.model_validate(data).build()
