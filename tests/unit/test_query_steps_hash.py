@@ -73,14 +73,18 @@ def numbers_dataset(test_session):
     Fixture to create dataset with stable / constant UUID to have consistent
     hash values in tests as it goes into chain hash calculation
     """
-    dc.read_values(num=list(range(100)), session=test_session).save("numbers")
+    dc.read_values(num=list(range(100)), session=test_session).save("dev.num.numbers")
     test_session.catalog.metastore.update_dataset_version(
-        test_session.catalog.get_dataset("numbers"),
+        test_session.catalog.get_dataset(
+            "numbers", namespace_name="dev", project_name="num"
+        ),
         "1.0.0",
         uuid="9045d46d-7c57-4442-aae3-3ca9e9f286c4",
     )
 
-    return test_session.catalog.get_dataset("numbers")
+    return test_session.catalog.get_dataset(
+        "numbers", namespace_name="dev", project_name="num"
+    )
 
 
 @pytest.mark.parametrize(
@@ -240,11 +244,11 @@ def test_distinct_hash(inputs, _hash):
 
 
 def test_union_hash(test_session, numbers_dataset):
-    chain1 = dc.read_dataset("numbers").filter(C("num") > 50).limit(10)
-    chain2 = dc.read_dataset("numbers").filter(C("num") < 50).limit(20)
+    chain1 = dc.read_dataset("dev.num.numbers").filter(C("num") > 50).limit(10)
+    chain2 = dc.read_dataset("dev.num.numbers").filter(C("num") < 50).limit(20)
 
     assert SQLUnion(chain1._query, chain2._query).hash() == (
-        "d61ad213851bd9714d1f6bcbf058de4aa4d0eee0582de1f2dd1d2f00fbfc8b7f"
+        "c13c83192846342814d693740085494d509247bb3512af5966e66e2ed10bc8ad"
     )
 
 
@@ -256,22 +260,22 @@ def test_union_hash(test_session, numbers_dataset):
             True,
             False,
             "{name}_right",
-            "b8a1e0000a6dbb9304186b9bcce625d3215ddf09f92805f80276c69640431c90",
+            "cd3504449c68fce0e6a687a7494b8a3ddb8e1b9b3452147c234c384fbbc201b2",
         ),
         (
             ("id", "name"),
             False,
             True,
             "{name}_r",
-            "4febef87db3f788473159077b71eaf95988969f2f7764e44a59697302ffb8bfb",
+            "f637c82a2a197823ec5dc6614623c860d682110ceec60821759534a9e24ec6cf",
         ),
     ],
 )
 def test_join_hash(
     test_session, numbers_dataset, predicates, inner, full, rname, _hash
 ):
-    chain1 = dc.read_dataset("numbers").filter(C("num") > 50).limit(10)
-    chain2 = dc.read_dataset("numbers").filter(C("num") < 50).limit(20)
+    chain1 = dc.read_dataset("dev.num.numbers").filter(C("num") > 50).limit(10)
+    chain2 = dc.read_dataset("dev.num.numbers").filter(C("num") < 50).limit(20)
 
     assert (
         SQLJoin(
@@ -321,20 +325,20 @@ def test_group_by_hash(columns, partition_by, _hash):
     [
         (
             [("id", "id")],
-            "fd2907206ee98df0c899cf58c189ffc009a396775aa85bc5b1a0aa1dfba1ba4c",
+            "4efcdbe669ea1c073bb12339f7bba79a78d61959988b12be975bffbf5dab0efd",
         ),
         (
             [("id", "id"), ("name", "name")],
-            "0814e7055c63668fece7fd0054995c5d6a7a4ae8182f8376845eefe2ae19dad6",
+            "35553413a5a988fc8d3b73694881603f50143b1e1846a6d8748a6274519c64db",
         ),
         (
             [],
-            "d9ad73ac997d8dbd6d7e2afd80657811e2ecaff3c8017d336ac9993dba8e8a78",
+            "9e9089070d5cfa3895ac03a53fd586149b84df49d0b2adbbe970fb6066e4b663",
         ),
     ],
 )
 def test_subtract_hash(test_session, numbers_dataset, on, _hash):
-    chain = dc.read_dataset("numbers").filter(C("num") > 50).limit(20)
+    chain = dc.read_dataset("dev.num.numbers").filter(C("num") > 50).limit(20)
     assert Subtract(chain._query, test_session.catalog, on).hash() == _hash
 
 

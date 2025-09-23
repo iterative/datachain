@@ -71,10 +71,10 @@ def test_read_storage(mock_get_listing):
 
 
 def test_read_dataset(test_session):
-    dc.read_values(num=[1, 2, 3], session=test_session).save("cats")
+    dc.read_values(num=[1, 2, 3], session=test_session).save("dev.animals.cats")
     assert dc.read_dataset(
-        name="cats", version="1.0.0", session=test_session
-    ).hash() == ("54634c934f1d0d03bdd9409d0dcff3a6261921a78a0ebce4752bf96a16b99604")
+        name="dev.animals.cats", version="1.0.0", session=test_session
+    ).hash() == ("51f2e5b81e40a22062a75c1590d0ccab880d182df9b39f610c6ccc503a5eb33c")
 
 
 def test_order_of_steps(mock_get_listing):
@@ -88,6 +88,9 @@ def test_order_of_steps(mock_get_listing):
 
 
 def test_all_possible_steps(test_session):
+    persons_ds_name = "dev.my_pr.persons"
+    players_ds_name = "dev.my_pr.players"
+
     def map_worker(person: Person) -> Worker:
         return Worker(
             name=person.name,
@@ -104,13 +107,15 @@ def test_all_possible_steps(test_session):
     def agg_persons(persons):
         return PersonAgg(ages=sum(p.age for p in persons), name=persons[0].age)
 
-    dc.read_values(person=persons, session=test_session).save("persons")
-    dc.read_values(player=players, session=test_session).save("players")
+    dc.read_values(person=persons, session=test_session).save(persons_ds_name)
+    dc.read_values(player=players, session=test_session).save(players_ds_name)
 
-    players_chain = dc.read_dataset("players", version="1.0.0", session=test_session)
+    players_chain = dc.read_dataset(
+        players_ds_name, version="1.0.0", session=test_session
+    )
 
     assert (
-        dc.read_dataset("persons", version="1.0.0", session=test_session)
+        dc.read_dataset(persons_ds_name, version="1.0.0", session=test_session)
         .mutate(age_double=C("person.age") * 2)
         .filter(C("person.age") > 20)
         .order_by("person.name", "person.age")
@@ -142,17 +147,22 @@ def test_all_possible_steps(test_session):
             right_on=["player.name"],
         )
         .hash()
-    ) == "1cc0fb2474c68b56171e11868c4c045c1308221a973cff1c15707e65b2da9123"
+    ) == "44b231652aee9712444ee26d5ecc77e6b87f768d17e6b8333303764d3706413b"
 
 
 def test_diff(test_session):
-    dc.read_values(person=persons, session=test_session).save("persons")
-    dc.read_values(player=players, session=test_session).save("players")
+    persons_ds_name = "dev.my_pr.persons"
+    players_ds_name = "dev.my_pr.players"
 
-    players_chain = dc.read_dataset("players", version="1.0.0", session=test_session)
+    dc.read_values(person=persons, session=test_session).save(persons_ds_name)
+    dc.read_values(player=players, session=test_session).save(players_ds_name)
+
+    players_chain = dc.read_dataset(
+        players_ds_name, version="1.0.0", session=test_session
+    )
 
     assert (
-        dc.read_dataset("persons", version="1.0.0", session=test_session)
+        dc.read_dataset(persons_ds_name, version="1.0.0", session=test_session)
         .diff(
             players_chain,
             on=["person.name"],
@@ -160,4 +170,4 @@ def test_diff(test_session):
             status_col="diff",
         )
         .hash()
-    ) == "98e26760eb7c6373f7b90aeb9afa1eee5c6a29f400b7d44018059e182dd84454"
+    ) == "aef929f3bf247966703534aa3daffb76fa8802d64660293deb95155ffacd8b77"
