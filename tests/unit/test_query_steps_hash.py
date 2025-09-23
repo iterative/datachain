@@ -84,6 +84,10 @@ def numbers_dataset(test_session):
             (C("name"),),
             "fe30656afd177ef32da191cc5ab3c68268282c382ef405d753e128b69767602f",
         ),
+        (
+            (func.rand().label("random"),),
+            "f99e28cd2023ae5a7855c72ffd44fc99e36442818d3855f46b3aed576ffc1d30",
+        ),
         (("name",), "46eeec88c5f842bd478d3ec87032c49b22adcdd46572463b0acde4b2bac0900a"),
     ],
 )
