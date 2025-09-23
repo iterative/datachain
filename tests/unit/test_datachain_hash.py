@@ -139,6 +139,9 @@ def test_all_possible_steps(test_session):
         )
         .hash()
     ) == "ccbf2471b73fb7b935a32495a7f2f36d3afba067dcd4f10d0f7a97228a7a417c"
+    assert 1 == 2
+
+    # f77aac1e61f49b0c7e41dc2acf609f276b5ca7c2644346e7c1feb749cba65a53
 
 
 def test_diff(test_session):

@@ -125,8 +125,14 @@ def hash_callable(func):
             k: getattr(v, "__name__", str(v)) for k, v in func.__annotations__.items()
         },
     }
+    print("extras are")
+    print(extras)
+    print("payload is")
+    print(payload)
 
     h = hashlib.sha256()
     h.update(str(payload).encode() if isinstance(payload, str) else payload)
     h.update(str(extras).encode())
-    return h.hexdigest()
+    _hash = h.hexdigest()
+    print(f"Hash is {_hash}")
+    return _hash
