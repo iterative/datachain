@@ -1,6 +1,7 @@
 import hashlib
 import inspect
 import json
+import textwrap
 from collections.abc import Sequence
 from typing import TypeVar, Union
 
@@ -104,35 +105,43 @@ def hash_column_elements(columns: Sequence[ColumnLike]) -> str:
 
 def hash_callable(func):
     """
-    Calculate a hash from a callable (e.g function or lambda)
-    ."""
+    Calculate a hash from a callable.
+    Rules:
+    - Named functions (def) → use source code for stable, cross-version hashing
+    - Lambdas → use bytecode (deterministic in same Python runtime)
+    """
     if not callable(func):
         raise TypeError("Expected a callable")
 
-    try:
-        # Prefer source code for stability across Python versions
-        payload = inspect.getsource(func).strip()
-    except (OSError, TypeError):
-        # Fallback: use bytecode (not cross-version stable, but deterministic in
-        # same runtime)
+    # Determine if it is a lambda
+    is_lambda = func.__name__ == "<lambda>"
+
+    if not is_lambda:
+        # Try to get exact source of named function
+        try:
+            lines, _ = inspect.getsourcelines(func)
+            payload = textwrap.dedent("".join(lines)).strip()
+        except (OSError, TypeError):
+            # Fallback: bytecode if source not available
+            payload = func.__code__.co_code
+    else:
+        # For lambdas, fall back directly to bytecode
         payload = func.__code__.co_code
 
-    # Add some extra context so two different funcs with identical bodies still differ
+    # Normalize annotations
+    annotations = {
+        k: getattr(v, "__name__", str(v)) for k, v in func.__annotations__.items()
+    }
+
+    # Extras to distinguish functions with same code but different metadata
     extras = {
         "name": func.__name__,
         "defaults": func.__defaults__,
-        "annotations": {
-            k: getattr(v, "__name__", str(v)) for k, v in func.__annotations__.items()
-        },
+        "annotations": annotations,
     }
-    print("extras are")
-    print(extras)
-    print("payload is")
-    print(payload)
 
+    # Compute SHA256
     h = hashlib.sha256()
     h.update(str(payload).encode() if isinstance(payload, str) else payload)
     h.update(str(extras).encode())
-    _hash = h.hexdigest()
-    print(f"Hash is {_hash}")
-    return _hash
+    return h.hexdigest()

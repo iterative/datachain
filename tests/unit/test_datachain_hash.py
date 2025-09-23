@@ -88,11 +88,21 @@ def test_order_of_steps(mock_get_listing):
 
 
 def test_all_possible_steps(test_session):
+    def map_worker(person: Person) -> Worker:
+        return Worker(
+            name=person.name,
+            age=person.age,
+            title="worker",
+        )
+
     def gen_persons(person):
         yield Person(
             age=person.age * 2,
             name=person.name + "_suf",
         )
+
+    def agg_persons(persons):
+        return PersonAgg(ages=sum(p.age for p in persons), name=persons[0].age)
 
     dc.read_values(person=persons, session=test_session).save("persons")
     dc.read_values(player=players, session=test_session).save("players")
@@ -109,18 +119,12 @@ def test_all_possible_steps(test_session):
             output=Person,
         )
         .map(
-            worker=lambda person: Worker(
-                name=person.name,
-                age=person.age,
-                title="worker",
-            ),
+            worker=map_worker,
             params="person",
             output={"worker": Worker},
         )
         .agg(
-            persons=lambda persons: [
-                PersonAgg(ages=sum(p.age for p in persons), name=persons[0].age)
-            ],
+            persons=agg_persons,
             partition_by=C.person.name,
             params="person",
             output={"persons": PersonAgg},
@@ -138,10 +142,7 @@ def test_all_possible_steps(test_session):
             right_on=["player.name"],
         )
         .hash()
-    ) == "ccbf2471b73fb7b935a32495a7f2f36d3afba067dcd4f10d0f7a97228a7a417c"
-    assert 1 == 2
-
-    # f77aac1e61f49b0c7e41dc2acf609f276b5ca7c2644346e7c1feb749cba65a53
+    ) == "1cc0fb2474c68b56171e11868c4c045c1308221a973cff1c15707e65b2da9123"
 
 
 def test_diff(test_session):

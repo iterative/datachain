@@ -40,6 +40,10 @@ def double(x):
     return x * 2
 
 
+def double2(y):
+    return 7 * 2
+
+
 def double_gen(x):
     yield x * 2
 
@@ -47,6 +51,13 @@ def double_gen(x):
 def double_gen_multi_arg(x, y):
     yield x * 2
     yield y * 2
+
+
+def map_custom_feature(m_fr):
+    return CustomFeature(
+        sqrt=math.sqrt(m_fr.count),
+        my_name=m_fr.nnn + "_suf",
+    )
 
 
 def custom_feature_gen(m_fr):
@@ -331,31 +342,22 @@ def test_subtract_hash(test_session, numbers_dataset, on, _hash):
     "func,params,output,_hash",
     [
         (
-            lambda x: x * 2,
-            ["x"],
-            {"double": int},
-            "cad33fb5ebae6d77809082043f119cdbceb07e38ea828386b4870a40ca453303",
-        ),
-        (
-            lambda y: y * 2,
-            ["y"],
-            {"double": int},
-            "ad3116be4c79d2b9210f007133c1c49ce5812e088327470c76e65886728095cc",
-        ),
-        (
             double,
             ["x"],
             {"double": int},
             "c62dcb3c110b1cadb47dd3b6499d7f4da351417fbe806a3e835237928a468708",
         ),
         (
-            lambda m_fr: CustomFeature(
-                sqrt=math.sqrt(m_fr.count),
-                my_name=m_fr.nnn + "_suf",
-            ),
+            double2,
+            ["y"],
+            {"double": int},
+            "674838e9557ad24b9fc68c6146b781e02fd7e0ad64361cc20c055f47404f0a95",
+        ),
+        (
+            map_custom_feature,
             ["t1"],
             {"x": CustomFeature},
-            "a4b7e5c78807c028df227cc9846a9b9e66ecb21d4b642b575102f2423c06e916",
+            "b4edceaa18ed731085e1c433a6d21deabec8d92dfc338fb1d709ed7951977fc5",
         ),
     ],
 )

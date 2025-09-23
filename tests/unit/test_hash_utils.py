@@ -17,6 +17,11 @@ def double_arg_and_return_annot(x: int) -> int:
     return x * 2
 
 
+lambda1 = lambda x: x * 2  # noqa: E731
+lambda2 = lambda y: y + 1  # noqa: E731
+lambda3 = lambda z: z - 1  # noqa: E731
+
+
 @pytest.mark.parametrize(
     "expr,result",
     [
@@ -59,16 +64,9 @@ def test_hash_column_elements(expr, result):
 
 
 @pytest.mark.parametrize(
-    "func,result",
+    "func,expected_hash",
     [
-        (
-            lambda x: x * 2,
-            "e8a73fb6c830b1818c0278a914c2fef7fb33951fa9bb90112c4a2ef7ac902c22",
-        ),
-        (
-            double,
-            "aba077bec793c25e277923cde6905636a80595d1cb9a92a2c53432fc620d2f44",
-        ),
+        (double, "aba077bec793c25e277923cde6905636a80595d1cb9a92a2c53432fc620d2f44"),
         (
             double_arg_annot,
             "391b2bfe41cfb76a9bb7e72c5ab4333f89124cd256d87cee93378739d078400f",
@@ -79,5 +77,29 @@ def test_hash_column_elements(expr, result):
         ),
     ],
 )
-def test_hash_callable(func, result):
-    assert hash_callable(func) == result
+def test_hash_named_functions(func, expected_hash):
+    h = hash_callable(func)
+    assert h == expected_hash
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda1,
+        lambda2,
+        lambda3,
+    ],
+)
+def test_lambda_same_hash(func):
+    h1 = hash_callable(func)
+    h2 = hash_callable(func)
+    assert h1 == h2  # same object produces same hash
+
+
+def test_lambda_different_hashes():
+    h1 = hash_callable(lambda1)
+    h2 = hash_callable(lambda2)
+    h3 = hash_callable(lambda3)
+
+    # Ensure hashes are all different
+    assert len({h1, h2, h3}) == 3
