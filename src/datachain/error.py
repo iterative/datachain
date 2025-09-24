@@ -97,3 +97,7 @@ class TableMissingError(DataChainError):
 
 class OutdatedDatabaseSchemaError(DataChainError):
     pass
+
+
+class CheckpointNotFoundError(NotFoundError):
+    pass
