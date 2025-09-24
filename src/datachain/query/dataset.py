@@ -1265,8 +1265,10 @@ class DatasetQuery:
         if version:
             self.version = version
 
-        namespace_name = namespace_name or self.catalog.metastore.default_namespace_name
-        project_name = project_name or self.catalog.metastore.default_project_name
+        self.namespace_name = (
+            namespace_name or self.catalog.metastore.default_namespace_name
+        )
+        self.project_name = project_name or self.catalog.metastore.default_project_name
 
         if is_listing_dataset(name) and not version:
             # not setting query step yet as listing dataset might not exist at
@@ -1276,8 +1278,8 @@ class DatasetQuery:
             self._set_starting_step(
                 self.catalog.get_dataset_with_remote_fallback(
                     name,
-                    namespace_name=namespace_name,
-                    project_name=project_name,
+                    namespace_name=self.namespace_name,
+                    project_name=self.project_name,
                     version=version,
                     pull_dataset=True,
                     update=update,
