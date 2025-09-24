@@ -1,5 +1,4 @@
 import copy
-import hashlib
 import os
 import os.path
 import sys
@@ -19,7 +18,6 @@ from typing import (
     cast,
     overload,
 )
-from uuid import uuid4
 
 import sqlalchemy
 import ujson as json
@@ -690,10 +688,8 @@ class DataChain:
 
         if job_id := os.getenv("DATACHAIN_JOB_ID"):
             catalog.metastore.create_checkpoint(
-                job_id,  # type: ignore[arg-type]
-                _hash=hashlib.sha256(  # TODO this will be replaced with self.hash()
-                    str(uuid4()).encode()
-                ).hexdigest(),
+                job_id,
+                self.hash(),  # type: ignore[arg-type]
             )
 
         return result
