@@ -687,6 +687,9 @@ class DataChain:
         )
 
         if job_id := os.getenv("DATACHAIN_JOB_ID"):
+            print(f"Job id is {job_id}")
+            print(f"Job id is {job_id}")
+            print(f"Job id is {job_id}")
             catalog.metastore.create_checkpoint(
                 job_id,
                 self.hash(),  # type: ignore[arg-type]
