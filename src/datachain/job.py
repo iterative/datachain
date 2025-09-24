@@ -22,6 +22,7 @@ class Job:
     python_version: Optional[str] = None
     error_message: str = ""
     error_stack: str = ""
+    parent_job_id: Optional[str] = None
 
     @classmethod
     def parse(
@@ -39,6 +40,7 @@ class Job:
         error_stack: str,
         params: str,
         metrics: str,
+        parent_job_id: Optional[str],
     ) -> "Job":
         return cls(
             str(id),
@@ -54,4 +56,5 @@ class Job:
             python_version,
             error_message,
             error_stack,
+            parent_job_id,
         )

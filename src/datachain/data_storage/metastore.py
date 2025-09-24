@@ -1548,6 +1548,7 @@ class AbstractDBMetastore(AbstractMetastore):
             Column("error_stack", Text, nullable=False, default=""),
             Column("params", JSON, nullable=False),
             Column("metrics", JSON, nullable=False),
+            Column("parent_job_id", Text, nullable=True),
         ]
 
     @cached_property
