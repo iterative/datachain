@@ -1,5 +1,3 @@
-import random
-import string
 from collections.abc import Sequence
 from enum import Enum
 from typing import TYPE_CHECKING, Optional, Union
@@ -11,16 +9,12 @@ from datachain.query.schema import Column
 if TYPE_CHECKING:
     from datachain.lib.dc import DataChain
 
-
 C = Column
 
 
-def get_status_col_name() -> str:
-    """Returns new unique status col name"""
-    return "diff_" + "".join(
-        random.choice(string.ascii_letters)  # noqa: S311
-        for _ in range(10)
-    )
+STATUS_COL_NAME = "diff_7aeed3aa17ba4d50b8d1c368c76e16a6"
+LEFT_DIFF_COL_NAME = "diff_95f95344064a4b819c8625cd1a5cfc2b"
+RIGHT_DIFF_COL_NAME = "diff_5808838a49b54849aa461d7387376d34"
 
 
 class CompareStatus(str, Enum):
@@ -101,9 +95,9 @@ def _compare(  # noqa: C901, PLR0912
         compare = right_compare = [c for c in cols if c in right_cols and c not in on]  # type: ignore[misc]
 
     # get diff column names
-    diff_col = status_col or get_status_col_name()
-    ldiff_col = get_status_col_name()
-    rdiff_col = get_status_col_name()
+    diff_col = status_col or STATUS_COL_NAME
+    ldiff_col = LEFT_DIFF_COL_NAME
+    rdiff_col = RIGHT_DIFF_COL_NAME
 
     # adding helper diff columns, which will be removed after
     left = left.mutate(**{ldiff_col: 1})
@@ -227,7 +221,7 @@ def compare_and_split(
         )
         ```
     """
-    status_col = get_status_col_name()
+    status_col = STATUS_COL_NAME
 
     res = _compare(
         left,

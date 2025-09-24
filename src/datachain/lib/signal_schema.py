@@ -1,4 +1,6 @@
 import copy
+import hashlib
+import json
 import warnings
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
@@ -256,6 +258,11 @@ class SignalSchema:
         if custom_types:
             signals["_custom_types"] = custom_types
         return signals
+
+    def hash(self) -> str:
+        """Create SHA hash of this schema"""
+        json_str = json.dumps(self.serialize(), sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(json_str.encode("utf-8")).hexdigest()
 
     @staticmethod
     def _split_subtypes(type_name: str) -> list[str]:

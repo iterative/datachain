@@ -209,6 +209,14 @@ class DataChain:
         self.print_schema(file=file)
         return file.getvalue()
 
+    def hash(self) -> str:
+        """
+        Calculates SHA hash of this chain. Hash calculation is fast and consistent.
+        It takes into account all the steps added to the chain and their inputs.
+        Order of the steps is important.
+        """
+        return self._query.hash()
+
     def _as_delta(
         self,
         on: Optional[Union[str, Sequence[str]]] = None,
@@ -682,7 +690,7 @@ class DataChain:
 
         if job_id := os.getenv("DATACHAIN_JOB_ID"):
             catalog.metastore.create_checkpoint(
-                job_id,  # type: ignore[arg-type]
+                job_id,
                 _hash=hashlib.sha256(  # TODO this will be replaced with self.hash()
                     str(uuid4()).encode()
                 ).hexdigest(),

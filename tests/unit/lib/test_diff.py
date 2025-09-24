@@ -529,3 +529,44 @@ def test_file_diff_nested(test_session, str_default, int_default, status_col):
         collect_fields = collect_fields[1:]
 
     assert diff.order_by("nested.file.source").to_list(*collect_fields) == expected
+
+
+def test_multiple_diffs(test_session):
+    ds1 = dc.read_values(
+        id=[1, 2, 3, 4, 5],
+        name=["John", "Doe", "Andy", "Matt", "Rick"],
+        session=test_session,
+    )
+    ds2 = dc.read_values(
+        id=[1, 2, 3],
+        name=["John", "Doe", "Andy"],
+        session=test_session,
+    )
+    ds3 = dc.read_values(
+        id=[1, 2],
+        name=["John", "Doe"],
+        session=test_session,
+    )
+
+    diff = ds1.diff(
+        ds2,
+        added=True,
+        deleted=False,
+        modified=False,
+        same=False,
+        on=["id"],
+        status_col="diff",
+    ).diff(
+        ds3,
+        added=True,
+        deleted=False,
+        modified=False,
+        same=False,
+        on=["id"],
+        status_col="diff",
+    )
+
+    assert diff.order_by("id").to_list(*["diff", "id", "name"]) == [
+        ("A", 4, "Matt"),
+        ("A", 5, "Rick"),
+    ]
