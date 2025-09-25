@@ -1610,6 +1610,14 @@ class AbstractDBMetastore(AbstractMetastore):
         Returns the job id.
         """
         job_id = str(uuid4())
+        print("---------------------------------------------------------------")
+        print("---------------------------------------------------------------")
+        print(f"Creating new job with id {job_id}")
+        print(f"Creating new job with id {job_id}")
+        print(f"Creating new job with id {job_id}")
+        print(f"Creating new job with id {job_id}")
+        print("---------------------------------------------------------------")
+        print("---------------------------------------------------------------")
         self.db.execute(
             self._jobs_insert().values(
                 id=job_id,
@@ -1633,6 +1641,10 @@ class AbstractDBMetastore(AbstractMetastore):
     def get_job(self, job_id: str, conn=None) -> Optional[Job]:
         """Returns the job with the given ID."""
         query = self._jobs_select(self._jobs).where(self._jobs.c.id == job_id)
+        print("Job query is")
+        print("Job query is")
+        print("Job query is")
+        print(query)
         results = list(self.db.execute(query, conn=conn))
         if not results:
             return None
