@@ -159,3 +159,26 @@ dc.read_values(scores=[0.8, 1.5, 2.1]).save("metrics")
 
 ds = dc.read_dataset("local.local.metrics")
 ds.show()
+```
+
+## Removing Namespaces and Projects
+
+Use `delete_namespace` to remove an empty namespace or an empty project within a namespace. Delete will fail if the target is not empty.
+
+### Signature
+
+```python
+def delete_namespace(name: str, session: Optional[Session]) -> None:
+```
+
+- **`<namespace>`** — deletes the namespace (must contain no projects or datasets).
+- **`<namespace>.<project>`** — deletes the project (must contain no datasets).
+
+### Examples
+
+```python
+import datachain as dc
+
+dc.delete_namespace("dev.my-project")  # delete project
+dc.delete_namespace("dev")             # delete namespace
+```

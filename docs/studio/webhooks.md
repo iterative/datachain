@@ -28,12 +28,14 @@ Payload:
             "id": "da59df47-d121-4eb6-aa76-dc452755544e",
             "status": "COMPLETE",
             "error_message": "",
+            "name": "job_query.py",
             "created_at": "2021-07-27T16:02:08.070557",
             "updated_at": "2021-07-27T16:22:08.070557",
             "finished_at": "2021-07-27T16:22:08.070557",
             "url": "https://studio.datachain.ai/team/TeamName/datasets/jobs/da59df47-d121-4eb6-aa76-dc452755544e"
         },
         "timestamp": "2021-07-27T16:22:08.070557",
+        "text": "Job job_query.py (da59df47-d121-4eb6-aa76-dc452755544e) changed its status to COMPLETE"
     }
 ```
 
@@ -45,7 +47,8 @@ Header: `http-x-datachain-event`: `PING`.
 Payload:
 ```json
 {
-    "action": "PING"
+    "action": "PING",
+    "message": "Webhook connection test successful"
 }
 ```
 
@@ -252,6 +255,14 @@ if signature:
 else:
     print("Warning: No signature header found")
 ```
+
+## Slack Integration
+
+You can use this webhook feature to send a message to slack as well. To integrate slack with Studio,
+
+1. Using the guide as described in [Slack documentation](https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/) , create an incoming webhook and copy the webhook address in the following format `https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX` .
+2. Use the address to create a webhook in Studio as described [above](#creating-webhooks)
+3. You should now be able to view the message in Slack channel connected.
 
 ## Best practices for using Webhooks
 

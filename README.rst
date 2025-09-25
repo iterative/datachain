@@ -89,44 +89,32 @@ datasets that evolve over time and may occasionally have processing errors.
 .. code:: py
 
     import datachain as dc
-    from datachain import C, File
 
-    def process_file(file: File):
-        """Process a file, which may occasionally fail."""
+    def process_file(file: dc.File) -> tuple[str, str, str]:
+        """Analyze a file, may occasionally fail."""
         try:
             # Your processing logic here
             content = file.read_text()
-            result = analyze_content(content)
-            return {
-                "content": content,
-                "result": result,
-                "error": None  # No error
-            }
+            result = content.upper()
+            return content, result, ""  # No error
         except Exception as e:
             # Return an error that will trigger reprocessing next time
-            return {
-                "content": None,
-                "result": None,
-                "error": str(e)  # Error field will trigger retry
-            }
+            return "", "", str(e)  # Error field will trigger retry
 
     # Process files efficiently with delta and retry
+    # Run it many times, keep adding files, to see delta and retry in action
     chain = (
         dc.read_storage(
             "data/",
             update=True,
             delta=True,              # Process only new/changed files
             delta_on="file.path",    # Identify files by path
-            retry_on="error"         # Field that indicates errors
+            delta_retry="error",     # Process files with error again
         )
-        .map(processed_result=process_file)
-        .mutate(
-            content=C("processed_result.content"),
-            result=C("processed_result.result"),
-            error=C("processed_result.error")
-        )
-        .save(name="processed_data")
+        .map(process_file, output=("content", "result", "error"))
+        .save("processed-data")
     )
+
 
 Example: LLM based text-file evaluation
 ---------------------------------------

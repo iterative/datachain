@@ -77,7 +77,6 @@ def tmp_dir(tmp_path):
 
 
 def test_simple_wildcard(tmp_dir):
-    # Single level wildcard
     result = dc.read_storage(f"{tmp_dir}/deep/level1/temp/*.tmp")
     names = {f.name for f in result.to_values("file")}
     assert names == {"temp1.tmp", "temp2.tmp"}
@@ -224,18 +223,23 @@ def test_mixed_pattern_types(tmp_dir):
 
 def test_glob_pattern_in_bucket_name_raises_error():
     with pytest.raises(
-        ValueError, match="Glob patterns in bucket names are not supported.*bucket-\\*"
+        ValueError, match=r"Glob patterns in bucket names are not supported.*bucket-\*"
     ):
         dc.read_storage("s3://bucket-*/data/file.txt")
 
     with pytest.raises(
-        ValueError, match="Glob patterns in bucket names are not supported.*bucket-\\?"
+        ValueError, match=r"Glob patterns in bucket names are not supported.*bucket-\?"
     ):
         dc.read_storage("s3://bucket-?/files/*.txt")
 
     with pytest.raises(
         ValueError,
-        match="Glob patterns in bucket names are not supported.*bucket-\\{dev,prod\\}",
+        # Brace expansion appears literally in the message, we only need to
+        # escape braces for the regex engine, not double escape like before.
+        match=(
+            r"Glob patterns in bucket names are not supported.*"
+            r"bucket-\{dev,prod\}/logs/.*"
+        ),
     ):
         dc.read_storage("s3://bucket-{dev,prod}/logs/*.log")
 
@@ -256,6 +260,58 @@ def test_hugging_face_glob_patterns():
 
     with pytest.raises(
         ValueError,
-        match="Glob patterns in bucket names are not supported.*hf://datasets",
+        match=r"Glob patterns in bucket names are not supported.*hf://datasets",
     ):
         validate_cloud_bucket_name("hf://datasets*/username/repo-name/data/file.txt")
+
+
+def test_brace_expansion_numeric_ranges(tmp_dir):
+    (tmp_dir / "deep").mkdir(exist_ok=True)
+
+    for i in range(1, 6):
+        (tmp_dir / "deep" / f"file{i}.txt").write_text(f"content {i}")
+
+    result = dc.read_storage(f"{tmp_dir}/deep/file{{1..3}}.txt")
+    files = sorted(f.name for f in result.to_values("file"))
+    assert files == ["file1.txt", "file2.txt", "file3.txt"]
+
+    for i in range(1, 10):
+        (tmp_dir / "deep" / f"data{str(i).zfill(2)}.log").write_text(f"log {i}")
+
+    result = dc.read_storage(f"{tmp_dir}/deep/data{{01..05}}.log")
+    files = sorted(f.name for f in result.to_values("file"))
+    assert files == [
+        "data01.log",
+        "data02.log",
+        "data03.log",
+        "data04.log",
+        "data05.log",
+    ]
+
+
+def test_brace_expansion_character_ranges(tmp_dir):
+    (tmp_dir / "deep").mkdir(exist_ok=True)
+    for char in "abcde":
+        dir_path = tmp_dir / "deep" / f"dir-{char}"
+        dir_path.mkdir()
+        (dir_path / "file.txt").write_text(f"content {char}")
+
+    result = dc.read_storage(f"{tmp_dir}/deep/dir-{{a..c}}/file.txt")
+    dirs = sorted(f.source.split("/")[-1] for f in result.to_values("file"))
+    assert dirs == ["dir-a", "dir-b", "dir-c"]
+
+
+def test_brace_expansion_combined_patterns(tmp_dir):
+    (tmp_dir / "deep").mkdir(exist_ok=True)
+    for year in ["2005"]:
+        for month in range(1, 13):
+            filename = f"data-{year}-{str(month).zfill(2)}.csv"
+            (tmp_dir / "deep" / filename).write_text(f"data {year}-{month}")
+
+    result = dc.read_storage(f"{tmp_dir}/deep/data-2005-{{01..03}}.csv")
+    files = sorted([f.name for f in result.to_values("file")])
+    assert files == ["data-2005-01.csv", "data-2005-02.csv", "data-2005-03.csv"]
+
+    result = dc.read_storage(f"{tmp_dir}/deep/data-*-{{10..12}}.csv")
+    files = sorted(f.name for f in result.to_values("file"))
+    assert files == ["data-2005-10.csv", "data-2005-11.csv", "data-2005-12.csv"]

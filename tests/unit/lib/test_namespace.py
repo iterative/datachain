@@ -7,7 +7,7 @@ from datachain.error import (
     NamespaceNotFoundError,
 )
 from datachain.lib.namespaces import create as create_namespace
-from datachain.lib.namespaces import delete as delete_namespace
+from datachain.lib.namespaces import delete_namespace
 from datachain.lib.namespaces import get as get_namespace
 from datachain.lib.namespaces import ls as ls_namespaces
 from datachain.lib.projects import create as create_project
@@ -86,6 +86,13 @@ def test_delete_namespace(test_session, dev_namespace):
     delete_namespace(dev_namespace.name, session=test_session)
     with pytest.raises(NamespaceNotFoundError):
         get_namespace(dev_namespace.name, session=test_session)
+
+
+def test_delete_namespace_no_session():
+    create_namespace("dev", "Dev namespace")
+    delete_namespace("dev")
+    with pytest.raises(NamespaceNotFoundError):
+        get_namespace("dev")
 
 
 def test_delete_namespace_not_found(test_session, dev_namespace):

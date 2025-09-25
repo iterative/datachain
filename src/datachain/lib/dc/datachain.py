@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import os
 import os.path
 import sys
@@ -18,6 +19,7 @@ from typing import (
     cast,
     overload,
 )
+from uuid import uuid4
 
 import sqlalchemy
 import ujson as json
@@ -206,6 +208,14 @@ class DataChain:
         file = io.StringIO()
         self.print_schema(file=file)
         return file.getvalue()
+
+    def hash(self) -> str:
+        """
+        Calculates SHA hash of this chain. Hash calculation is fast and consistent.
+        It takes into account all the steps added to the chain and their inputs.
+        Order of the steps is important.
+        """
+        return self._query.hash()
 
     def _as_delta(
         self,
@@ -665,7 +675,7 @@ class DataChain:
                     name, namespace=namespace_name, project=project_name, **kwargs
                 )
 
-        return self._evolve(
+        result = self._evolve(
             query=self._query.save(
                 name=name,
                 version=version,
@@ -677,6 +687,16 @@ class DataChain:
                 **kwargs,
             )
         )
+
+        if job_id := os.getenv("DATACHAIN_JOB_ID"):
+            catalog.metastore.create_checkpoint(
+                job_id,
+                _hash=hashlib.sha256(  # TODO this will be replaced with self.hash()
+                    str(uuid4()).encode()
+                ).hexdigest(),
+            )
+
+        return result
 
     def apply(self, func, *args, **kwargs):
         """Apply any function to the chain.

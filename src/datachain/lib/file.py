@@ -332,7 +332,10 @@ class File(DataModel):
 
     @classmethod
     def upload(
-        cls, data: bytes, path: str, catalog: Optional["Catalog"] = None
+        cls,
+        data: bytes,
+        path: Union[str, os.PathLike[str]],
+        catalog: Optional["Catalog"] = None,
     ) -> "Self":
         if catalog is None:
             from datachain.catalog.loader import get_catalog
@@ -340,8 +343,10 @@ class File(DataModel):
             catalog = get_catalog()
         from datachain.client.fsspec import Client
 
-        client_cls = Client.get_implementation(path)
-        source, rel_path = client_cls.split_url(path)
+        path_str = stringify_path(path)
+
+        client_cls = Client.get_implementation(path_str)
+        source, rel_path = client_cls.split_url(path_str)
 
         client = catalog.get_client(client_cls.get_uri(source))
         file = client.upload(data, rel_path)
@@ -351,7 +356,9 @@ class File(DataModel):
         return file
 
     @classmethod
-    def at(cls, uri: str, session: Optional["Session"] = None) -> "Self":
+    def at(
+        cls, uri: Union[str, os.PathLike[str]], session: Optional["Session"] = None
+    ) -> "Self":
         """Construct a File from a full URI in one call.
 
         Example:
@@ -364,9 +371,10 @@ class File(DataModel):
         if session is None:
             session = Session.get()
         catalog = session.catalog
+        uri_str = stringify_path(uri)
 
-        client_cls = Client.get_implementation(uri)
-        source, rel_path = client_cls.split_url(uri)
+        client_cls = Client.get_implementation(uri_str)
+        source, rel_path = client_cls.split_url(uri_str)
         file = cls(source=client_cls.get_uri(source), path=rel_path)
         file._set_stream(catalog)
         return file
