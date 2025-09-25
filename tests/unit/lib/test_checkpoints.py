@@ -31,7 +31,6 @@ def test_checkpoints(test_session, monkeypatch, nums_dataset, reset_checkpoints)
             .map(new=mapper_fail)
             .save("nums3")
         )
-    # check we created first 2 datasets but third one failed
     catalog.get_dataset("nums1")
     catalog.get_dataset("nums2")
     with pytest.raises(DatasetNotFoundError):
@@ -46,7 +45,6 @@ def test_checkpoints(test_session, monkeypatch, nums_dataset, reset_checkpoints)
     dc.read_dataset("nums", session=test_session).save("nums2")
     dc.read_dataset("nums", session=test_session).save("nums3")
 
-    # check that we skipped creation of first 2 datasets (they have only 1 version)
     assert (
         len(catalog.get_dataset("nums1").versions) == 1 if not reset_checkpoints else 2
     )
@@ -55,7 +53,6 @@ def test_checkpoints(test_session, monkeypatch, nums_dataset, reset_checkpoints)
     )
     assert len(catalog.get_dataset("nums3").versions) == 1
 
-    # check checkpoints
     assert len(list(catalog.metastore.list_checkpoints(first_job_id))) == 2
     assert len(list(catalog.metastore.list_checkpoints(second_job_id))) == 3
 
@@ -85,14 +82,12 @@ def test_checkpoints_modified_chains(
     )  # added change from first run
     dc.read_dataset("nums", session=test_session).save("nums3")
 
-    # check that we skipped creation of first 2 datasets (they have only 1 version)
     assert (
         len(catalog.get_dataset("nums1").versions) == 1 if not reset_checkpoints else 2
     )
     assert len(catalog.get_dataset("nums2").versions) == 2
     assert len(catalog.get_dataset("nums3").versions) == 2
 
-    # check checkpoints
     assert len(list(catalog.metastore.list_checkpoints(first_job_id))) == 3
     assert len(list(catalog.metastore.list_checkpoints(second_job_id))) == 3
 
@@ -116,7 +111,6 @@ def test_checkpoints_multiple_runs(
             .map(new=mapper_fail)
             .save("nums3")
         )
-    # check we created first 2 datasets but third one failed
     catalog.get_dataset("nums1")
     catalog.get_dataset("nums2")
     with pytest.raises(DatasetNotFoundError):
@@ -137,9 +131,7 @@ def test_checkpoints_multiple_runs(
     )
     monkeypatch.setenv("DATACHAIN_JOB_ID", third_job_id)
     dc.read_dataset("nums", session=test_session).save("nums1")
-    dc.read_dataset("nums", session=test_session).filter(dc.C("num") > 1).save(
-        "nums2"
-    )  # added change from first run
+    dc.read_dataset("nums", session=test_session).filter(dc.C("num") > 1).save("nums2")
     with pytest.raises(DataChainError):
         (
             dc.read_dataset("nums", session=test_session)
@@ -153,9 +145,7 @@ def test_checkpoints_multiple_runs(
     )
     monkeypatch.setenv("DATACHAIN_JOB_ID", fourth_job_id)
     dc.read_dataset("nums", session=test_session).save("nums1")
-    dc.read_dataset("nums", session=test_session).filter(dc.C("num") > 1).save(
-        "nums2"
-    )  # added change from first run
+    dc.read_dataset("nums", session=test_session).filter(dc.C("num") > 1).save("nums2")
     dc.read_dataset("nums", session=test_session).save("nums3")
 
     num1_versions = len(catalog.get_dataset("nums1").versions)
@@ -172,7 +162,6 @@ def test_checkpoints_multiple_runs(
         assert num2_versions == 2
         assert num3_versions == 2
 
-    # check checkpoints
     assert len(list(catalog.metastore.list_checkpoints(first_job_id))) == 2
     assert len(list(catalog.metastore.list_checkpoints(second_job_id))) == 3
     assert len(list(catalog.metastore.list_checkpoints(third_job_id))) == 2
