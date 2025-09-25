@@ -399,6 +399,7 @@ class AbstractMetastore(ABC, Serializable):
         workers: int = 1,
         python_version: Optional[str] = None,
         params: Optional[dict[str, str]] = None,
+        parent_job_id: Optional[str] = None,
     ) -> str:
         """
         Creates a new job.
@@ -1596,6 +1597,7 @@ class AbstractDBMetastore(AbstractMetastore):
         workers: int = 1,
         python_version: Optional[str] = None,
         params: Optional[dict[str, str]] = None,
+        parent_job_id: Optional[str] = None,
         conn: Optional[Any] = None,
     ) -> str:
         """
@@ -1617,6 +1619,7 @@ class AbstractDBMetastore(AbstractMetastore):
                 error_stack="",
                 params=json.dumps(params or {}),
                 metrics=json.dumps({}),
+                parent_job_id=parent_job_id,
             ),
             conn=conn,
         )

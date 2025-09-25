@@ -594,9 +594,8 @@ class DataChain:
         )
 
         return hashlib.sha256(
-            bytes.fromhex(last_checkpoint.hash)
-            if last_checkpoint
-            else b"" + bytes.fromhex(self.hash())
+            (bytes.fromhex(last_checkpoint.hash) if last_checkpoint else b"")
+            + bytes.fromhex(self.hash())
         ).hexdigest()
 
     def save(  # type: ignore[override]
