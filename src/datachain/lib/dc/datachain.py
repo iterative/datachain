@@ -19,7 +19,6 @@ from typing import (
     cast,
     overload,
 )
-from uuid import uuid4
 
 import sqlalchemy
 import ujson as json
@@ -30,7 +29,11 @@ from tqdm import tqdm
 from datachain import semver
 from datachain.dataset import DatasetRecord
 from datachain.delta import delta_disabled
-from datachain.error import ProjectCreateNotAllowedError, ProjectNotFoundError
+from datachain.error import (
+    JobNotFoundError,
+    ProjectCreateNotAllowedError,
+    ProjectNotFoundError,
+)
 from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
@@ -54,7 +57,7 @@ from datachain.query import Session
 from datachain.query.dataset import DatasetQuery, PartitionByType
 from datachain.query.schema import DEFAULT_DELIMITER, Column
 from datachain.sql.functions import path as pathfunc
-from datachain.utils import batched_it, inside_notebook, row_to_nested_dict
+from datachain.utils import batched_it, env2bool, inside_notebook, row_to_nested_dict
 
 from .database import DEFAULT_DATABASE_BATCH_SIZE
 from .utils import (
@@ -578,6 +581,19 @@ class DataChain:
             query=self._query.save(project=project, feature_schema=schema)
         )
 
+    def _calculate_job_hash(self, job_id: str) -> str:
+        """
+        Calculates hash of the job at the place of this chain's save method.
+        Hash is calculated using previous job checkpoint hash (if exists) and
+        adding hash of this chain to produce new hash.
+        """
+        last_checkpoint = self.session.catalog.metastore.get_last_checkpoint(job_id)
+
+        return hashlib.sha256(
+            (bytes.fromhex(last_checkpoint.hash) if last_checkpoint else b"")
+            + bytes.fromhex(self.hash())
+        ).hexdigest()
+
     def save(  # type: ignore[override]
         self,
         name: str,
@@ -602,7 +618,16 @@ class DataChain:
             update_version: which part of the dataset version to automatically increase.
                 Available values: `major`, `minor` or `patch`. Default is `patch`.
         """
+        from .datasets import read_dataset
+
         catalog = self.session.catalog
+        metastore = catalog.metastore
+
+        job = None
+        _hash = None
+        job_id = os.getenv("DATACHAIN_JOB_ID")
+        checkpoints_reset = env2bool("DATACHAIN_CHECKPOINTS_RESET")
+
         if version is not None:
             semver.validate(version)
 
@@ -631,6 +656,24 @@ class DataChain:
         except ProjectNotFoundError as e:
             # not being able to create it as creation is not allowed
             raise ProjectCreateNotAllowedError("Creating project is not allowed") from e
+
+        # checking checkpoints and skip re-calculation of the chain if checkpoint exist
+        if job_id:
+            job = metastore.get_job(job_id)
+            if not job:
+                raise JobNotFoundError(f"Job with id {job_id} not found")
+            _hash = self._calculate_job_hash(job.id)
+
+            if (
+                job.parent_job_id
+                and not checkpoints_reset
+                and metastore.find_checkpoint(job.parent_job_id, _hash)
+            ):
+                # if we find checkpoint with correct hash, we can skip chain calculation
+                catalog.metastore.create_checkpoint(job.id, _hash)
+                return read_dataset(
+                    name, namespace=namespace_name, project=project_name, **kwargs
+                )
 
         schema = self.signals_schema.clone_without_sys_signals().serialize()
 
@@ -669,8 +712,8 @@ class DataChain:
                 # would be the same as previous one. To avoid duplicating exact
                 # datasets, we won't create new version of it and we will return
                 # current latest version instead.
-                from .datasets import read_dataset
-
+                if job:
+                    catalog.metastore.create_checkpoint(job.id, _hash)  # type: ignore[arg-type]
                 return read_dataset(
                     name, namespace=namespace_name, project=project_name, **kwargs
                 )
@@ -688,13 +731,8 @@ class DataChain:
             )
         )
 
-        if job_id := os.getenv("DATACHAIN_JOB_ID"):
-            catalog.metastore.create_checkpoint(
-                job_id,
-                _hash=hashlib.sha256(  # TODO this will be replaced with self.hash()
-                    str(uuid4()).encode()
-                ).hexdigest(),
-            )
+        if job:
+            catalog.metastore.create_checkpoint(job.id, _hash)  # type: ignore[arg-type]
 
         return result
 

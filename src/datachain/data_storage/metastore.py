@@ -21,6 +21,7 @@ from sqlalchemy import (
     Table,
     Text,
     UniqueConstraint,
+    desc,
     select,
 )
 from sqlalchemy.sql import func as f
@@ -399,6 +400,7 @@ class AbstractMetastore(ABC, Serializable):
         workers: int = 1,
         python_version: Optional[str] = None,
         params: Optional[dict[str, str]] = None,
+        parent_job_id: Optional[str] = None,
     ) -> str:
         """
         Creates a new job.
@@ -442,6 +444,10 @@ class AbstractMetastore(ABC, Serializable):
     @abstractmethod
     def list_checkpoints(self, job_id: str, conn=None) -> Iterator["Checkpoint"]:
         """Returns all checkpoints related to some job"""
+
+    @abstractmethod
+    def get_last_checkpoint(self, job_id: str, conn=None) -> Optional[Checkpoint]:
+        """Get last created checkpoint for some job."""
 
     @abstractmethod
     def get_checkpoint_by_id(self, checkpoint_id: str, conn=None) -> Checkpoint:
@@ -1548,6 +1554,7 @@ class AbstractDBMetastore(AbstractMetastore):
             Column("error_stack", Text, nullable=False, default=""),
             Column("params", JSON, nullable=False),
             Column("metrics", JSON, nullable=False),
+            Column("parent_job_id", Text, nullable=True),
         ]
 
     @cached_property
@@ -1595,6 +1602,7 @@ class AbstractDBMetastore(AbstractMetastore):
         workers: int = 1,
         python_version: Optional[str] = None,
         params: Optional[dict[str, str]] = None,
+        parent_job_id: Optional[str] = None,
         conn: Optional[Any] = None,
     ) -> str:
         """
@@ -1616,6 +1624,7 @@ class AbstractDBMetastore(AbstractMetastore):
                 error_stack="",
                 params=json.dumps(params or {}),
                 metrics=json.dumps({}),
+                parent_job_id=parent_job_id,
             ),
             conn=conn,
         )
@@ -1770,7 +1779,7 @@ class AbstractDBMetastore(AbstractMetastore):
         )
         return self.get_checkpoint_by_id(checkpoint_id)
 
-    def list_checkpoints(self, job_id: str, conn=None) -> Iterator["Checkpoint"]:
+    def list_checkpoints(self, job_id: str, conn=None) -> Iterator[Checkpoint]:
         """List checkpoints by job id."""
         query = self._checkpoints_query().where(self._checkpoints.c.job_id == job_id)
         rows = list(self.db.execute(query, conn=conn))
@@ -1795,6 +1804,18 @@ class AbstractDBMetastore(AbstractMetastore):
         ch = self._checkpoints
         query = self._checkpoints_select(ch).where(
             ch.c.job_id == job_id, ch.c.hash == _hash, ch.c.partial == partial
+        )
+        rows = list(self.db.execute(query, conn=conn))
+        if not rows:
+            return None
+        return self.checkpoint_class.parse(*rows[0])
+
+    def get_last_checkpoint(self, job_id: str, conn=None) -> Optional[Checkpoint]:
+        query = (
+            self._checkpoints_query()
+            .where(self._checkpoints.c.job_id == job_id)
+            .order_by(desc(self._checkpoints.c.created_at))
+            .limit(1)
         )
         rows = list(self.db.execute(query, conn=conn))
         if not rows:

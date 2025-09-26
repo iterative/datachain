@@ -101,3 +101,7 @@ class OutdatedDatabaseSchemaError(DataChainError):
 
 class CheckpointNotFoundError(NotFoundError):
     pass
+
+
+class JobNotFoundError(NotFoundError):
+    pass
