@@ -1,7 +1,7 @@
 import pytest
 
 import datachain as dc
-from datachain.error import DatasetNotFoundError
+from datachain.error import DatasetNotFoundError, JobNotFoundError
 from datachain.lib.utils import DataChainError
 
 
@@ -186,3 +186,9 @@ def test_checkpoints_check_valid_chain_is_returned(
     assert ds.dataset.name == "nums1"
     assert len(ds.dataset.versions) == 1
     assert ds.order_by("num").to_list("num") == [(1,), (2,), (3,)]
+
+
+def test_checkpoints_invalid_parent_job_id(test_session, monkeypatch, nums_dataset):
+    monkeypatch.setenv("DATACHAIN_JOB_ID", "wrong")
+    with pytest.raises(JobNotFoundError):
+        dc.read_dataset("nums", session=test_session).save("nums1")
