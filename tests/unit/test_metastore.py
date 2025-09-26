@@ -1,5 +1,5 @@
 import base64
-import pickle
+import json
 
 import pytest
 
@@ -24,18 +24,19 @@ def test_sqlite_metastore(sqlite_db):
     assert obj2.db.db_file == sqlite_db.db_file
     assert obj2.clone_params() == obj.clone_params()
 
-    # Test serialization
+    # Test serialization JSON format
     serialized = obj.serialize()
     assert serialized
-    serialized_pickled = base64.b64decode(serialized.encode())
-    assert serialized_pickled
-    (f, args, kwargs) = pickle.loads(serialized_pickled)  # noqa: S301
-    assert str(f) == str(SQLiteMetastore.init_after_clone)
-    assert args == []
-    assert kwargs["uri"] == uri
-    assert str(kwargs["db_clone_params"]) == str(sqlite_db.clone_params())
+    raw = base64.b64decode(serialized.encode())
+    data = json.loads(raw.decode())
+    assert data["callable"] == "sqlite.metastore.init_after_clone"
+    assert data["args"] == []
+    assert data["kwargs"]["uri"] == uri
+    nested = data["kwargs"]["db_clone_params"]
+    assert nested["callable"] == "sqlite.from_db_file"
+    assert nested["args"] == [":memory:"]
+    assert nested["kwargs"] == {}
 
-    # Test deserialization
     obj3 = deserialize(serialized)
     assert isinstance(obj3, SQLiteMetastore)
     assert obj3.uri == uri

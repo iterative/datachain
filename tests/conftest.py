@@ -126,6 +126,7 @@ def clean_environment(
     working_dir = str(tmp_path_factory.mktemp("default_working_dir"))
     monkeypatch_session.chdir(working_dir)
     monkeypatch_session.delenv(DataChainDir.ENV_VAR, raising=False)
+    monkeypatch_session.delenv(DataChainDir.ENV_VAR_DATACHAIN_ROOT, raising=False)
 
 
 @pytest.fixture

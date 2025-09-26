@@ -3,6 +3,7 @@ import sys
 from importlib import import_module
 from typing import TYPE_CHECKING, Any, Optional
 
+from datachain.plugins import ensure_plugins_loaded
 from datachain.utils import get_envs_by_prefix
 
 if TYPE_CHECKING:
@@ -24,6 +25,8 @@ IN_MEMORY_ERROR_MESSAGE = "In-memory is only supported on SQLite"
 
 
 def get_metastore(in_memory: bool = False) -> "AbstractMetastore":
+    ensure_plugins_loaded()
+
     from datachain.data_storage import AbstractMetastore
     from datachain.data_storage.serializer import deserialize
 
@@ -64,6 +67,8 @@ def get_metastore(in_memory: bool = False) -> "AbstractMetastore":
 
 
 def get_warehouse(in_memory: bool = False) -> "AbstractWarehouse":
+    ensure_plugins_loaded()
+
     from datachain.data_storage import AbstractWarehouse
     from datachain.data_storage.serializer import deserialize
 
