@@ -1530,6 +1530,7 @@ class DatasetQuery:
         obj.steps = obj.steps.copy()
         if new_table:
             obj.table = self.get_table()
+        obj.temp_table_names = []
         return obj
 
     @detach
@@ -1873,7 +1874,7 @@ class DatasetQuery:
             query = self.clone()
             query.apply_steps()
         finally:
-            self.cleanup()
+            query.cleanup()
         return query
 
     def save(
