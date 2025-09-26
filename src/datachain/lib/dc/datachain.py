@@ -618,6 +618,8 @@ class DataChain:
             update_version: which part of the dataset version to automatically increase.
                 Available values: `major`, `minor` or `patch`. Default is `patch`.
         """
+        from .datasets import read_dataset
+
         catalog = self.session.catalog
         metastore = catalog.metastore
 
@@ -669,8 +671,6 @@ class DataChain:
             ):
                 # if we find checkpoint with correct hash, we can skip chain calculation
                 catalog.metastore.create_checkpoint(job.id, _hash)
-                from .datasets import read_dataset
-
                 return read_dataset(
                     name, namespace=namespace_name, project=project_name, **kwargs
                 )
@@ -712,8 +712,6 @@ class DataChain:
                 # would be the same as previous one. To avoid duplicating exact
                 # datasets, we won't create new version of it and we will return
                 # current latest version instead.
-                from .datasets import read_dataset
-
                 if job:
                     catalog.metastore.create_checkpoint(job.id, _hash)  # type: ignore[arg-type]
                 return read_dataset(
