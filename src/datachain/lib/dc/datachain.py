@@ -657,7 +657,7 @@ class DataChain:
 
         # checking checkpoints and skip re-calculation of the chain if checkpoint exist
         if job_id:
-            job = metastore.get_job(job_id)  # type: ignore[arg-type]
+            job = metastore.get_job(job_id)
             if not job:
                 raise JobNotFoundError(f"Job with id {job_id} not found")
             _hash = self._calculate_job_hash(job.id)
