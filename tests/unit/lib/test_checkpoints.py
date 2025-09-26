@@ -45,12 +45,8 @@ def test_checkpoints(test_session, monkeypatch, nums_dataset, reset_checkpoints)
     dc.read_dataset("nums", session=test_session).save("nums2")
     dc.read_dataset("nums", session=test_session).save("nums3")
 
-    assert (
-        len(catalog.get_dataset("nums1").versions) == 1 if not reset_checkpoints else 2
-    )
-    assert (
-        len(catalog.get_dataset("nums2").versions) == 1 if not reset_checkpoints else 2
-    )
+    assert len(catalog.get_dataset("nums1").versions) == 2 if reset_checkpoints else 1
+    assert len(catalog.get_dataset("nums2").versions) == 2 if reset_checkpoints else 1
     assert len(catalog.get_dataset("nums3").versions) == 1
 
     assert len(list(catalog.metastore.list_checkpoints(first_job_id))) == 2
@@ -82,9 +78,7 @@ def test_checkpoints_modified_chains(
     )  # added change from first run
     dc.read_dataset("nums", session=test_session).save("nums3")
 
-    assert (
-        len(catalog.get_dataset("nums1").versions) == 1 if not reset_checkpoints else 2
-    )
+    assert len(catalog.get_dataset("nums1").versions) == 2 if reset_checkpoints else 1
     assert len(catalog.get_dataset("nums2").versions) == 2
     assert len(catalog.get_dataset("nums3").versions) == 2
 

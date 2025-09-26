@@ -587,11 +587,7 @@ class DataChain:
         Hash is calculated using previous job checkpoint hash (if exists) and
         adding hash of this chain to produce new hash.
         """
-        last_checkpoint = max(
-            self.session.catalog.metastore.list_checkpoints(job_id),
-            key=lambda obj: obj.created_at,
-            default=None,
-        )
+        last_checkpoint = self.session.catalog.metastore.get_last_checkpoint(job_id)
 
         return hashlib.sha256(
             (bytes.fromhex(last_checkpoint.hash) if last_checkpoint else b"")
