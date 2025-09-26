@@ -545,7 +545,7 @@ def ensure_sequence(x) -> Sequence:
     return [x]
 
 
-def get_user_script_source(self):
+def get_user_script_source():
     """
     Attempt to read the source code of the user's Python script.
 
