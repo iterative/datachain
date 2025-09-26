@@ -982,6 +982,9 @@ class SQLUnion(Step):
 
         columns1, columns2 = _order_columns(q1.columns, q2.columns)
 
+        columns1 = _remap_sys_id_dense(columns1, branch_offset=0)
+        columns2 = _remap_sys_id_dense(columns2, branch_offset=1)
+
         def q(*columns):
             names = {c.name for c in columns}
             col1 = [c for c in columns1 if c.name in names]
@@ -1220,6 +1223,28 @@ def _order_columns(
     ]
 
     return [[d[n] for n in column_order] for d in column_dicts]
+
+
+def _remap_sys_id_dense(
+    columns: Iterable[ColumnElement], branch_offset: int
+) -> list[ColumnElement]:
+    """Return a new column list where sys__id is remapped to a dense row number.
+
+    The resulting sys__id is computed as:
+      row_number(order by sys__id) * 2 + branch_offset
+
+    This guarantees uniqueness across branches (even vs odd) and avoids
+    arithmetic overflow from scaling arbitrary pre-existing ids.
+    """
+    remapped: list[ColumnElement] = []
+    for col in columns:
+        if getattr(col, "name", None) == "sys__id":
+            rn = sqlalchemy.func.row_number().over(order_by=col)
+            new_id = (rn * 2) + sqlalchemy.literal(branch_offset)
+            remapped.append(new_id.label("sys__id"))
+        else:
+            remapped.append(col)
+    return remapped
 
 
 @attrs.define
