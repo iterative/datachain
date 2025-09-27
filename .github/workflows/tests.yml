@@ -23,10 +23,10 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
-      - name: Set up Python 3.9
+      - name: Set up Python 3.10
         uses: actions/setup-python@v6
         with:
-          python-version: '3.9'
+          python-version: '3.10'
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v6
@@ -60,14 +60,14 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest-8-cores]
-        pyv: ['3.9', '3.10', '3.11', '3.12', '3.13']
+        pyv: ['3.10', '3.11', '3.12', '3.13']
         include:
           - os: macos-latest
-            pyv: '3.9'
+            pyv: '3.10'
           - os: macos-latest
             pyv: '3.13'
           - os: windows-latest
-            pyv: '3.9'
+            pyv: '3.10'
           - os: windows-latest
             pyv: '3.13'
 
@@ -166,15 +166,15 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        pyv: ['3.9', '3.13']
+        pyv: ['3.10', '3.13']
         group: ['get_started', 'computer_vision', 'multimodal']
         exclude:
-          - {os: ubuntu-latest, pyv: '3.9', group: 'multimodal'}
+          - {os: ubuntu-latest, pyv: '3.10', group: 'multimodal'}
           - {os: ubuntu-latest, pyv: '3.13', group: 'multimodal'}
         include:
           # HF runs against actual API - thus run it only once
           - {os: ubuntu-latest, pyv: "3.13", group: llm_and_nlp}
-          - {os: ubuntu-latest-4-cores, pyv: "3.9", group: multimodal}
+          - {os: ubuntu-latest-4-cores, pyv: "3.10", group: multimodal}
           - {os: ubuntu-latest-4-cores, pyv: "3.13", group: multimodal}
 
     steps:
