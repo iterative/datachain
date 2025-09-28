@@ -2,9 +2,8 @@ import csv
 import json
 import tempfile
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Callable
 
 import jmespath as jsp
 from pydantic import BaseModel, ConfigDict, Field, ValidationError  # noqa: F401

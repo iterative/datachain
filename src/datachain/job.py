@@ -2,7 +2,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Optional, TypeVar, Union
+from typing import Any, TypeVar
 
 J = TypeVar("J", bound="Job")
 
@@ -18,8 +18,8 @@ class Job:
     workers: int
     params: dict[str, str]
     metrics: dict[str, Any]
-    finished_at: Optional[datetime] = None
-    python_version: Optional[str] = None
+    finished_at: datetime | None = None
+    python_version: str | None = None
     error_message: str = ""
     error_stack: str = ""
     parent_job_id: Optional[str] = None
@@ -27,15 +27,15 @@ class Job:
     @classmethod
     def parse(
         cls,
-        id: Union[str, uuid.UUID],
+        id: str | uuid.UUID,
         name: str,
         status: int,
         created_at: datetime,
-        finished_at: Optional[datetime],
+        finished_at: datetime | None,
         query: str,
         query_type: int,
         workers: int,
-        python_version: Optional[str],
+        python_version: str | None,
         error_message: str,
         error_stack: str,
         params: str,

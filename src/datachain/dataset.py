@@ -3,13 +3,7 @@ import json
 from dataclasses import dataclass, fields
 from datetime import datetime
 from functools import cached_property
-from typing import (
-    Any,
-    NewType,
-    Optional,
-    TypeVar,
-    Union,
-)
+from typing import Any, NewType, Optional, TypeVar
 from urllib.parse import urlparse
 
 from packaging.specifiers import SpecifierSet
@@ -43,7 +37,7 @@ DATASET_NAME_REPLACEMENT_CHAR = "_"
 StorageURI = NewType("StorageURI", str)
 
 
-def parse_dataset_uri(uri: str) -> tuple[str, Optional[str]]:
+def parse_dataset_uri(uri: str) -> tuple[str, str | None]:
     """
     Parse dataser uri to extract name and version out of it (if version is defined)
     Example:
@@ -65,7 +59,7 @@ def parse_dataset_uri(uri: str) -> tuple[str, Optional[str]]:
 
 
 def create_dataset_uri(
-    name: str, namespace: str, project: str, version: Optional[str] = None
+    name: str, namespace: str, project: str, version: str | None = None
 ) -> str:
     """
     Creates a dataset uri based on namespace, project, dataset name and optionally
@@ -81,7 +75,7 @@ def create_dataset_uri(
     return uri
 
 
-def parse_dataset_name(name: str) -> tuple[Optional[str], Optional[str], str]:
+def parse_dataset_name(name: str) -> tuple[str | None, str | None, str]:
     """Parses dataset name and returns namespace, project and name"""
     if not name:
         raise InvalidDatasetNameError("Name must be defined to parse it")
@@ -131,11 +125,11 @@ class DatasetDependency:
         namespace_name: str,
         project_name: str,
         id: int,
-        dataset_id: Optional[int],
-        dataset_version_id: Optional[int],
-        dataset_name: Optional[str],
-        dataset_version: Optional[str],
-        dataset_version_created_at: Optional[datetime],
+        dataset_id: int | None,
+        dataset_version_id: int | None,
+        dataset_name: str | None,
+        dataset_version: str | None,
+        dataset_version_created_at: datetime | None,
     ) -> Optional["DatasetDependency"]:
         from datachain.lib.listing import is_listing_dataset
 
@@ -198,17 +192,17 @@ class DatasetVersion:
     status: int
     feature_schema: dict
     created_at: datetime
-    finished_at: Optional[datetime]
+    finished_at: datetime | None
     error_message: str
     error_stack: str
     script_output: str
-    schema: dict[str, Union[SQLType, type[SQLType]]]
-    num_objects: Optional[int]
-    size: Optional[int]
-    _preview_data: Optional[Union[str, list[dict]]]
+    schema: dict[str, SQLType | type[SQLType]]
+    num_objects: int | None
+    size: int | None
+    _preview_data: str | list[dict] | None
     sources: str = ""
     query_script: str = ""
-    job_id: Optional[str] = None
+    job_id: str | None = None
 
     @classmethod
     def parse(  # noqa: PLR0913
@@ -218,19 +212,19 @@ class DatasetVersion:
         dataset_id: int,
         version: str,
         status: int,
-        feature_schema: Optional[str],
+        feature_schema: str | None,
         created_at: datetime,
-        finished_at: Optional[datetime],
+        finished_at: datetime | None,
         error_message: str,
         error_stack: str,
         script_output: str,
-        num_objects: Optional[int],
-        size: Optional[int],
-        preview: Optional[Union[str, list[dict]]],
-        schema: dict[str, Union[SQLType, type[SQLType]]],
+        num_objects: int | None,
+        size: int | None,
+        preview: str | list[dict] | None,
+        schema: dict[str, SQLType | type[SQLType]],
         sources: str = "",
         query_script: str = "",
-        job_id: Optional[str] = None,
+        job_id: str | None = None,
     ):
         return cls(
             id,
@@ -292,7 +286,7 @@ class DatasetVersion:
         }
 
     @cached_property
-    def preview(self) -> Optional[list[dict]]:
+    def preview(self) -> list[dict] | None:
         if isinstance(self._preview_data, str):
             return json.loads(self._preview_data)
         return self._preview_data if self._preview_data else None
@@ -313,13 +307,13 @@ class DatasetListVersion:
     version: str
     status: int
     created_at: datetime
-    finished_at: Optional[datetime]
+    finished_at: datetime | None
     error_message: str
     error_stack: str
-    num_objects: Optional[int]
-    size: Optional[int]
+    num_objects: int | None
+    size: int | None
     query_script: str = ""
-    job_id: Optional[str] = None
+    job_id: str | None = None
 
     @classmethod
     def parse(
@@ -330,13 +324,13 @@ class DatasetListVersion:
         version: str,
         status: int,
         created_at: datetime,
-        finished_at: Optional[datetime],
+        finished_at: datetime | None,
         error_message: str,
         error_stack: str,
-        num_objects: Optional[int],
-        size: Optional[int],
+        num_objects: int | None,
+        size: int | None,
         query_script: str = "",
-        job_id: Optional[str] = None,
+        job_id: str | None = None,
         **kwargs,
     ):
         return cls(
@@ -368,14 +362,14 @@ class DatasetRecord:
     id: int
     name: str
     project: Project
-    description: Optional[str]
+    description: str | None
     attrs: list[str]
-    schema: dict[str, Union[SQLType, type[SQLType]]]
+    schema: dict[str, SQLType | type[SQLType]]
     feature_schema: dict
     versions: list[DatasetVersion]
     status: int = DatasetStatus.CREATED
-    created_at: Optional[datetime] = None
-    finished_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    finished_at: datetime | None = None
     error_message: str = ""
     error_stack: str = ""
     script_output: str = ""
@@ -388,7 +382,7 @@ class DatasetRecord:
     @staticmethod
     def parse_schema(
         ct: dict[str, Any],
-    ) -> dict[str, Union[SQLType, type[SQLType]]]:
+    ) -> dict[str, SQLType | type[SQLType]]:
         return {
             c_name: NAME_TYPES_MAPPING[c_type["type"]].from_dict(c_type)  # type: ignore [attr-defined]
             for c_name, c_type in ct.items()
@@ -409,23 +403,23 @@ class DatasetRecord:
         namespace_id: int,
         namespace_uuid: str,
         namespace_name: str,
-        namespace_description: Optional[str],
+        namespace_description: str | None,
         namespace_created_at: datetime,
         project_id: int,
         project_uuid: str,
         project_name: str,
-        project_description: Optional[str],
+        project_description: str | None,
         project_created_at: datetime,
         project_namespace_id: int,
         dataset_id: int,
         dataset_project_id: int,
         name: str,
-        description: Optional[str],
+        description: str | None,
         attrs: str,
         status: int,
-        feature_schema: Optional[str],
+        feature_schema: str | None,
         created_at: datetime,
-        finished_at: Optional[datetime],
+        finished_at: datetime | None,
         error_message: str,
         error_stack: str,
         script_output: str,
@@ -437,19 +431,19 @@ class DatasetRecord:
         version_dataset_id: int,
         version: str,
         version_status: int,
-        version_feature_schema: Optional[str],
+        version_feature_schema: str | None,
         version_created_at: datetime,
-        version_finished_at: Optional[datetime],
+        version_finished_at: datetime | None,
         version_error_message: str,
         version_error_stack: str,
         version_script_output: str,
-        version_num_objects: Optional[int],
-        version_size: Optional[int],
-        version_preview: Optional[str],
-        version_sources: Optional[str],
-        version_query_script: Optional[str],
+        version_num_objects: int | None,
+        version_size: int | None,
+        version_preview: str | None,
+        version_sources: str | None,
+        version_query_script: str | None,
         version_schema: str,
-        version_job_id: Optional[str] = None,
+        version_job_id: str | None = None,
     ) -> "DatasetRecord":
         attrs_lst: list[str] = json.loads(attrs) if attrs else []
         schema_dct: dict[str, Any] = json.loads(schema) if schema else {}
@@ -527,7 +521,7 @@ class DatasetRecord:
     def full_name(self) -> str:
         return f"{self.project.namespace.name}.{self.project.name}.{self.name}"
 
-    def get_schema(self, version: str) -> dict[str, Union[SQLType, type[SQLType]]]:
+    def get_schema(self, version: str) -> dict[str, SQLType | type[SQLType]]:
         return self.get_version(version).schema if version else self.schema
 
     def update(self, **kwargs):
@@ -649,7 +643,7 @@ class DatasetRecord:
         """Returns latest version of a dataset"""
         return max(self.versions).version
 
-    def latest_major_version(self, major: int) -> Optional[str]:
+    def latest_major_version(self, major: int) -> str | None:
         """
         Returns latest specific major version, e.g if dataset has versions:
             - 1.4.1
@@ -664,7 +658,7 @@ class DatasetRecord:
             return None
         return max(versions).version
 
-    def latest_compatible_version(self, version_spec: str) -> Optional[str]:
+    def latest_compatible_version(self, version_spec: str) -> str | None:
         """
         Returns the latest version that matches the given version specifier.
 
@@ -711,10 +705,10 @@ class DatasetListRecord:
     id: int
     name: str
     project: Project
-    description: Optional[str]
+    description: str | None
     attrs: list[str]
     versions: list[DatasetListVersion]
-    created_at: Optional[datetime] = None
+    created_at: datetime | None = None
 
     @classmethod
     def parse(  # noqa: PLR0913
@@ -722,17 +716,17 @@ class DatasetListRecord:
         namespace_id: int,
         namespace_uuid: str,
         namespace_name: str,
-        namespace_description: Optional[str],
+        namespace_description: str | None,
         namespace_created_at: datetime,
         project_id: int,
         project_uuid: str,
         project_name: str,
-        project_description: Optional[str],
+        project_description: str | None,
         project_created_at: datetime,
         project_namespace_id: int,
         dataset_id: int,
         name: str,
-        description: Optional[str],
+        description: str | None,
         attrs: str,
         created_at: datetime,
         version_id: int,
@@ -741,13 +735,13 @@ class DatasetListRecord:
         version: str,
         version_status: int,
         version_created_at: datetime,
-        version_finished_at: Optional[datetime],
+        version_finished_at: datetime | None,
         version_error_message: str,
         version_error_stack: str,
-        version_num_objects: Optional[int],
-        version_size: Optional[int],
-        version_query_script: Optional[str],
-        version_job_id: Optional[str] = None,
+        version_num_objects: int | None,
+        version_size: int | None,
+        version_query_script: str | None,
+        version_job_id: str | None = None,
     ) -> "DatasetListRecord":
         attrs_lst: list[str] = json.loads(attrs) if attrs else []
 

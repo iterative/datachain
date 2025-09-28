@@ -16,7 +16,7 @@ def ls(
     studio: bool = False,
     local: bool = False,
     all: bool = True,
-    team: Optional[str] = None,
+    team: str | None = None,
     **kwargs,
 ):
     token = Config().read().get("studio", {}).get("token")
@@ -78,7 +78,7 @@ def format_ls_entry(entry: str) -> str:
 def ls_remote(
     paths: Iterable[str],
     long: bool = False,
-    team: Optional[str] = None,
+    team: str | None = None,
 ):
     from datachain.node import long_line_str
     from datachain.remote.studio import StudioClient

@@ -1,5 +1,4 @@
 from collections.abc import Iterable
-from typing import Union
 
 import pytest
 from pydantic import BaseModel
@@ -32,8 +31,8 @@ def test_convert_type_to_datachain_array(typ, expected):
 @pytest.mark.parametrize(
     "typ",
     (
-        Union[str, int],
-        list[Union[str, int]],
+        str | int,
+        list[str | int],
         MyFeature,
         MyModel,
     ),

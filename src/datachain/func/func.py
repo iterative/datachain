@@ -1,6 +1,6 @@
 import inspect
-from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union, get_args, get_origin
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any, Optional, Union, get_args, get_origin
 
 from sqlalchemy import BindParameter, Case, ColumnElement, Integer, cast, desc
 from sqlalchemy.sql import func as sa_func
@@ -22,26 +22,29 @@ if TYPE_CHECKING:
     from .window import Window
 
 
-ColT = Union[str, Column, ColumnElement, "Func", tuple]
+ColT = Union[str, tuple, Column, ColumnElement, "Func"]
 
 
 class Func(Function):  # noqa: PLW1641
     """Represents a function to be applied to a column in a SQL query."""
 
+    cols: Sequence[ColT]
+    args: Sequence[Any]
+
     def __init__(
         self,
         name: str,
         inner: Callable,
-        cols: Optional[Sequence[ColT]] = None,
-        args: Optional[Sequence[Any]] = None,
-        kwargs: Optional[dict[str, Any]] = None,
+        cols: Sequence[ColT] | None = None,
+        args: Sequence[Any] | None = None,
+        kwargs: dict[str, Any] | None = None,
         result_type: Optional["DataType"] = None,
-        type_from_args: Optional[Callable[..., "DataType"]] = None,
+        type_from_args: Callable[..., "DataType"] | None = None,
         is_array: bool = False,
         from_array: bool = False,
         is_window: bool = False,
         window: Optional["Window"] = None,
-        label: Optional[str] = None,
+        label: str | None = None,
     ) -> None:
         self.name = name
         self.inner = inner
@@ -125,51 +128,51 @@ class Func(Function):  # noqa: PLW1641
 
         return list[col_type] if self.is_array else col_type  # type: ignore[valid-type]
 
-    def __add__(self, other: Union[ColT, float]) -> "Func":
+    def __add__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func("add", lambda a: a + other, [self])
         return Func("add", lambda a1, a2: a1 + a2, [self, other])
 
-    def __radd__(self, other: Union[ColT, float]) -> "Func":
+    def __radd__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func("add", lambda a: other + a, [self])
         return Func("add", lambda a1, a2: a1 + a2, [other, self])
 
-    def __sub__(self, other: Union[ColT, float]) -> "Func":
+    def __sub__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func("sub", lambda a: a - other, [self])
         return Func("sub", lambda a1, a2: a1 - a2, [self, other])
 
-    def __rsub__(self, other: Union[ColT, float]) -> "Func":
+    def __rsub__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func("sub", lambda a: other - a, [self])
         return Func("sub", lambda a1, a2: a1 - a2, [other, self])
 
-    def __mul__(self, other: Union[ColT, float]) -> "Func":
+    def __mul__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func("mul", lambda a: a * other, [self])
         return Func("mul", lambda a1, a2: a1 * a2, [self, other])
 
-    def __rmul__(self, other: Union[ColT, float]) -> "Func":
+    def __rmul__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func("mul", lambda a: other * a, [self])
         return Func("mul", lambda a1, a2: a1 * a2, [other, self])
 
-    def __truediv__(self, other: Union[ColT, float]) -> "Func":
+    def __truediv__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func("div", lambda a: _truediv(a, other), [self], result_type=float)
         return Func(
             "div", lambda a1, a2: _truediv(a1, a2), [self, other], result_type=float
         )
 
-    def __rtruediv__(self, other: Union[ColT, float]) -> "Func":
+    def __rtruediv__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func("div", lambda a: _truediv(other, a), [self], result_type=float)
         return Func(
             "div", lambda a1, a2: _truediv(a1, a2), [other, self], result_type=float
         )
 
-    def __floordiv__(self, other: Union[ColT, float]) -> "Func":
+    def __floordiv__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func(
                 "floordiv", lambda a: _floordiv(a, other), [self], result_type=int
@@ -178,7 +181,7 @@ class Func(Function):  # noqa: PLW1641
             "floordiv", lambda a1, a2: _floordiv(a1, a2), [self, other], result_type=int
         )
 
-    def __rfloordiv__(self, other: Union[ColT, float]) -> "Func":
+    def __rfloordiv__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func(
                 "floordiv", lambda a: _floordiv(other, a), [self], result_type=int
@@ -187,17 +190,17 @@ class Func(Function):  # noqa: PLW1641
             "floordiv", lambda a1, a2: _floordiv(a1, a2), [other, self], result_type=int
         )
 
-    def __mod__(self, other: Union[ColT, float]) -> "Func":
+    def __mod__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func("mod", lambda a: a % other, [self], result_type=int)
         return Func("mod", lambda a1, a2: a1 % a2, [self, other], result_type=int)
 
-    def __rmod__(self, other: Union[ColT, float]) -> "Func":
+    def __rmod__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func("mod", lambda a: other % a, [self], result_type=int)
         return Func("mod", lambda a1, a2: a1 % a2, [other, self], result_type=int)
 
-    def __and__(self, other: Union[ColT, float]) -> "Func":
+    def __and__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func(
                 "and", lambda a: numeric.bit_and(a, other), [self], result_type=int
@@ -209,7 +212,7 @@ class Func(Function):  # noqa: PLW1641
             result_type=int,
         )
 
-    def __rand__(self, other: Union[ColT, float]) -> "Func":
+    def __rand__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func(
                 "and", lambda a: numeric.bit_and(other, a), [self], result_type=int
@@ -221,7 +224,7 @@ class Func(Function):  # noqa: PLW1641
             result_type=int,
         )
 
-    def __or__(self, other: Union[ColT, float]) -> "Func":
+    def __or__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func(
                 "or", lambda a: numeric.bit_or(a, other), [self], result_type=int
@@ -230,7 +233,7 @@ class Func(Function):  # noqa: PLW1641
             "or", lambda a1, a2: numeric.bit_or(a1, a2), [self, other], result_type=int
         )
 
-    def __ror__(self, other: Union[ColT, float]) -> "Func":
+    def __ror__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func(
                 "or", lambda a: numeric.bit_or(other, a), [self], result_type=int
@@ -239,7 +242,7 @@ class Func(Function):  # noqa: PLW1641
             "or", lambda a1, a2: numeric.bit_or(a1, a2), [other, self], result_type=int
         )
 
-    def __xor__(self, other: Union[ColT, float]) -> "Func":
+    def __xor__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func(
                 "xor", lambda a: numeric.bit_xor(a, other), [self], result_type=int
@@ -251,7 +254,7 @@ class Func(Function):  # noqa: PLW1641
             result_type=int,
         )
 
-    def __rxor__(self, other: Union[ColT, float]) -> "Func":
+    def __rxor__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func(
                 "xor", lambda a: numeric.bit_xor(other, a), [self], result_type=int
@@ -263,7 +266,7 @@ class Func(Function):  # noqa: PLW1641
             result_type=int,
         )
 
-    def __rshift__(self, other: Union[ColT, float]) -> "Func":
+    def __rshift__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func(
                 "rshift",
@@ -278,7 +281,7 @@ class Func(Function):  # noqa: PLW1641
             result_type=int,
         )
 
-    def __rrshift__(self, other: Union[ColT, float]) -> "Func":
+    def __rrshift__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func(
                 "rshift",
@@ -293,7 +296,7 @@ class Func(Function):  # noqa: PLW1641
             result_type=int,
         )
 
-    def __lshift__(self, other: Union[ColT, float]) -> "Func":
+    def __lshift__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func(
                 "lshift",
@@ -308,7 +311,7 @@ class Func(Function):  # noqa: PLW1641
             result_type=int,
         )
 
-    def __rlshift__(self, other: Union[ColT, float]) -> "Func":
+    def __rlshift__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func(
                 "lshift",
@@ -323,12 +326,12 @@ class Func(Function):  # noqa: PLW1641
             result_type=int,
         )
 
-    def __lt__(self, other: Union[ColT, float]) -> "Func":
+    def __lt__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func("lt", lambda a: a < other, [self], result_type=bool)
         return Func("lt", lambda a1, a2: a1 < a2, [self, other], result_type=bool)
 
-    def __le__(self, other: Union[ColT, float]) -> "Func":
+    def __le__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func("le", lambda a: a <= other, [self], result_type=bool)
         return Func("le", lambda a1, a2: a1 <= a2, [self, other], result_type=bool)
@@ -343,12 +346,12 @@ class Func(Function):  # noqa: PLW1641
             return Func("ne", lambda a: a != other, [self], result_type=bool)
         return Func("ne", lambda a1, a2: a1 != a2, [self, other], result_type=bool)
 
-    def __gt__(self, other: Union[ColT, float]) -> "Func":
+    def __gt__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func("gt", lambda a: a > other, [self], result_type=bool)
         return Func("gt", lambda a1, a2: a1 > a2, [self, other], result_type=bool)
 
-    def __ge__(self, other: Union[ColT, float]) -> "Func":
+    def __ge__(self, other: ColT | float) -> "Func":
         if isinstance(other, (int, float)):
             return Func("ge", lambda a: a >= other, [self], result_type=bool)
         return Func("ge", lambda a1, a2: a1 >= a2, [self, other], result_type=bool)
@@ -369,7 +372,7 @@ class Func(Function):  # noqa: PLW1641
             label,
         )
 
-    def get_col_name(self, label: Optional[str] = None) -> str:
+    def get_col_name(self, label: str | None = None) -> str:
         if label:
             return label
         if self.col_label:
@@ -409,7 +412,7 @@ class Func(Function):  # noqa: PLW1641
     def get_column(
         self,
         signals_schema: Optional["SignalSchema"] = None,
-        label: Optional[str] = None,
+        label: str | None = None,
         table: Optional["TableClause"] = None,
     ) -> Column:
         col_type = self.get_result_type(signals_schema)

@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from copy import copy
 from functools import wraps
-from typing import TYPE_CHECKING, Callable, Optional, TypeVar, Union
+from typing import TYPE_CHECKING, Optional, TypeVar
 
 import datachain
 from datachain.dataset import DatasetDependency, DatasetRecord
@@ -9,7 +9,10 @@ from datachain.error import DatasetNotFoundError
 from datachain.project import Project
 
 if TYPE_CHECKING:
-    from typing_extensions import Concatenate, ParamSpec
+    from collections.abc import Callable
+    from typing import Concatenate
+
+    from typing_extensions import ParamSpec
 
     from datachain.lib.dc import DataChain
 
@@ -55,8 +58,8 @@ def _get_delta_chain(
     source_ds_project: Project,
     source_ds_version: str,
     source_ds_latest_version: str,
-    on: Union[str, Sequence[str]],
-    compare: Optional[Union[str, Sequence[str]]] = None,
+    on: str | Sequence[str],
+    compare: str | Sequence[str] | None = None,
 ) -> "DataChain":
     """Get delta chain for processing changes between versions."""
     source_dc = datachain.read_dataset(
@@ -84,9 +87,9 @@ def _get_retry_chain(
     source_ds_name: str,
     source_ds_project: Project,
     source_ds_version: str,
-    on: Union[str, Sequence[str]],
-    right_on: Optional[Union[str, Sequence[str]]],
-    delta_retry: Optional[Union[bool, str]],
+    on: str | Sequence[str],
+    right_on: str | Sequence[str] | None,
+    delta_retry: bool | str | None,
     diff_chain: "DataChain",
 ) -> Optional["DataChain"]:
     """Get retry chain for processing error records and missing records."""
@@ -144,11 +147,11 @@ def _get_source_info(
     latest_version: str,
     catalog,
 ) -> tuple[
-    Optional[str],
-    Optional[Project],
-    Optional[str],
-    Optional[str],
-    Optional[list[DatasetDependency]],
+    str | None,
+    Project | None,
+    str | None,
+    str | None,
+    list[DatasetDependency] | None,
 ]:
     """Get source dataset information and dependencies.
 
@@ -190,11 +193,11 @@ def delta_retry_update(
     namespace_name: str,
     project_name: str,
     name: str,
-    on: Union[str, Sequence[str]],
-    right_on: Optional[Union[str, Sequence[str]]] = None,
-    compare: Optional[Union[str, Sequence[str]]] = None,
-    delta_retry: Optional[Union[bool, str]] = None,
-) -> tuple[Optional["DataChain"], Optional[list[DatasetDependency]], bool]:
+    on: str | Sequence[str],
+    right_on: str | Sequence[str] | None = None,
+    compare: str | Sequence[str] | None = None,
+    delta_retry: bool | str | None = None,
+) -> tuple[Optional["DataChain"], list[DatasetDependency] | None, bool]:
     """
     Creates new chain that consists of the last version of current delta dataset
     plus diff from the source with all needed modifications.

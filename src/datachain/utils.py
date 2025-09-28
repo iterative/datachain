@@ -11,7 +11,7 @@ import time
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from datetime import date, datetime, timezone
-from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union
+from typing import TYPE_CHECKING, Any, TypeVar
 from uuid import UUID
 
 import cloudpickle
@@ -53,11 +53,11 @@ class DataChainDir:
 
     def __init__(
         self,
-        root: Optional[str] = None,
-        cache: Optional[str] = None,
-        tmp: Optional[str] = None,
-        db: Optional[str] = None,
-        config: Optional[str] = None,
+        root: str | None = None,
+        cache: str | None = None,
+        tmp: str | None = None,
+        db: str | None = None,
+        config: str | None = None,
     ) -> None:
         self.root = osp.abspath(root) if root is not None else self.default_root()
         self.cache = (
@@ -122,7 +122,7 @@ def global_config_dir():
     )
 
 
-def human_time_to_int(time: str) -> Optional[int]:
+def human_time_to_int(time: str) -> int | None:
     if not time:
         return None
 
@@ -146,7 +146,7 @@ def time_to_str(dt):
     return dt.strftime("%Y-%m-%d %H:%M:%S")
 
 
-def time_to_local(dt: Union[datetime, str]) -> datetime:
+def time_to_local(dt: datetime | str) -> datetime:
     # TODO check usage
     if isinstance(dt, str):
         dt = isoparse(dt)
@@ -156,11 +156,11 @@ def time_to_local(dt: Union[datetime, str]) -> datetime:
         return dt
 
 
-def time_to_local_str(dt: Union[datetime, str]) -> str:
+def time_to_local_str(dt: datetime | str) -> str:
     return time_to_str(time_to_local(dt))
 
 
-def is_expired(expires: Optional[Union[datetime, str]]):
+def is_expired(expires: datetime | str | None):
     if expires:
         return time_to_local(expires) < time_to_local(datetime.now())  # noqa: DTZ005
 
@@ -301,9 +301,9 @@ def retry_with_backoff(retries=5, backoff_sec=1, errors=(Exception,)):
 
 
 def determine_workers(
-    workers: Union[bool, int],
-    rows_total: Optional[int] = None,
-) -> Union[bool, int]:
+    workers: bool | int,
+    rows_total: int | None = None,
+) -> bool | int:
     """Determine the number of workers to use for distributed processing."""
     if rows_total is not None and rows_total <= 1:
         # Disable distributed processing if there is no rows or only one row.
@@ -322,9 +322,9 @@ def determine_workers(
 
 
 def determine_processes(
-    parallel: Optional[Union[bool, int]] = None,
-    rows_total: Optional[int] = None,
-) -> Union[bool, int]:
+    parallel: bool | int | None = None,
+    rows_total: int | None = None,
+) -> bool | int:
     """Determine the number of processes to use for parallel processing."""
     if rows_total is not None and rows_total <= 1:
         # Disable parallel processing if there is no rows or only one row.
@@ -344,8 +344,8 @@ def determine_processes(
 
 
 def get_env_list(
-    key: str, default: Optional[Sequence] = None, sep: str = ","
-) -> Optional[Sequence[str]]:
+    key: str, default: Sequence | None = None, sep: str = ","
+) -> Sequence[str] | None:
     try:
         str_val = os.environ[key]
     except KeyError:
@@ -386,10 +386,10 @@ def show_df(
 
 
 def show_records(
-    records: Optional[list[dict]],
+    records: list[dict] | None,
     collapse_columns: bool = False,
     system_columns: bool = False,
-    hidden_fields: Optional[list[str]] = None,
+    hidden_fields: list[str] | None = None,
 ) -> None:
     import pandas as pd
 
@@ -518,7 +518,7 @@ def row_to_nested_dict(
 ) -> dict[str, Any]:
     """Converts a row to a nested dict based on the provided headers."""
     result: dict[str, Any] = {}
-    for h, v in zip(headers, row):
+    for h, v in zip(headers, row, strict=False):
         nested_dict_path_set(result, h, v)
     return result
 
