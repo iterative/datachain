@@ -55,7 +55,7 @@ def test_dir_expansion(cloud_test_catalog, version_aware, cloud_type):
             "location",
         )
 
-        result = [dict(zip(columns, r)) for r in warehouse.db.execute(q)]
+        result = [dict(zip(columns, r, strict=False)) for r in warehouse.db.execute(q)]
         to_compare = [(r["path"], r["is_dir"], r["version"] != "") for r in result]
 
     assert all(r["source"] == ctc.src_uri for r in result)

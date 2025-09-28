@@ -1,5 +1,4 @@
 import math
-from typing import Optional
 
 import pandas as pd
 import pytest
@@ -13,25 +12,25 @@ from tests.utils import skip_if_not_sqlite
 
 
 class User(BaseModel):
-    name: Optional[str] = None
-    age: Optional[int] = None
+    name: str | None = None
+    age: int | None = None
 
 
 class Player(User):
-    weight: Optional[float] = None
-    height: Optional[int] = None
+    weight: float | None = None
+    height: int | None = None
 
 
 class Employee(BaseModel):
-    id: Optional[int] = None
+    id: int | None = None
     person: User
 
 
 class TeamMember(BaseModel):
-    player: Optional[str] = None
-    sport: Optional[str] = None
-    weight: Optional[float] = None
-    height: Optional[float] = None
+    player: str | None = None
+    sport: str | None = None
+    weight: float | None = None
+    height: float | None = None
 
 
 employees = [

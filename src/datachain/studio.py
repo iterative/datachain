@@ -2,7 +2,7 @@ import asyncio
 import os
 import sys
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import dateparser
 import tabulate
@@ -175,7 +175,7 @@ def token():
     print(token)
 
 
-def list_datasets(team: Optional[str] = None, name: Optional[str] = None):
+def list_datasets(team: str | None = None, name: str | None = None):
     def ds_full_name(ds: dict) -> str:
         return (
             f"{ds['project']['namespace']['name']}.{ds['project']['name']}.{ds['name']}"
@@ -206,7 +206,7 @@ def list_datasets(team: Optional[str] = None, name: Optional[str] = None):
             yield (full_name, version)
 
 
-def list_dataset_versions(team: Optional[str] = None, name: str = ""):
+def list_dataset_versions(team: str | None = None, name: str = ""):
     client = StudioClient(team=team)
 
     namespace_name, project_name, name = parse_dataset_name(name)
@@ -226,13 +226,13 @@ def list_dataset_versions(team: Optional[str] = None, name: str = ""):
 
 
 def edit_studio_dataset(
-    team_name: Optional[str],
+    team_name: str | None,
     name: str,
     namespace: str,
     project: str,
-    new_name: Optional[str] = None,
-    description: Optional[str] = None,
-    attrs: Optional[list[str]] = None,
+    new_name: str | None = None,
+    description: str | None = None,
+    attrs: list[str] | None = None,
 ):
     client = StudioClient(team=team_name)
     response = client.edit_dataset(
@@ -245,12 +245,12 @@ def edit_studio_dataset(
 
 
 def remove_studio_dataset(
-    team_name: Optional[str],
+    team_name: str | None,
     name: str,
     namespace: str,
     project: str,
-    version: Optional[str] = None,
-    force: Optional[bool] = False,
+    version: str | None = None,
+    force: bool | None = False,
 ):
     client = StudioClient(team=team_name)
     response = client.rm_dataset(name, namespace, project, version, force)
@@ -271,7 +271,7 @@ def save_config(hostname, token, level=ConfigLevel.GLOBAL):
     return config.config_file()
 
 
-def parse_start_time(start_time_str: Optional[str]) -> Optional[str]:
+def parse_start_time(start_time_str: str | None) -> str | None:
     if not start_time_str:
         return None
 
@@ -343,21 +343,21 @@ def show_logs_from_client(client, job_id):
 
 def create_job(
     query_file: str,
-    team_name: Optional[str],
-    env_file: Optional[str] = None,
-    env: Optional[list[str]] = None,
-    workers: Optional[int] = None,
-    files: Optional[list[str]] = None,
-    python_version: Optional[str] = None,
-    repository: Optional[str] = None,
-    req: Optional[list[str]] = None,
-    req_file: Optional[str] = None,
-    priority: Optional[int] = None,
-    cluster: Optional[str] = None,
-    start_time: Optional[str] = None,
-    cron: Optional[str] = None,
-    no_wait: Optional[bool] = False,
-    credentials_name: Optional[str] = None,
+    team_name: str | None,
+    env_file: str | None = None,
+    env: list[str] | None = None,
+    workers: int | None = None,
+    files: list[str] | None = None,
+    python_version: str | None = None,
+    repository: str | None = None,
+    req: list[str] | None = None,
+    req_file: str | None = None,
+    priority: int | None = None,
+    cluster: str | None = None,
+    start_time: str | None = None,
+    cron: str | None = None,
+    no_wait: bool | None = False,
+    credentials_name: str | None = None,
 ):
     query_type = "PYTHON" if query_file.endswith(".py") else "SHELL"
     with open(query_file) as f:
@@ -433,7 +433,7 @@ def upload_files(client: StudioClient, files: list[str]) -> list[str]:
     return file_ids
 
 
-def cancel_job(job_id: str, team_name: Optional[str]):
+def cancel_job(job_id: str, team_name: str | None):
     token = Config().read().get("studio", {}).get("token")
     if not token:
         raise DataChainError(
@@ -448,7 +448,7 @@ def cancel_job(job_id: str, team_name: Optional[str]):
     print(f"Job {job_id} canceled")
 
 
-def list_jobs(status: Optional[str], team_name: Optional[str], limit: int):
+def list_jobs(status: str | None, team_name: str | None, limit: int):
     client = StudioClient(team=team_name)
     response = client.get_jobs(status, limit)
     if not response.ok:
@@ -473,7 +473,7 @@ def list_jobs(status: Optional[str], team_name: Optional[str], limit: int):
     print(tabulate.tabulate(rows, headers="keys", tablefmt="grid"))
 
 
-def show_job_logs(job_id: str, team_name: Optional[str]):
+def show_job_logs(job_id: str, team_name: str | None):
     token = Config().read().get("studio", {}).get("token")
     if not token:
         raise DataChainError(
@@ -484,7 +484,7 @@ def show_job_logs(job_id: str, team_name: Optional[str]):
     return show_logs_from_client(client, job_id)
 
 
-def list_clusters(team_name: Optional[str]):
+def list_clusters(team_name: str | None):
     client = StudioClient(team=team_name)
     response = client.get_clusters()
     if not response.ok:

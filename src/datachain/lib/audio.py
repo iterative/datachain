@@ -1,5 +1,5 @@
 import posixpath
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 from datachain.lib.file import FileError
 
@@ -18,7 +18,7 @@ except ImportError as exc:
     ) from exc
 
 
-def audio_info(file: "Union[File, AudioFile]") -> "Audio":
+def audio_info(file: "File | AudioFile") -> "Audio":
     """Extract metadata like sample rate, channels, duration, and format."""
     from datachain.lib.file import Audio
 
@@ -99,7 +99,7 @@ def _encoding_to_format(encoding: str, file_ext: str) -> str:
 
 
 def audio_to_np(
-    audio: "AudioFile", start: float = 0, duration: Optional[float] = None
+    audio: "AudioFile", start: float = 0, duration: float | None = None
 ) -> "tuple[ndarray, int]":
     """Load audio fragment as numpy array.
     Multi-channel audio is transposed to (samples, channels)."""
@@ -146,7 +146,7 @@ def audio_to_bytes(
     audio: "AudioFile",
     format: str = "wav",
     start: float = 0,
-    duration: Optional[float] = None,
+    duration: float | None = None,
 ) -> bytes:
     """Convert audio to bytes using soundfile.
 
@@ -166,9 +166,9 @@ def audio_to_bytes(
 def save_audio(
     audio: "AudioFile",
     output: str,
-    format: Optional[str] = None,
+    format: str | None = None,
     start: float = 0,
-    end: Optional[float] = None,
+    end: float | None = None,
 ) -> "AudioFile":
     """Save audio file or extract fragment to specified format.
 

@@ -33,7 +33,7 @@ def test_dataset_select_paginated_dataset_larger_than_batch_size(test_session):
 
     rows = list(rows)
     assert len(rows) == 10_000
-    (values,) = zip(*rows)
+    (values,) = zip(*rows, strict=False)
     assert set(values) == set(db_values)
 
 

@@ -18,7 +18,7 @@ from tests.utils import assert_row_names, dataset_dependency_asdict
 
 
 def from_result_row(col_names, row):
-    return dict(zip(col_names, row))
+    return dict(zip(col_names, row, strict=False))
 
 
 def create_dataset_query_mutate_schema(**mutations):
@@ -333,11 +333,13 @@ def test_mutate(cloud_test_catalog, save, animal_dataset):
         new_query = DatasetQuery(name=ds_name, catalog=catalog).order_by(
             C.size10x.desc(), C("file.path")
         )
-        result = new_query.db_results(row_factory=lambda c, v: dict(zip(c, v)))
+        result = new_query.db_results(
+            row_factory=lambda c, v: dict(zip(c, v, strict=False))
+        )
         dataset_record = catalog.get_dataset(ds_name)
         assert dataset_record.status == DatasetStatus.COMPLETE
     else:
-        result = q.db_results(row_factory=lambda c, v: dict(zip(c, v)))
+        result = q.db_results(row_factory=lambda c, v: dict(zip(c, v, strict=False)))
     assert len(result) == 4
     assert len(result[0]) == 15
     cols = {"size10x", "size1000x", "s2", "s3", "s4"}
@@ -372,10 +374,10 @@ def test_order_by_after_mutate(cloud_test_catalog, save, animal_dataset):
         result = (
             DatasetQuery(name=ds_name, catalog=catalog)
             .order_by(C.size10x.desc(), pathfunc.name(C("file.path")))
-            .db_results(row_factory=lambda c, v: dict(zip(c, v)))
+            .db_results(row_factory=lambda c, v: dict(zip(c, v, strict=False)))
         )
     else:
-        result = q.db_results(row_factory=lambda c, v: dict(zip(c, v)))
+        result = q.db_results(row_factory=lambda c, v: dict(zip(c, v, strict=False)))
 
     assert [r["size10x"] for r in result] == [130, 40, 40, 30]
 
@@ -914,7 +916,11 @@ def test_simple_dataset_query(cloud_test_catalog):
 
     ds1, ds2 = (
         [
-            {k.name: v for k, v in zip(q.selected_columns, r) if k.name != "sys__id"}
+            {
+                k.name: v
+                for k, v in zip(q.selected_columns, r, strict=False)
+                if k.name != "sys__id"
+            }
             for r in warehouse.db.execute(q)
         ]
         for q in ds_queries

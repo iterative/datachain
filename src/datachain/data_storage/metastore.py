@@ -7,7 +7,7 @@ from collections.abc import Iterator
 from datetime import datetime, timezone
 from functools import cached_property, reduce
 from itertools import groupby
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from sqlalchemy import (
@@ -82,7 +82,7 @@ class AbstractMetastore(ABC, Serializable):
 
     def __init__(
         self,
-        uri: Optional[StorageURI] = None,
+        uri: StorageURI | None = None,
     ):
         self.uri = uri or StorageURI("")
 
@@ -96,7 +96,7 @@ class AbstractMetastore(ABC, Serializable):
     @abstractmethod
     def clone(
         self,
-        uri: Optional[StorageURI] = None,
+        uri: StorageURI | None = None,
         use_new_connection: bool = False,
     ) -> "AbstractMetastore":
         """Clones AbstractMetastore implementation for some Storage input.
@@ -136,8 +136,8 @@ class AbstractMetastore(ABC, Serializable):
     def create_namespace(
         self,
         name: str,
-        description: Optional[str] = None,
-        uuid: Optional[str] = None,
+        description: str | None = None,
+        uuid: str | None = None,
         ignore_if_exists: bool = True,
         validate: bool = True,
         **kwargs,
@@ -184,8 +184,8 @@ class AbstractMetastore(ABC, Serializable):
         self,
         namespace_name: str,
         name: str,
-        description: Optional[str] = None,
-        uuid: Optional[str] = None,
+        description: str | None = None,
+        uuid: str | None = None,
         ignore_if_exists: bool = True,
         validate: bool = True,
         **kwargs,
@@ -218,7 +218,7 @@ class AbstractMetastore(ABC, Serializable):
         """Gets a single project by id"""
 
     @abstractmethod
-    def count_projects(self, namespace_id: Optional[int] = None) -> int:
+    def count_projects(self, namespace_id: int | None = None) -> int:
         """Counts projects in some namespace or in general."""
 
     @abstractmethod
@@ -226,7 +226,7 @@ class AbstractMetastore(ABC, Serializable):
         """Removes a single project by id"""
 
     @abstractmethod
-    def list_projects(self, namespace_id: Optional[int], conn=None) -> list[Project]:
+    def list_projects(self, namespace_id: int | None, conn=None) -> list[Project]:
         """Gets list of projects in some namespace or in general (in all namespaces)"""
 
     #
@@ -236,15 +236,15 @@ class AbstractMetastore(ABC, Serializable):
     def create_dataset(
         self,
         name: str,
-        project_id: Optional[int] = None,
+        project_id: int | None = None,
         status: int = DatasetStatus.CREATED,
-        sources: Optional[list[str]] = None,
-        feature_schema: Optional[dict] = None,
+        sources: list[str] | None = None,
+        feature_schema: dict | None = None,
         query_script: str = "",
-        schema: Optional[dict[str, Any]] = None,
+        schema: dict[str, Any] | None = None,
         ignore_if_exists: bool = False,
-        description: Optional[str] = None,
-        attrs: Optional[list[str]] = None,
+        description: str | None = None,
+        attrs: list[str] | None = None,
     ) -> DatasetRecord:
         """Creates new dataset."""
 
@@ -255,20 +255,20 @@ class AbstractMetastore(ABC, Serializable):
         version: str,
         status: int,
         sources: str = "",
-        feature_schema: Optional[dict] = None,
+        feature_schema: dict | None = None,
         query_script: str = "",
         error_message: str = "",
         error_stack: str = "",
         script_output: str = "",
-        created_at: Optional[datetime] = None,
-        finished_at: Optional[datetime] = None,
-        schema: Optional[dict[str, Any]] = None,
+        created_at: datetime | None = None,
+        finished_at: datetime | None = None,
+        schema: dict[str, Any] | None = None,
         ignore_if_exists: bool = False,
-        num_objects: Optional[int] = None,
-        size: Optional[int] = None,
-        preview: Optional[list[dict]] = None,
-        job_id: Optional[str] = None,
-        uuid: Optional[str] = None,
+        num_objects: int | None = None,
+        size: int | None = None,
+        preview: list[dict] | None = None,
+        job_id: str | None = None,
+        uuid: str | None = None,
     ) -> DatasetRecord:
         """Creates new dataset version."""
 
@@ -297,17 +297,17 @@ class AbstractMetastore(ABC, Serializable):
 
     @abstractmethod
     def list_datasets(
-        self, project_id: Optional[int] = None
+        self, project_id: int | None = None
     ) -> Iterator[DatasetListRecord]:
         """Lists all datasets in some project or in all projects."""
 
     @abstractmethod
-    def count_datasets(self, project_id: Optional[int] = None) -> int:
+    def count_datasets(self, project_id: int | None = None) -> int:
         """Counts datasets in some project or in all projects."""
 
     @abstractmethod
     def list_datasets_by_prefix(
-        self, prefix: str, project_id: Optional[int] = None
+        self, prefix: str, project_id: int | None = None
     ) -> Iterator["DatasetListRecord"]:
         """
         Lists all datasets which names start with prefix in some project or in all
@@ -318,8 +318,8 @@ class AbstractMetastore(ABC, Serializable):
     def get_dataset(
         self,
         name: str,  # normal, not full dataset name
-        namespace_name: Optional[str] = None,
-        project_name: Optional[str] = None,
+        namespace_name: str | None = None,
+        project_name: str | None = None,
         conn=None,
     ) -> DatasetRecord:
         """Gets a single dataset by name."""
@@ -329,7 +329,7 @@ class AbstractMetastore(ABC, Serializable):
         self,
         dataset: DatasetRecord,
         status: int,
-        version: Optional[str] = None,
+        version: str | None = None,
         error_message="",
         error_stack="",
         script_output="",
@@ -354,20 +354,20 @@ class AbstractMetastore(ABC, Serializable):
         self,
         source_dataset: DatasetRecord,
         source_dataset_version: str,
-        new_source_dataset: Optional[DatasetRecord] = None,
-        new_source_dataset_version: Optional[str] = None,
+        new_source_dataset: DatasetRecord | None = None,
+        new_source_dataset_version: str | None = None,
     ) -> None:
         """Updates dataset dependency source."""
 
     @abstractmethod
     def get_direct_dataset_dependencies(
         self, dataset: DatasetRecord, version: str
-    ) -> list[Optional[DatasetDependency]]:
+    ) -> list[DatasetDependency | None]:
         """Gets direct dataset dependencies."""
 
     @abstractmethod
     def remove_dataset_dependencies(
-        self, dataset: DatasetRecord, version: Optional[str] = None
+        self, dataset: DatasetRecord, version: str | None = None
     ) -> None:
         """
         When we remove dataset, we need to clean up it's dependencies as well.
@@ -375,7 +375,7 @@ class AbstractMetastore(ABC, Serializable):
 
     @abstractmethod
     def remove_dataset_dependants(
-        self, dataset: DatasetRecord, version: Optional[str] = None
+        self, dataset: DatasetRecord, version: str | None = None
     ) -> None:
         """
         When we remove dataset, we need to clear its references in other dataset
@@ -397,8 +397,8 @@ class AbstractMetastore(ABC, Serializable):
         query_type: JobQueryType = JobQueryType.PYTHON,
         status: JobStatus = JobStatus.CREATED,
         workers: int = 1,
-        python_version: Optional[str] = None,
-        params: Optional[dict[str, str]] = None,
+        python_version: str | None = None,
+        params: dict[str, str] | None = None,
     ) -> str:
         """
         Creates a new job.
@@ -406,19 +406,19 @@ class AbstractMetastore(ABC, Serializable):
         """
 
     @abstractmethod
-    def get_job(self, job_id: str) -> Optional[Job]:
+    def get_job(self, job_id: str) -> Job | None:
         """Returns the job with the given ID."""
 
     @abstractmethod
     def update_job(
         self,
         job_id: str,
-        status: Optional[JobStatus] = None,
-        error_message: Optional[str] = None,
-        error_stack: Optional[str] = None,
-        finished_at: Optional[datetime] = None,
-        metrics: Optional[dict[str, Any]] = None,
-    ) -> Optional["Job"]:
+        status: JobStatus | None = None,
+        error_message: str | None = None,
+        error_stack: str | None = None,
+        finished_at: datetime | None = None,
+        metrics: dict[str, Any] | None = None,
+    ) -> Job | None:
         """Updates job fields."""
 
     @abstractmethod
@@ -426,13 +426,13 @@ class AbstractMetastore(ABC, Serializable):
         self,
         job_id: str,
         status: JobStatus,
-        error_message: Optional[str] = None,
-        error_stack: Optional[str] = None,
+        error_message: str | None = None,
+        error_stack: str | None = None,
     ) -> None:
         """Set the status of the given job."""
 
     @abstractmethod
-    def get_job_status(self, job_id: str) -> Optional[JobStatus]:
+    def get_job_status(self, job_id: str) -> JobStatus | None:
         """Returns the status of the given job."""
 
     #
@@ -449,7 +449,7 @@ class AbstractMetastore(ABC, Serializable):
 
     def find_checkpoint(
         self, job_id: str, _hash: str, partial: bool = False, conn=None
-    ) -> Optional[Checkpoint]:
+    ) -> Checkpoint | None:
         """
         Tries to find checkpoint for a job with specific hash and optionally partial
         """
@@ -460,7 +460,7 @@ class AbstractMetastore(ABC, Serializable):
         job_id: str,
         _hash: str,
         partial: bool = False,
-        conn: Optional[Any] = None,
+        conn: Any | None = None,
     ) -> Checkpoint:
         """Creates new checkpoint"""
 
@@ -483,7 +483,7 @@ class AbstractDBMetastore(AbstractMetastore):
 
     db: "DatabaseEngine"
 
-    def __init__(self, uri: Optional[StorageURI] = None):
+    def __init__(self, uri: StorageURI | None = None):
         uri = uri or StorageURI("")
         super().__init__(uri)
 
@@ -775,8 +775,8 @@ class AbstractDBMetastore(AbstractMetastore):
     def create_namespace(
         self,
         name: str,
-        description: Optional[str] = None,
-        uuid: Optional[str] = None,
+        description: str | None = None,
+        uuid: str | None = None,
         ignore_if_exists: bool = True,
         validate: bool = True,
         **kwargs,
@@ -840,8 +840,8 @@ class AbstractDBMetastore(AbstractMetastore):
         self,
         namespace_name: str,
         name: str,
-        description: Optional[str] = None,
-        uuid: Optional[str] = None,
+        description: str | None = None,
+        uuid: str | None = None,
         ignore_if_exists: bool = True,
         validate: bool = True,
         **kwargs,
@@ -919,7 +919,7 @@ class AbstractDBMetastore(AbstractMetastore):
             raise ProjectNotFoundError(f"Project with id {project_id} not found.")
         return self.project_class.parse(*rows[0])
 
-    def count_projects(self, namespace_id: Optional[int] = None) -> int:
+    def count_projects(self, namespace_id: int | None = None) -> int:
         p = self._projects
 
         query = self._projects_base_query()
@@ -943,7 +943,7 @@ class AbstractDBMetastore(AbstractMetastore):
             self.db.execute(self._projects_delete().where(p.c.id == project_id))
 
     def list_projects(
-        self, namespace_id: Optional[int] = None, conn=None
+        self, namespace_id: int | None = None, conn=None
     ) -> list[Project]:
         """
         Gets a list of projects inside some namespace, or in all namespaces
@@ -966,15 +966,15 @@ class AbstractDBMetastore(AbstractMetastore):
     def create_dataset(
         self,
         name: str,
-        project_id: Optional[int] = None,
+        project_id: int | None = None,
         status: int = DatasetStatus.CREATED,
-        sources: Optional[list[str]] = None,
-        feature_schema: Optional[dict] = None,
+        sources: list[str] | None = None,
+        feature_schema: dict | None = None,
         query_script: str = "",
-        schema: Optional[dict[str, Any]] = None,
+        schema: dict[str, Any] | None = None,
         ignore_if_exists: bool = False,
-        description: Optional[str] = None,
-        attrs: Optional[list[str]] = None,
+        description: str | None = None,
+        attrs: list[str] | None = None,
         **kwargs,  # TODO registered = True / False
     ) -> DatasetRecord:
         """Creates new dataset."""
@@ -1014,20 +1014,20 @@ class AbstractDBMetastore(AbstractMetastore):
         version: str,
         status: int,
         sources: str = "",
-        feature_schema: Optional[dict] = None,
+        feature_schema: dict | None = None,
         query_script: str = "",
         error_message: str = "",
         error_stack: str = "",
         script_output: str = "",
-        created_at: Optional[datetime] = None,
-        finished_at: Optional[datetime] = None,
-        schema: Optional[dict[str, Any]] = None,
+        created_at: datetime | None = None,
+        finished_at: datetime | None = None,
+        schema: dict[str, Any] | None = None,
         ignore_if_exists: bool = False,
-        num_objects: Optional[int] = None,
-        size: Optional[int] = None,
-        preview: Optional[list[dict]] = None,
-        job_id: Optional[str] = None,
-        uuid: Optional[str] = None,
+        num_objects: int | None = None,
+        size: int | None = None,
+        preview: list[dict] | None = None,
+        job_id: str | None = None,
+        uuid: str | None = None,
         conn=None,
     ) -> DatasetRecord:
         """Creates new dataset version."""
@@ -1199,13 +1199,13 @@ class AbstractDBMetastore(AbstractMetastore):
             f"Dataset {dataset.name} does not have version {version}"
         )
 
-    def _parse_dataset(self, rows) -> Optional[DatasetRecord]:
+    def _parse_dataset(self, rows) -> DatasetRecord | None:
         versions = [self.dataset_class.parse(*r) for r in rows]
         if not versions:
             return None
         return reduce(lambda ds, version: ds.merge_versions(version), versions)
 
-    def _parse_list_dataset(self, rows) -> Optional[DatasetListRecord]:
+    def _parse_list_dataset(self, rows) -> DatasetListRecord | None:
         versions = [self.dataset_list_class.parse(*r) for r in rows]
         if not versions:
             return None
@@ -1268,7 +1268,7 @@ class AbstractDBMetastore(AbstractMetastore):
         )
 
     def list_datasets(
-        self, project_id: Optional[int] = None
+        self, project_id: int | None = None
     ) -> Iterator["DatasetListRecord"]:
         d = self._datasets
         query = self._base_list_datasets_query().order_by(
@@ -1278,7 +1278,7 @@ class AbstractDBMetastore(AbstractMetastore):
             query = query.where(d.c.project_id == project_id)
         yield from self._parse_dataset_list(self.db.execute(query))
 
-    def count_datasets(self, project_id: Optional[int] = None) -> int:
+    def count_datasets(self, project_id: int | None = None) -> int:
         d = self._datasets
         query = self._datasets_select()
         if project_id:
@@ -1289,7 +1289,7 @@ class AbstractDBMetastore(AbstractMetastore):
         return next(self.db.execute(query))[0]
 
     def list_datasets_by_prefix(
-        self, prefix: str, project_id: Optional[int] = None, conn=None
+        self, prefix: str, project_id: int | None = None, conn=None
     ) -> Iterator["DatasetListRecord"]:
         d = self._datasets
         query = self._base_list_datasets_query()
@@ -1301,8 +1301,8 @@ class AbstractDBMetastore(AbstractMetastore):
     def get_dataset(
         self,
         name: str,  # normal, not full dataset name
-        namespace_name: Optional[str] = None,
-        project_name: Optional[str] = None,
+        namespace_name: str | None = None,
+        project_name: str | None = None,
         conn=None,
     ) -> DatasetRecord:
         """
@@ -1363,7 +1363,7 @@ class AbstractDBMetastore(AbstractMetastore):
         self,
         dataset: DatasetRecord,
         status: int,
-        version: Optional[str] = None,
+        version: str | None = None,
         error_message="",
         error_stack="",
         script_output="",
@@ -1417,8 +1417,8 @@ class AbstractDBMetastore(AbstractMetastore):
         self,
         source_dataset: DatasetRecord,
         source_dataset_version: str,
-        new_source_dataset: Optional[DatasetRecord] = None,
-        new_source_dataset_version: Optional[str] = None,
+        new_source_dataset: DatasetRecord | None = None,
+        new_source_dataset_version: str | None = None,
     ) -> None:
         dd = self._datasets_dependencies
 
@@ -1450,7 +1450,7 @@ class AbstractDBMetastore(AbstractMetastore):
 
     def get_direct_dataset_dependencies(
         self, dataset: DatasetRecord, version: str
-    ) -> list[Optional[DatasetDependency]]:
+    ) -> list[DatasetDependency | None]:
         n = self._namespaces
         p = self._projects
         d = self._datasets
@@ -1478,7 +1478,7 @@ class AbstractDBMetastore(AbstractMetastore):
         return [self.dependency_class.parse(*r) for r in self.db.execute(query)]
 
     def remove_dataset_dependencies(
-        self, dataset: DatasetRecord, version: Optional[str] = None
+        self, dataset: DatasetRecord, version: str | None = None
     ) -> None:
         """
         When we remove dataset, we need to clean up it's dependencies as well
@@ -1497,7 +1497,7 @@ class AbstractDBMetastore(AbstractMetastore):
         self.db.execute(q)
 
     def remove_dataset_dependants(
-        self, dataset: DatasetRecord, version: Optional[str] = None
+        self, dataset: DatasetRecord, version: str | None = None
     ) -> None:
         """
         When we remove dataset, we need to clear its references in other dataset
@@ -1593,9 +1593,9 @@ class AbstractDBMetastore(AbstractMetastore):
         query_type: JobQueryType = JobQueryType.PYTHON,
         status: JobStatus = JobStatus.CREATED,
         workers: int = 1,
-        python_version: Optional[str] = None,
-        params: Optional[dict[str, str]] = None,
-        conn: Optional[Any] = None,
+        python_version: str | None = None,
+        params: dict[str, str] | None = None,
+        conn: Any | None = None,
     ) -> str:
         """
         Creates a new job.
@@ -1621,7 +1621,7 @@ class AbstractDBMetastore(AbstractMetastore):
         )
         return job_id
 
-    def get_job(self, job_id: str, conn=None) -> Optional[Job]:
+    def get_job(self, job_id: str, conn=None) -> Job | None:
         """Returns the job with the given ID."""
         query = self._jobs_select(self._jobs).where(self._jobs.c.id == job_id)
         results = list(self.db.execute(query, conn=conn))
@@ -1632,13 +1632,13 @@ class AbstractDBMetastore(AbstractMetastore):
     def update_job(
         self,
         job_id: str,
-        status: Optional[JobStatus] = None,
-        error_message: Optional[str] = None,
-        error_stack: Optional[str] = None,
-        finished_at: Optional[datetime] = None,
-        metrics: Optional[dict[str, Any]] = None,
-        conn: Optional[Any] = None,
-    ) -> Optional["Job"]:
+        status: JobStatus | None = None,
+        error_message: str | None = None,
+        error_stack: str | None = None,
+        finished_at: datetime | None = None,
+        metrics: dict[str, Any] | None = None,
+        conn: Any | None = None,
+    ) -> Job | None:
         """Updates job fields."""
         values: dict = {}
         if status is not None:
@@ -1665,9 +1665,9 @@ class AbstractDBMetastore(AbstractMetastore):
         self,
         job_id: str,
         status: JobStatus,
-        error_message: Optional[str] = None,
-        error_stack: Optional[str] = None,
-        conn: Optional[Any] = None,
+        error_message: str | None = None,
+        error_stack: str | None = None,
+        conn: Any | None = None,
     ) -> None:
         """Set the status of the given job."""
         values: dict = {"status": status}
@@ -1685,8 +1685,8 @@ class AbstractDBMetastore(AbstractMetastore):
     def get_job_status(
         self,
         job_id: str,
-        conn: Optional[Any] = None,
-    ) -> Optional[JobStatus]:
+        conn: Any | None = None,
+    ) -> JobStatus | None:
         """Returns the status of the given job."""
         results = list(
             self.db.execute(
@@ -1752,7 +1752,7 @@ class AbstractDBMetastore(AbstractMetastore):
         job_id: str,
         _hash: str,
         partial: bool = False,
-        conn: Optional[Any] = None,
+        conn: Any | None = None,
     ) -> Checkpoint:
         """
         Creates a new job query step.
@@ -1788,7 +1788,7 @@ class AbstractDBMetastore(AbstractMetastore):
 
     def find_checkpoint(
         self, job_id: str, _hash: str, partial: bool = False, conn=None
-    ) -> Optional[Checkpoint]:
+    ) -> Checkpoint | None:
         """
         Tries to find checkpoint for a job with specific hash and optionally partial
         """

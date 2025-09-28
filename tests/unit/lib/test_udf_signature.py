@@ -1,5 +1,5 @@
-from collections.abc import Sequence
-from typing import Any, Callable, Optional, Union
+from collections.abc import Callable, Sequence
+from typing import Any
 
 import pytest
 from pydantic import BaseModel
@@ -11,9 +11,9 @@ from datachain.lib.udf_signature import UdfSignature, UdfSignatureError
 
 
 def get_sign(
-    func: Optional[Callable] = None,
-    params: Union[None, str, Sequence[str]] = None,
-    output: Union[None, DataType, Sequence[str], dict[str, DataType]] = None,
+    func: Callable | None = None,
+    params: str | Sequence[str] | None = None,
+    output: DataType | Sequence[str] | dict[str, DataType] | None = None,
     **signal_map,
 ):
     return UdfSignature.parse("test", signal_map, func, params, output, False)

@@ -1,7 +1,7 @@
 import os
 from collections.abc import Sequence
 from functools import reduce
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 from datachain.lib.dc.storage_pattern import (
     apply_glob_filter,
@@ -19,27 +19,27 @@ if TYPE_CHECKING:
 
 
 def read_storage(
-    uri: Union[str, os.PathLike[str], list[str], list[os.PathLike[str]]],
+    uri: str | os.PathLike[str] | list[str] | list[os.PathLike[str]],
     *,
     type: FileType = "binary",
-    session: Optional[Session] = None,
-    settings: Optional[dict] = None,
+    session: Session | None = None,
+    settings: dict | None = None,
     in_memory: bool = False,
-    recursive: Optional[bool] = True,
+    recursive: bool | None = True,
     column: str = "file",
     update: bool = False,
-    anon: Optional[bool] = None,
-    delta: Optional[bool] = False,
-    delta_on: Optional[Union[str, Sequence[str]]] = (
+    anon: bool | None = None,
+    delta: bool | None = False,
+    delta_on: str | Sequence[str] | None = (
         "file.path",
         "file.etag",
         "file.version",
     ),
-    delta_result_on: Optional[Union[str, Sequence[str]]] = None,
-    delta_compare: Optional[Union[str, Sequence[str]]] = None,
-    delta_retry: Optional[Union[bool, str]] = None,
+    delta_result_on: str | Sequence[str] | None = None,
+    delta_compare: str | Sequence[str] | None = None,
+    delta_retry: bool | str | None = None,
     delta_unsafe: bool = False,
-    client_config: Optional[dict] = None,
+    client_config: dict | None = None,
 ) -> "DataChain":
     """Get data from storage(s) as a list of file with all file attributes.
     It returns the chain itself as usual.

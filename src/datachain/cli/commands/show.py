@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from datachain.lib.signal_schema import SignalSchema
 
@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 def show(
     catalog: "Catalog",
     name: str,
-    version: Optional[str] = None,
+    version: str | None = None,
     limit: int = 10,
     offset: int = 0,
     columns: Sequence[str] = (),

@@ -7,8 +7,6 @@ The example keeps things minimal: we persist a tiny dataset, run a parallel map
 that returns a nested DataModel, and display the result.
 """
 
-from typing import Optional
-
 from pydantic import Field
 
 import datachain as dc
@@ -17,12 +15,12 @@ import datachain as dc
 class Metric(dc.DataModel):
     """Represents a single computed metric with quality metadata."""
 
-    value: Optional[float] = Field(default=None, description="Computed metric value")
-    confidence: Optional[float] = Field(
+    value: float | None = Field(default=None, description="Computed metric value")
+    confidence: float | None = Field(
         default=None, description="Confidence / quality score"
     )
-    status: Optional[str] = Field(default=None, description="Processing status label")
-    metric_error: Optional[str] = Field(
+    status: str | None = Field(default=None, description="Processing status label")
+    metric_error: str | None = Field(
         default=None, description="Error message if metric computation failed"
     )
 

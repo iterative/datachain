@@ -4,10 +4,11 @@ import math
 import os
 import posixpath
 import tarfile
+from collections.abc import Callable
 from string import printable
 from tarfile import DIRTYPE, TarInfo
 from time import sleep, time
-from typing import Any, Callable, Optional
+from typing import Any
 
 import pytest
 import sqlalchemy as sa
@@ -138,8 +139,8 @@ def text_embedding(text: str) -> list[float]:
 
 
 def dataset_dependency_asdict(
-    dep: Optional[DatasetDependency],
-) -> Optional[dict[str, Any]]:
+    dep: DatasetDependency | None,
+) -> dict[str, Any] | None:
     """
     Converting to dict with making sure we don't have any additional fields
     that could've been added with subclasses
@@ -222,7 +223,7 @@ def df_equal(df1, df2) -> bool:
     return sort_df(df1).equals(sort_df(df2))
 
 
-def table_row_count(db, table_name) -> Optional[int]:
+def table_row_count(db, table_name) -> int | None:
     if not db.has_table(table_name):
         return None
     query = sa.select(sa.func.count()).select_from(sa.table(table_name))

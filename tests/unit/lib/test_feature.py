@@ -1,4 +1,4 @@
-from typing import ClassVar, Literal, Optional
+from typing import ClassVar, Literal
 
 import pytest
 from pydantic import BaseModel, Field, ValidationError
@@ -54,7 +54,7 @@ def test_flatten_with_empty_json():
 
 def test_flatten_with_accepted_empty_json():
     class _Test(DataModel):
-        d: Optional[dict]
+        d: dict | None
 
     assert flatten(_Test(d=None)) == (None,)
 

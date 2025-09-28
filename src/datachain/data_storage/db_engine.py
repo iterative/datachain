@@ -1,7 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any, ClassVar, Optional, Union
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import sqlalchemy as sa
 from sqlalchemy.sql import FROM_LINTING
@@ -58,7 +58,7 @@ class DatabaseEngine(ABC, Serializable):
     @classmethod
     def compile_to_args(
         cls, statement: "ClauseElement", **kwargs
-    ) -> Union[tuple[str], tuple[str, dict[str, Any]]]:
+    ) -> tuple[str] | tuple[str, dict[str, Any]]:
         """
         Compile a sqlalchemy query or ddl object to an args tuple.
 
@@ -75,8 +75,8 @@ class DatabaseEngine(ABC, Serializable):
     def execute(
         self,
         query,
-        cursor: Optional[Any] = None,
-        conn: Optional[Any] = None,
+        cursor: Any | None = None,
+        conn: Any | None = None,
     ) -> Iterator[tuple[Any, ...]]: ...
 
     def get_table(self, name: str) -> "Table":
@@ -90,7 +90,7 @@ class DatabaseEngine(ABC, Serializable):
 
     @abstractmethod
     def executemany(
-        self, query, params, cursor: Optional[Any] = None
+        self, query, params, cursor: Any | None = None
     ) -> Iterator[tuple[Any, ...]]: ...
 
     @abstractmethod

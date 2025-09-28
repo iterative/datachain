@@ -2,11 +2,10 @@ import logging
 import re
 import sqlite3
 import warnings
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import MAXYEAR, MINYEAR, datetime, timezone
 from functools import cache
 from types import MappingProxyType
-from typing import Callable, Optional
 
 import sqlalchemy as sa
 import ujson as json
@@ -132,7 +131,7 @@ def run_compiler_hook(name):
 
 
 def functions_exist(
-    names: Iterable[str], connection: Optional[sqlite3.Connection] = None
+    names: Iterable[str], connection: sqlite3.Connection | None = None
 ) -> bool:
     """
     Returns True if all function names are defined for the given connection.
@@ -201,9 +200,7 @@ def sqlite_int_hash_64(x: int) -> int:
 def sqlite_bit_hamming_distance(a: int, b: int) -> int:
     """Calculate the Hamming distance between two integers."""
     diff = (a & MAX_INT64) ^ (b & MAX_INT64)
-    if hasattr(diff, "bit_count"):
-        return diff.bit_count()
-    return bin(diff).count("1")
+    return diff.bit_count()
 
 
 def sqlite_byte_hamming_distance(a: str, b: str) -> int:
@@ -215,7 +212,7 @@ def sqlite_byte_hamming_distance(a: str, b: str) -> int:
     elif len(b) < len(a):
         diff = len(a) - len(b)
         a = a[: len(b)]
-    return diff + sum(c1 != c2 for c1, c2 in zip(a, b))
+    return diff + sum(c1 != c2 for c1, c2 in zip(a, b, strict=False))
 
 
 def register_user_defined_sql_functions() -> None:
@@ -470,7 +467,7 @@ def py_json_array_get_element(val, idx):
         return None
 
 
-def py_json_array_slice(val, offset: int, length: Optional[int] = None):
+def py_json_array_slice(val, offset: int, length: int | None = None):
     arr = json.loads(val)
     try:
         return json.dumps(
@@ -605,7 +602,7 @@ def compile_collect(element, compiler, **kwargs):
 
 
 @cache
-def usearch_sqlite_path() -> Optional[str]:
+def usearch_sqlite_path() -> str | None:
     try:
         import usearch
     except ImportError:

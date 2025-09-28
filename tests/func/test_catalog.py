@@ -499,7 +499,7 @@ def test_index_error(cloud_test_catalog):
 
 def test_dataset_stats(test_session):
     ids = [1, 2, 3]
-    values = tuple(zip(["a", "b", "c"], [1, 2, 3]))
+    values = tuple(zip(["a", "b", "c"], [1, 2, 3], strict=False))
 
     ds1 = dc.read_values(
         ids=ids,
@@ -523,7 +523,7 @@ def test_dataset_stats(test_session):
 
 def test_ls_datasets_ordered(test_session):
     ids = [1, 2, 3]
-    values = tuple(zip(["a", "b", "c"], ids))
+    values = tuple(zip(["a", "b", "c"], ids, strict=False))
 
     assert not list(test_session.catalog.ls_datasets())
 
@@ -555,7 +555,7 @@ def test_ls_datasets_ordered(test_session):
 
 def test_ls_datasets_no_json(test_session):
     ids = [1, 2, 3]
-    values = tuple(zip(["a", "b", "c"], [1, 2, 3]))
+    values = tuple(zip(["a", "b", "c"], [1, 2, 3], strict=False))
 
     dc.read_values(
         ids=ids,

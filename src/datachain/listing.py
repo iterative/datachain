@@ -2,7 +2,7 @@ import glob
 import os
 from collections.abc import Iterable, Iterator
 from functools import cached_property
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Column
 from sqlalchemy.sql import func
@@ -25,8 +25,8 @@ class Listing:
         metastore: "AbstractMetastore",
         warehouse: "AbstractWarehouse",
         client: "Client",
-        dataset_name: Optional["str"] = None,
-        dataset_version: Optional[str] = None,
+        dataset_name: str | None = None,
+        dataset_version: str | None = None,
         column: str = "file",
     ):
         self.metastore = metastore
@@ -102,7 +102,7 @@ class Listing:
     def collect_nodes_to_instantiate(
         self,
         sources: Iterable["DataSource"],
-        copy_to_filename: Optional[str],
+        copy_to_filename: str | None,
         recursive=False,
         copy_dir_contents=False,
         from_dataset=False,
