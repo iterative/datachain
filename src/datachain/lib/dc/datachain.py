@@ -669,7 +669,10 @@ class DataChain:
                 and not checkpoints_reset
                 and metastore.find_checkpoint(job.parent_job_id, _hash)
             ):
-                # if we find checkpoint with correct hash, we can skip chain calculation
+                # if we find checkpoint with correct hash in previous job, we can
+                # skip chain calculation and in addition we are copying found
+                # checkpoint to the current job to avoid job tree traversal for
+                # finding checkpoints in the future.
                 catalog.metastore.create_checkpoint(job.id, _hash)
                 return read_dataset(
                     name, namespace=namespace_name, project=project_name, **kwargs
