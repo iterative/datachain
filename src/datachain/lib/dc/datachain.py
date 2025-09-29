@@ -37,6 +37,7 @@ from datachain.error import (
 from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
+from datachain.job import Job
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.data_model import (
     DataModel,
@@ -53,6 +54,7 @@ from datachain.lib.signal_schema import SignalResolvingError, SignalSchema
 from datachain.lib.udf import Aggregator, BatchMapper, Generator, Mapper, UDFBase
 from datachain.lib.udf_signature import UdfSignature
 from datachain.lib.utils import DataChainColumnError, DataChainParamsError
+from datachain.project import Project
 from datachain.query import Session
 from datachain.query.dataset import DatasetQuery, PartitionByType
 from datachain.query.schema import DEFAULT_DELIMITER, Column
@@ -618,126 +620,171 @@ class DataChain:
             update_version: which part of the dataset version to automatically increase.
                 Available values: `major`, `minor` or `patch`. Default is `patch`.
         """
-        from .datasets import read_dataset
 
         catalog = self.session.catalog
-        metastore = catalog.metastore
 
-        job = None
-        _hash = None
-        job_id = os.getenv("DATACHAIN_JOB_ID")
-        checkpoints_reset = env2bool("DATACHAIN_CHECKPOINTS_RESET")
+        result = None  # result chain that will be returned at the end
 
-        if version is not None:
-            semver.validate(version)
-
-        if update_version is not None and update_version not in [
-            "patch",
-            "major",
-            "minor",
-        ]:
-            raise ValueError(
-                "update_version can have one of the following values: major, minor or"
-                " patch"
-            )
+        # Version validation
+        self._validate_version(version)
+        self._validate_update_version(update_version)
 
         namespace_name, project_name, name = catalog.get_full_dataset_name(
             name,
             namespace_name=self._settings.namespace,
             project_name=self._settings.project,
         )
+        project = self._get_or_create_project(namespace_name, project_name)
 
-        try:
-            project = self.session.catalog.metastore.get_project(
-                project_name,
-                namespace_name,
-                create=is_studio(),
-            )
-        except ProjectNotFoundError as e:
-            # not being able to create it as creation is not allowed
-            raise ProjectCreateNotAllowedError("Creating project is not allowed") from e
+        # Checkpoint handling
+        job, _hash, result = self._resolve_checkpoint(name, project, kwargs)
 
-        # checking checkpoints and skip re-calculation of the chain if checkpoint exist
-        if job_id:
-            job = metastore.get_job(job_id)
-            if not job:
-                raise JobNotFoundError(f"Job with id {job_id} not found")
-            _hash = self._calculate_job_hash(job.id)
-
-            if (
-                job.parent_job_id
-                and not checkpoints_reset
-                and metastore.find_checkpoint(job.parent_job_id, _hash)
-            ):
-                # if we find checkpoint with correct hash in previous job, we can
-                # skip chain calculation and in addition we are copying found
-                # checkpoint to the current job to avoid job tree traversal for
-                # finding checkpoints in the future.
-                catalog.metastore.create_checkpoint(job.id, _hash)
-                return read_dataset(
-                    name, namespace=namespace_name, project=project_name, **kwargs
-                )
-
+        # Schema preparation
         schema = self.signals_schema.clone_without_sys_signals().serialize()
 
         # Handle retry and delta functionality
-        if self.delta and name:
-            from datachain.delta import delta_retry_update
+        if not result:
+            result = self._handle_delta(name, version, project, schema, kwargs)
 
-            # Delta chains must have delta_on defined (ensured by _as_delta method)
-            assert self._delta_on is not None, "Delta chain must have delta_on defined"
-
-            result_ds, dependencies, has_changes = delta_retry_update(
-                self,
-                namespace_name,
-                project_name,
-                name,
-                on=self._delta_on,
-                right_on=self._delta_result_on,
-                compare=self._delta_compare,
-                delta_retry=self._delta_retry,
-            )
-
-            if result_ds:
-                return self._evolve(
-                    query=result_ds._query.save(
-                        name=name,
-                        version=version,
-                        project=project,
-                        feature_schema=schema,
-                        dependencies=dependencies,
-                        **kwargs,
-                    )
+        if not result:
+            # calculate chain if we already don't have result from checkpoint or delta
+            result = self._evolve(
+                query=self._query.save(
+                    name=name,
+                    version=version,
+                    project=project,
+                    description=description,
+                    attrs=attrs,
+                    feature_schema=schema,
+                    update_version=update_version,
+                    **kwargs,
                 )
-
-            if not has_changes:
-                # sources have not been changed so new version of resulting dataset
-                # would be the same as previous one. To avoid duplicating exact
-                # datasets, we won't create new version of it and we will return
-                # current latest version instead.
-                if job:
-                    catalog.metastore.create_checkpoint(job.id, _hash)  # type: ignore[arg-type]
-                return read_dataset(
-                    name, namespace=namespace_name, project=project_name, **kwargs
-                )
-
-        result = self._evolve(
-            query=self._query.save(
-                name=name,
-                version=version,
-                project=project,
-                description=description,
-                attrs=attrs,
-                feature_schema=schema,
-                update_version=update_version,
-                **kwargs,
             )
-        )
 
         if job:
             catalog.metastore.create_checkpoint(job.id, _hash)  # type: ignore[arg-type]
 
         return result
+
+    def _validate_version(self, version: Optional[str]) -> None:
+        """Validate dataset version if provided."""
+        if version is not None:
+            semver.validate(version)
+
+    def _validate_update_version(self, update_version: Optional[str]) -> None:
+        """Ensure update_version is one of: major, minor, patch."""
+        allowed = ["major", "minor", "patch"]
+        if update_version not in allowed:
+            raise ValueError(f"update_version must be one of {allowed}")
+
+    def _get_or_create_project(self, namespace: str, project_name: str) -> Project:
+        """Get project or raise if creation not allowed."""
+        try:
+            return self.session.catalog.metastore.get_project(
+                project_name,
+                namespace,
+                create=is_studio(),
+            )
+        except ProjectNotFoundError as e:
+            raise ProjectCreateNotAllowedError("Creating project is not allowed") from e
+
+    def _resolve_checkpoint(
+        self,
+        name: str,
+        project: Project,
+        kwargs: dict,
+    ) -> tuple[Optional[Job], Optional[str], Optional["DataChain"]]:
+        """Check if checkpoint exists and return cached dataset if possible."""
+        from .datasets import read_dataset
+
+        metastore = self.session.catalog.metastore
+
+        job_id = os.getenv("DATACHAIN_JOB_ID")
+        checkpoints_reset = env2bool("DATACHAIN_CHECKPOINTS_RESET")
+
+        if not job_id:
+            return None, None, None
+
+        job = metastore.get_job(job_id)
+        if not job:
+            raise JobNotFoundError(f"Job with id {job_id} not found")
+
+        _hash = self._calculate_job_hash(job.id)
+
+        if (
+            job.parent_job_id
+            and not checkpoints_reset
+            and metastore.find_checkpoint(job.parent_job_id, _hash)
+        ):
+            # checkpoint found → reuse dataset
+            chain = read_dataset(
+                name, namespace=project.namespace.name, project=project.name, **kwargs
+            )
+            return job, _hash, chain
+
+        return job, _hash, None
+
+    def _handle_delta(
+        self,
+        name: str,
+        version: Optional[str],
+        project: Project,
+        schema: dict,
+        kwargs: dict,
+    ) -> Optional["DataChain"]:
+        """Try to save as a delta dataset.
+        Returns:
+            A DataChain if delta logic could handle it, otherwise None to fall back
+            to the regular save path (e.g., on first dataset creation).
+        """
+        from datachain.delta import delta_retry_update
+
+        from .datasets import read_dataset
+
+        if not self.delta or not name:
+            return None
+
+        assert self._delta_on is not None, "Delta chain must have delta_on defined"
+
+        result_ds, dependencies, has_changes = delta_retry_update(
+            self,
+            project.namespace.name,
+            project.name,
+            name,
+            on=self._delta_on,
+            right_on=self._delta_result_on,
+            compare=self._delta_compare,
+            delta_retry=self._delta_retry,
+        )
+
+        # Case 1: delta produced a new dataset
+        if result_ds:
+            return self._evolve(
+                query=result_ds._query.save(
+                    name=name,
+                    version=version,
+                    project=project,
+                    feature_schema=schema,
+                    dependencies=dependencies,
+                    **kwargs,
+                )
+            )
+
+        # Case 2: no changes → reuse last version
+        if not has_changes:
+            # sources have not been changed so new version of resulting dataset
+            # would be the same as previous one. To avoid duplicating exact
+            # datasets, we won't create new version of it and we will return
+            # current latest version instead.
+            return read_dataset(
+                name,
+                namespace=project.namespace.name,
+                project=project.name,
+                **kwargs,
+            )
+
+        # Case 3: first creation of dataset
+        return None
 
     def apply(self, func, *args, **kwargs):
         """Apply any function to the chain.
