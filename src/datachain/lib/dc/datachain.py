@@ -30,14 +30,13 @@ from datachain import semver
 from datachain.dataset import DatasetRecord
 from datachain.delta import delta_disabled
 from datachain.error import (
-    JobNotFoundError,
     ProjectCreateNotAllowedError,
     ProjectNotFoundError,
 )
 from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
-from datachain.job import Job
+from datachain.job import Job, job_manager
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.data_model import (
     DataModel,
@@ -629,6 +628,9 @@ class DataChain:
         self._validate_version(version)
         self._validate_update_version(update_version)
 
+        # get existing job if running in SaaS, or creating new one if running locally
+        job = job_manager.get_or_create(self.session)
+
         namespace_name, project_name, name = catalog.get_full_dataset_name(
             name,
             namespace_name=self._settings.namespace,
@@ -637,7 +639,7 @@ class DataChain:
         project = self._get_or_create_project(namespace_name, project_name)
 
         # Checkpoint handling
-        job, _hash, result = self._resolve_checkpoint(name, project, kwargs)
+        _hash, result = self._resolve_checkpoint(name, project, job, kwargs)
 
         # Schema preparation
         schema = self.signals_schema.clone_without_sys_signals().serialize()
@@ -661,9 +663,7 @@ class DataChain:
                 )
             )
 
-        if job:
-            catalog.metastore.create_checkpoint(job.id, _hash)  # type: ignore[arg-type]
-
+        catalog.metastore.create_checkpoint(job.id, _hash)  # type: ignore[arg-type]
         return result
 
     def _validate_version(self, version: Optional[str]) -> None:
@@ -692,22 +692,14 @@ class DataChain:
         self,
         name: str,
         project: Project,
+        job: Job,
         kwargs: dict,
-    ) -> tuple[Optional[Job], Optional[str], Optional["DataChain"]]:
+    ) -> tuple[str, Optional["DataChain"]]:
         """Check if checkpoint exists and return cached dataset if possible."""
         from .datasets import read_dataset
 
         metastore = self.session.catalog.metastore
-
-        job_id = os.getenv("DATACHAIN_JOB_ID")
-        checkpoints_reset = env2bool("DATACHAIN_CHECKPOINTS_RESET", undefined=True)
-
-        if not job_id:
-            return None, None, None
-
-        job = metastore.get_job(job_id)
-        if not job:
-            raise JobNotFoundError(f"Job with id {job_id} not found")
+        checkpoints_reset = env2bool("DATACHAIN_CHECKPOINTS_RESET")
 
         _hash = self._calculate_job_hash(job.id)
 
@@ -720,9 +712,9 @@ class DataChain:
             chain = read_dataset(
                 name, namespace=project.namespace.name, project=project.name, **kwargs
             )
-            return job, _hash, chain
+            return _hash, chain
 
-        return job, _hash, None
+        return _hash, None
 
     def _handle_delta(
         self,

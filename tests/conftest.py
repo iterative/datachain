@@ -1,3 +1,4 @@
+import atexit
 import os
 import os.path
 import signal
@@ -26,6 +27,7 @@ from datachain.data_storage.sqlite import (
     SQLiteWarehouse,
 )
 from datachain.dataset import DatasetRecord, DatasetVersion
+from datachain.job import JobManager
 from datachain.lib.dc import Sys
 from datachain.namespace import Namespace
 from datachain.project import Project
@@ -1080,3 +1082,18 @@ def mock_parquet_data(compressed_parquet_data, dog_entries, version="1.0.0"):
 def mock_parquet_data_cloud(compressed_parquet_data, dog_entries, cloud_test_catalog):
     src_uri = cloud_test_catalog.src_uri
     return compressed_parquet_data(dog_entries("1.0.0"), src_uri)
+
+
+@pytest.fixture(autouse=True)
+def disable_jobmanager_hooks(request):
+    # Run the test
+    yield
+
+    # After test finishes: remove only JobManager hooks, unless explicitly requested
+    if "use_jobmanager_hooks" not in request.keywords:
+        for fn in list(JobManager._hook_refs):
+            try:
+                atexit.unregister(fn)
+            except Exception as e:  # noqa: BLE001
+                print(f"Failed to unregister atexit hook: {e}")
+        JobManager._hook_refs.clear()

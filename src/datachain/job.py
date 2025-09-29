@@ -6,9 +6,11 @@ import traceback
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Optional, TypeVar, Union
+from typing import Any, Callable, ClassVar, Optional, TypeVar, Union
 
 from datachain.data_storage import JobQueryType, JobStatus
+from datachain.error import JobNotFoundError
+from datachain.utils import get_user_script_source
 
 J = TypeVar("J", bound="Job")
 
@@ -83,10 +85,12 @@ class JobManager:
             an unhandled exception terminates the process.
     """
 
+    _hook_refs: ClassVar[list[Callable]] = []
+
     def __init__(self):
         self.job = None
         self.status = None
-        self.owned = None  # True if this manager owns Job lifecycle
+        self.owned = None  # True if this manager owns the Job lifecycle
         self._hooks_registered = False
 
     def get_or_create(self, session):
@@ -117,14 +121,18 @@ class JobManager:
         if env_job_id:
             # SaaS run: just fetch existing job
             self.job = session.catalog.metastore.get_job(env_job_id)
+            if not self.job:
+                raise JobNotFoundError(
+                    f"Job {env_job_id} from DATACHAIN_JOB_ID env not found"
+                )
             self.owned = False
         else:
             # Local run: create new job
             script = os.path.abspath(sys.argv[0]) if sys.argv else "interactive"
-            source_code = self.get_user_script_source()
+            source_code = get_user_script_source()
             python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
 
-            # try to find parent job
+            # try to find the parent job
             parent = session.catalog.metastore.get_last_job_by_name(script)
 
             job_id = session.catalog.metastore.create_job(
@@ -141,7 +149,13 @@ class JobManager:
 
             # register cleanup hooks
             if not self._hooks_registered:
-                atexit.register(lambda: self.finalize_success(session))
+                # Register and remember hook
+                def _finalize_success_hook() -> None:
+                    self.finalize_success(session)
+
+                atexit.register(_finalize_success_hook)
+                self._hook_refs.append(_finalize_success_hook)
+
                 sys.excepthook = lambda et, ev, tb: self.finalize_failure(
                     session, et, ev, tb
                 )
@@ -173,16 +187,19 @@ class JobManager:
             session (Session): The current DataChain session.
             exc_type (type): Exception class.
             exc_value (Exception): Exception instance.
-            traceback (traceback): Traceback object.
+            tb (traceback): Traceback object.
         """
         if self.job and self.owned and self.status == JobStatus.RUNNING:
             error_stack = "".join(traceback.format_exception(exc_type, exc_value, tb))
             session.catalog.metastore.set_job_status(
                 self.job.id,
                 JobStatus.FAILED,
-                erorr_message=str(exc_value),
+                error_message=str(exc_value),
                 error_stack=error_stack,
             )
             self.status = JobStatus.FAILED
         # Delegate to default handler so exception still prints
         sys.__excepthook__(exc_type, exc_value, tb)
+
+
+job_manager = JobManager()
