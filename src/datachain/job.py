@@ -117,8 +117,7 @@ class JobManager:
         if self.job:
             return self.job
 
-        env_job_id = os.getenv("DATACHAIN_JOB_ID")
-        if env_job_id:
+        if env_job_id := os.getenv("DATACHAIN_JOB_ID"):
             # SaaS run: just fetch existing job
             self.job = session.catalog.metastore.get_job(env_job_id)
             if not self.job:
