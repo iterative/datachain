@@ -1,7 +1,6 @@
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Union
 
 
 @dataclass
@@ -29,7 +28,7 @@ class Checkpoint:
     @classmethod
     def parse(
         cls,
-        id: Union[str, uuid.UUID],
+        id: str | uuid.UUID,
         job_id: str,
         _hash: str,
         partial: bool,

@@ -3,10 +3,8 @@ import os
 import sys
 import traceback
 from multiprocessing import freeze_support
-from typing import Optional
 
 from datachain.cli.utils import get_logging_level
-from datachain.error import DataChainError as DataChainError
 
 from .commands import (
     clear_cache,
@@ -26,7 +24,7 @@ from .parser import get_parser
 logger = logging.getLogger("datachain")
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     from datachain.catalog import get_catalog
 
     # Required for Windows multiprocessing support
@@ -307,7 +305,7 @@ def handle_udf() -> int:
     return udf_entrypoint()
 
 
-def handle_udf_runner(fd: Optional[int] = None) -> int:
+def handle_udf_runner(fd: int | None = None) -> int:
     from datachain.query.dispatch import udf_worker_entrypoint
 
     return udf_worker_entrypoint(fd)

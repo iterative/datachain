@@ -1,6 +1,6 @@
 import sys
 from collections.abc import Mapping
-from typing import Literal, Optional, Union
+from typing import Literal
 
 import pytest
 
@@ -17,8 +17,8 @@ from tests.unit.lib.test_utils import MyModel
         (Literal["text"], String),
         (dict[str, int], JSON),
         (Mapping[str, int], JSON),
-        (Optional[str], String),
-        (Union[dict, list[dict]], JSON),
+        (str | None, String),
+        (dict | list[dict], JSON),
     ),
 )
 def test_convert_type_to_datachain(typ, expected):
@@ -50,15 +50,14 @@ def test_list_of_tuples_object():
 def test_pep_604_union_syntax():
     from datachain.sql.types import Int64
 
-    if sys.version_info >= (3, 10):
-        # Use runtime type creation for Python 3.10+
-        str_or_none = str | None
-        int_or_none = int | None
-        dict_or_list_dict = dict | list[dict]
+    # Use runtime type creation for Python 3.10+
+    str_or_none = str | None
+    int_or_none = int | None
+    dict_or_list_dict = dict | list[dict]
 
-        assert python_to_sql(str_or_none) == String
-        assert python_to_sql(int_or_none) == Int64
-        assert python_to_sql(dict_or_list_dict) == JSON
+    assert python_to_sql(str_or_none) == String
+    assert python_to_sql(int_or_none) == Int64
+    assert python_to_sql(dict_or_list_dict) == JSON
 
-        str_literal_union = Literal["a", "b"]
-        assert python_to_sql(str_literal_union) == String
+    str_literal_union = Literal["a", "b"]
+    assert python_to_sql(str_literal_union) == String

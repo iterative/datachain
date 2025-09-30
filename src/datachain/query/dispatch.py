@@ -3,9 +3,8 @@ from collections.abc import Iterable, Sequence
 from itertools import chain
 from multiprocessing import cpu_count
 from sys import stdin
-from typing import TYPE_CHECKING, Literal, Optional
+from typing import TYPE_CHECKING, Literal
 
-import multiprocess
 from cloudpickle import load, loads
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
 from multiprocess import get_context
@@ -27,6 +26,7 @@ from datachain.query.utils import get_query_id_column
 from datachain.utils import batched, flatten, safe_closing
 
 if TYPE_CHECKING:
+    import multiprocess
     from sqlalchemy import Select, Table
 
     from datachain.data_storage import AbstractMetastore, AbstractWarehouse
@@ -41,7 +41,7 @@ FAILED_STATUS = "FAILED"
 NOTIFY_STATUS = "NOTIFY"
 
 
-def get_n_workers_from_arg(n_workers: Optional[int] = None) -> int:
+def get_n_workers_from_arg(n_workers: int | None = None) -> int:
     if not n_workers:
         return cpu_count()
     if n_workers < 1:
@@ -86,7 +86,7 @@ def udf_entrypoint() -> int:
     return 0
 
 
-def udf_worker_entrypoint(fd: Optional[int] = None) -> int:
+def udf_worker_entrypoint(fd: int | None = None) -> int:
     if not (udf_distributor_class := get_udf_distributor_class()):
         raise RuntimeError(
             f"{DISTRIBUTED_IMPORT_PATH} import path is required "
@@ -97,9 +97,9 @@ def udf_worker_entrypoint(fd: Optional[int] = None) -> int:
 
 
 class UDFDispatcher:
-    _catalog: Optional[Catalog] = None
-    task_queue: Optional[multiprocess.Queue] = None
-    done_queue: Optional[multiprocess.Queue] = None
+    _catalog: Catalog | None = None
+    task_queue: "multiprocess.Queue | None" = None
+    done_queue: "multiprocess.Queue | None" = None
 
     def __init__(self, udf_info: UdfInfo, buffer_size: int = DEFAULT_BATCH_SIZE):
         self.udf_data = udf_info["udf_data"]

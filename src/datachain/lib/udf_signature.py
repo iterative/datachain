@@ -1,7 +1,7 @@
 import inspect
-from collections.abc import Generator, Iterator, Sequence
+from collections.abc import Callable, Generator, Iterator, Sequence
 from dataclasses import dataclass
-from typing import Any, Callable, Union, get_args, get_origin
+from typing import Any, get_args, get_origin
 
 from datachain.lib.data_model import DataType, DataTypeNames, is_chain_type
 from datachain.lib.signal_schema import SignalSchema
@@ -17,8 +17,8 @@ class UdfSignatureError(DataChainParamsError):
 
 @dataclass
 class UdfSignature:  # noqa: PLW1641
-    func: Union[Callable, UDFBase]
-    params: dict[str, Union[DataType, Any]]
+    func: Callable | UDFBase
+    params: dict[str, DataType | Any]
     output_schema: SignalSchema
 
     DEFAULT_RETURN_TYPE = str
@@ -28,9 +28,9 @@ class UdfSignature:  # noqa: PLW1641
         cls,
         chain: str,
         signal_map: dict[str, Callable],
-        func: Union[None, UDFBase, Callable] = None,
-        params: Union[None, str, Sequence[str]] = None,
-        output: Union[None, DataType, Sequence[str], dict[str, DataType]] = None,
+        func: UDFBase | Callable | None = None,
+        params: str | Sequence[str] | None = None,
+        output: DataType | Sequence[str] | dict[str, DataType] | None = None,
         is_generator: bool = True,
     ) -> "UdfSignature":
         keys = ", ".join(signal_map.keys())
@@ -40,7 +40,7 @@ class UdfSignature:  # noqa: PLW1641
                 f"multiple signals '{keys}' are not supported in processors."
                 " Chain multiple processors instead.",
             )
-        udf_func: Union[UDFBase, Callable]
+        udf_func: UDFBase | Callable
         if len(signal_map) == 1:
             if func is not None:
                 raise UdfSignatureError(
@@ -62,7 +62,7 @@ class UdfSignature:  # noqa: PLW1641
             chain, udf_func
         )
 
-        udf_params: dict[str, Union[DataType, Any]] = {}
+        udf_params: dict[str, DataType | Any] = {}
         if params:
             udf_params = (
                 {params: Any} if isinstance(params, str) else dict.fromkeys(params, Any)
@@ -128,7 +128,7 @@ class UdfSignature:  # noqa: PLW1641
                     f" return type length ({len(func_outs_sign)}) does not match",
                 )
 
-            udf_output_map = dict(zip(output, func_outs_sign))
+            udf_output_map = dict(zip(output, func_outs_sign, strict=False))
         elif isinstance(output, dict):
             for key, value in output.items():
                 if not isinstance(key, str):
@@ -164,7 +164,7 @@ class UdfSignature:  # noqa: PLW1641
 
     @staticmethod
     def _func_signature(
-        chain: str, udf_func: Union[Callable, UDFBase]
+        chain: str, udf_func: Callable | UDFBase
     ) -> tuple[dict[str, type], Sequence[type], bool]:
         if isinstance(udf_func, AbstractUDF):
             func = udf_func.process  # type: ignore[unreachable]

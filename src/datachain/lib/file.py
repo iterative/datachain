@@ -13,7 +13,7 @@ from datetime import datetime
 from functools import partial
 from io import BytesIO
 from pathlib import Path, PurePath, PurePosixPath
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
@@ -53,12 +53,12 @@ class FileExporter(NodesThreadPool):
 
     def __init__(
         self,
-        output: Union[str, os.PathLike[str]],
+        output: str | os.PathLike[str],
         placement: ExportPlacement,
         use_cache: bool,
         link_type: Literal["copy", "symlink"],
         max_threads: int = EXPORT_FILES_MAX_THREADS,
-        client_config: Optional[dict] = None,
+        client_config: dict | None = None,
     ):
         super().__init__(max_threads)
         self.output = output
@@ -221,7 +221,7 @@ class File(DataModel):
     etag: str = Field(default="")
     is_latest: bool = Field(default=True)
     last_modified: datetime = Field(default=TIME_ZERO)
-    location: Optional[Union[dict, list[dict]]] = Field(default=None)
+    location: dict | list[dict] | None = Field(default=None)
 
     _datachain_column_types: ClassVar[dict[str, Any]] = {
         "source": String,
@@ -264,8 +264,8 @@ class File(DataModel):
 
     @staticmethod
     def _validate_dict(
-        v: Optional[Union[str, dict, list[dict]]],
-    ) -> Optional[Union[str, dict, list[dict]]]:
+        v: str | dict | list[dict] | None,
+    ) -> str | dict | list[dict] | None:
         if v is None or v == "":
             return None
         if isinstance(v, str):
@@ -334,7 +334,7 @@ class File(DataModel):
     def upload(
         cls,
         data: bytes,
-        path: Union[str, os.PathLike[str]],
+        path: str | os.PathLike[str],
         catalog: Optional["Catalog"] = None,
     ) -> "Self":
         if catalog is None:
@@ -357,7 +357,7 @@ class File(DataModel):
 
     @classmethod
     def at(
-        cls, uri: Union[str, os.PathLike[str]], session: Optional["Session"] = None
+        cls, uri: str | os.PathLike[str], session: Optional["Session"] = None
     ) -> "Self":
         """Construct a File from a full URI in one call.
 
@@ -470,7 +470,7 @@ class File(DataModel):
         """Returns file contents."""
         return self.read_bytes(length)
 
-    def save(self, destination: str, client_config: Optional[dict] = None):
+    def save(self, destination: str, client_config: dict | None = None):
         """Writes it's content to destination"""
         destination = stringify_path(destination)
         client: Client = self._catalog.get_client(destination, **(client_config or {}))
@@ -497,11 +497,11 @@ class File(DataModel):
 
     def export(
         self,
-        output: Union[str, os.PathLike[str]],
+        output: str | os.PathLike[str],
         placement: ExportPlacement = "fullpath",
         use_cache: bool = True,
         link_type: Literal["copy", "symlink"] = "copy",
-        client_config: Optional[dict] = None,
+        client_config: dict | None = None,
     ) -> None:
         """Export file to new location."""
         self._caching_enabled = use_cache
@@ -552,7 +552,7 @@ class File(DataModel):
         )
         return True
 
-    def get_local_path(self) -> Optional[str]:
+    def get_local_path(self) -> str | None:
         """Return path to a file in a local cache.
 
         Returns None if file is not cached.
@@ -629,7 +629,7 @@ class File(DataModel):
         return path
 
     def get_destination_path(
-        self, output: Union[str, os.PathLike[str]], placement: ExportPlacement
+        self, output: str | os.PathLike[str], placement: ExportPlacement
     ) -> str:
         """
         Returns full destination path of a file for exporting to some output
@@ -796,7 +796,7 @@ class TextFile(File):
         with self.open(**open_kwargs) as stream:
             return stream.read()
 
-    def save(self, destination: str, client_config: Optional[dict] = None):
+    def save(self, destination: str, client_config: dict | None = None):
         """Writes it's content to destination"""
         destination = stringify_path(destination)
 
@@ -829,8 +829,8 @@ class ImageFile(File):
     def save(  # type: ignore[override]
         self,
         destination: str,
-        format: Optional[str] = None,
-        client_config: Optional[dict] = None,
+        format: str | None = None,
+        client_config: dict | None = None,
     ):
         """Writes it's content to destination"""
         destination = stringify_path(destination)
@@ -912,7 +912,7 @@ class VideoFile(File):
     def get_frames(
         self,
         start: int = 0,
-        end: Optional[int] = None,
+        end: int | None = None,
         step: int = 1,
     ) -> "Iterator[VideoFrame]":
         """
@@ -962,7 +962,7 @@ class VideoFile(File):
         self,
         duration: float,
         start: float = 0,
-        end: Optional[float] = None,
+        end: float | None = None,
     ) -> "Iterator[VideoFragment]":
         """
         Splits the video into multiple fragments of a specified duration.
@@ -1048,7 +1048,7 @@ class AudioFile(File):
         self,
         duration: float,
         start: float = 0,
-        end: Optional[float] = None,
+        end: float | None = None,
     ) -> "Iterator[AudioFragment]":
         """
         Splits the audio into multiple fragments of a specified duration.
@@ -1086,10 +1086,10 @@ class AudioFile(File):
     def save(  # type: ignore[override]
         self,
         output: str,
-        format: Optional[str] = None,
+        format: str | None = None,
         start: float = 0,
-        end: Optional[float] = None,
-        client_config: Optional[dict] = None,
+        end: float | None = None,
+        client_config: dict | None = None,
     ) -> "AudioFile":
         """Save audio file or extract fragment to specified format.
 
@@ -1160,7 +1160,7 @@ class AudioFragment(DataModel):
         duration = self.end - self.start
         return audio_to_bytes(self.audio, format, self.start, duration)
 
-    def save(self, output: str, format: Optional[str] = None) -> "AudioFile":
+    def save(self, output: str, format: str | None = None) -> "AudioFile":
         """
         Saves the audio fragment as a new audio file.
 
@@ -1263,7 +1263,7 @@ class VideoFragment(DataModel):
     start: float
     end: float
 
-    def save(self, output: str, format: Optional[str] = None) -> "VideoFile":
+    def save(self, output: str, format: str | None = None) -> "VideoFile":
         """
         Saves the video fragment as a new video file.
 

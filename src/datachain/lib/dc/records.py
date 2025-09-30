@@ -1,5 +1,5 @@
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 import sqlalchemy
 
@@ -19,11 +19,11 @@ READ_RECORDS_BATCH_SIZE = 10000
 
 
 def read_records(
-    to_insert: Optional[Union[dict, Iterable[dict]]],
-    session: Optional[Session] = None,
-    settings: Optional[dict] = None,
+    to_insert: dict | Iterable[dict] | None,
+    session: Session | None = None,
+    settings: dict | None = None,
     in_memory: bool = False,
-    schema: Optional[dict[str, DataType]] = None,
+    schema: dict[str, DataType] | None = None,
 ) -> "DataChain":
     """Create a DataChain from the provided records. This method can be used for
     programmatically generating a chain in contrast of reading data from storages

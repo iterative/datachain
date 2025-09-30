@@ -601,7 +601,9 @@ def test_save(test_session):
 
 
 def test_show_nested_empty(capsys, test_session):
-    files = [File(size=s, path=p) for p, s in zip(list("abcde"), range(5))]
+    files = [
+        File(size=s, path=p) for p, s in zip(list("abcde"), range(5), strict=False)
+    ]
     dc.read_values(file=files, session=test_session).limit(0).show()
 
     captured = capsys.readouterr()
@@ -713,7 +715,8 @@ def test_show_ordered(capsys, test_session, ordered_by):
     ]
 
     ordered_entries = sorted(
-        zip(numbers, letters), key=lambda x: x[0 if ordered_by == "number" else 1]
+        zip(numbers, letters, strict=False),
+        key=lambda x: x[0 if ordered_by == "number" else 1],
     )
 
     assert normalized_lines[0].strip() == "number letter"
@@ -802,7 +805,7 @@ def test_udf(cloud_test_catalog):
     assert len(result2) == 3
     assert count == 3
 
-    for r1, r2 in zip(result1, result2):
+    for r1, r2 in zip(result1, result2, strict=False):
         # Check that the UDF ran successfully
         assert len(posixpath.basename(r1[0])) == r1[1]
         assert len(posixpath.basename(r2[0])) == r2[1]
@@ -1612,7 +1615,7 @@ def test_similarity_search(cloud_test_catalog):
     ]
 
     for (p1, c1, e1), (p2, c2, e2) in zip(
-        chain.to_iter("file.path", "cos_dist", "eucl_dist"), expected
+        chain.to_iter("file.path", "cos_dist", "eucl_dist"), expected, strict=False
     ):
         assert p1.endswith(p2)
         assert math.isclose(c1, c2, abs_tol=1e-5)
@@ -2157,7 +2160,9 @@ def test_to_read_json(tmp_dir, test_session):
         values = json.load(f)
     assert values == [
         {"first_name": n, "age": a, "city": c}
-        for n, a, c in zip(DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"])
+        for n, a, c in zip(
+            DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"], strict=False
+        )
     ]
 
     dc_from = dc.read_json(path.as_uri(), session=test_session)
@@ -2172,7 +2177,9 @@ def test_read_json_jmespath(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     values = [
         {"first_name": n, "age": a, "city": c}
-        for n, a, c in zip(DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"])
+        for n, a, c in zip(
+            DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"], strict=False
+        )
     ]
     path = tmp_dir / "test.json"
     with open(path, "w") as f:

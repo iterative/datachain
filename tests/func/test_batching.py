@@ -1,6 +1,5 @@
 import math
 from types import GeneratorType
-from typing import Union
 
 import pytest
 import sqlalchemy as sa
@@ -10,7 +9,7 @@ from datachain.query.batch import Batch, NoBatching, Partition
 from datachain.sql.functions import path
 
 
-def to_str(val: Union[bytes, str]) -> str:
+def to_str(val: bytes | str) -> str:
     """Convert bytes to string if necessary."""
     return val.decode("utf-8") if isinstance(val, bytes) else val
 
@@ -21,7 +20,7 @@ def test_no_batching_full_row(warehouse, animal_dataset):
         warehouse.dataset_table_name(animal_dataset, animal_dataset.latest_version)
     )
     cols = (table.c.sys__id, table.c.file__path)
-    db_ids, db_files = zip(*warehouse.db.execute(sa.select(*cols)))
+    db_ids, db_files = zip(*warehouse.db.execute(sa.select(*cols)), strict=False)
 
     batching = NoBatching()
     rows = batching(
@@ -34,7 +33,7 @@ def test_no_batching_full_row(warehouse, animal_dataset):
     assert len(rows) == 7
     assert all(len(row) == 2 for row in rows)
 
-    ids, paths = zip(*rows)
+    ids, paths = zip(*rows, strict=False)
     assert set(ids) == set(db_ids)
     assert {to_str(f) for f in paths} == set(db_files)
 
@@ -159,7 +158,7 @@ def test_partition_full_row(warehouse, partitioned_animal_dataset_query):
     subq = query.subquery()
     cols = (subq.c.sys__id, subq.c.file__path)
 
-    db_ids, db_files = zip(*warehouse.db.execute(sa.select(*cols)))
+    db_ids, db_files = zip(*warehouse.db.execute(sa.select(*cols)), strict=False)
     db_ids, db_files = set(db_ids), set(db_files)
 
     partition_files = {

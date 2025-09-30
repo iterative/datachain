@@ -1,5 +1,3 @@
-from typing import Optional
-
 import datachain as dc
 from datachain import func
 from tests.utils import skip_if_not_sqlite
@@ -108,8 +106,8 @@ def test_conditional_ifelse(test_session):
 def test_conditional_isnone(test_session):
     class Data(dc.DataModel):
         i: int
-        f: Optional[float]
-        s: Optional[str]
+        f: float | None
+        s: str | None
 
     ds = list(
         dc.read_values(

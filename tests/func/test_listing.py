@@ -21,7 +21,7 @@ def test_listing_generator(cloud_test_catalog, cloud_type):
     )
     files = chain.order_by("file.path").to_values("file")
 
-    for cat_file, cat_entry in zip(files, entries):
+    for cat_file, cat_entry in zip(files, entries, strict=False):
         assert cat_file.source == ctc.src_uri
         assert cat_file.path == cat_entry.path
         assert cat_file.size == cat_entry.size

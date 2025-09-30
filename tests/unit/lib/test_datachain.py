@@ -231,7 +231,7 @@ def test_from_features_basic_in_memory():
 def test_from_features(test_session):
     ds = dc.read_records(dc.DataChain.DEFAULT_FILE_RECORD, session=test_session)
     ds = ds.gen(
-        lambda prm: list(zip([File(path="")] * len(features), features)),
+        lambda prm: list(zip([File(path="")] * len(features), features, strict=False)),
         params="path",
         output={"file": File, "t1": MyFr},
     )
@@ -521,7 +521,9 @@ def test_listings_read_listing_dataset_with_subpath(test_session, tmp_dir):
 def test_preserve_feature_schema(test_session):
     ds = dc.read_records(dc.DataChain.DEFAULT_FILE_RECORD, session=test_session)
     ds = ds.gen(
-        lambda prm: list(zip([File(path="")] * len(features), features, features)),
+        lambda prm: list(
+            zip([File(path="")] * len(features), features, features, strict=False)
+        ),
         params="path",
         output={"file": File, "t1": MyFr, "t2": MyFr},
     )
@@ -600,7 +602,9 @@ def test_from_features_more_simple_types(test_session):
 def test_file_list(test_session):
     names = ["f1.jpg", "f1.json", "f1.txt", "f2.jpg", "f2.json"]
     sizes = [1, 2, 3, 4, 5]
-    files = [File(path=name, size=size) for name, size in zip(names, sizes)]
+    files = [
+        File(path=name, size=size) for name, size in zip(names, sizes, strict=False)
+    ]
 
     ds = dc.read_values(file=files, session=test_session)
 
@@ -659,7 +663,7 @@ def test_map(test_session):
 
     assert len(x_list) == len(test_frs)
 
-    for x, test_fr in zip(x_list, test_frs):
+    for x, test_fr in zip(x_list, test_frs, strict=False):
         assert np.isclose(x.sqrt, test_fr.sqrt)
         assert x.my_name == test_fr.my_name
 
@@ -731,7 +735,9 @@ def test_agg_two_params(test_session):
             x=lambda frs1, frs2: [
                 _TestFr(
                     f=File(path=""),
-                    cnt=sum(f1.count + f2.count for f1, f2 in zip(frs1, frs2)),
+                    cnt=sum(
+                        f1.count + f2.count for f1, f2 in zip(frs1, frs2, strict=False)
+                    ),
                     my_name="-".join([fr.nnn for fr in frs1]),
                 )
             ],
@@ -853,7 +859,7 @@ def test_batch_map(test_session):
 
     assert len(x_list) == len(test_frs)
 
-    for x, test_fr in zip(x_list, test_frs):
+    for x, test_fr in zip(x_list, test_frs, strict=False):
         assert np.isclose(x.sqrt, test_fr.sqrt)
         assert x.my_name == test_fr.my_name
 
@@ -897,7 +903,7 @@ def test_batch_map_two_params(test_session):
                 cnt=f1.count + f2.count,
                 my_name=f"{f1.nnn}-{f2.nnn}",
             )
-            for f1, f2 in zip(frs1, frs2)
+            for f1, f2 in zip(frs1, frs2, strict=False)
         ],
         params=("t1", "t2"),
         output={"x": _TestFr},
@@ -1186,7 +1192,9 @@ def test_unsupported_output_type(test_session):
 def test_to_list_single_item(test_session):
     names = ["f1.jpg", "f1.json", "f1.txt", "f2.jpg", "f2.json"]
     sizes = [1, 2, 3, 4, 5]
-    files = sort_files([File(path=name, size=size) for name, size in zip(names, sizes)])
+    files = sort_files(
+        [File(path=name, size=size) for name, size in zip(names, sizes, strict=False)]
+    )
 
     scores = [0.1, 0.2, 0.3, 0.4, 0.5]
 
@@ -1200,7 +1208,9 @@ def test_to_list_single_item(test_session):
     assert np.allclose(chain.to_values("score"), scores)
 
     for actual, expected in zip(
-        chain.to_list("file.size", "score"), [[x, y] for x, y in zip(sizes, scores)]
+        chain.to_list("file.size", "score"),
+        [[x, y] for x, y in zip(sizes, scores, strict=False)],
+        strict=False,
     ):
         assert len(actual) == 2
         assert actual[0] == expected[0]
@@ -1691,7 +1701,9 @@ def test_to_read_jsonl(tmp_dir, test_session):
         values = [json.loads(line) for line in f.read().split("\n")]
     assert values == [
         {"first_name": n, "age": a, "city": c}
-        for n, a, c in zip(DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"])
+        for n, a, c in zip(
+            DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"], strict=False
+        )
     ]
 
     dc_from = dc.read_json(path.as_uri(), format="jsonl", session=test_session)
@@ -1706,7 +1718,9 @@ def test_read_jsonl_jmespath(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     values = [
         {"first_name": n, "age": a, "city": c}
-        for n, a, c in zip(DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"])
+        for n, a, c in zip(
+            DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"], strict=False
+        )
     ]
     path = tmp_dir / "test.jsonl"
     with open(path, "w") as f:
@@ -2421,7 +2435,9 @@ def test_rename_non_object_column_name_with_mutate(test_session):
 def test_rename_object_column_name_with_mutate(test_session):
     names = ["a", "b", "c"]
     sizes = [1, 2, 3]
-    files = [File(path=name, size=size) for name, size in zip(names, sizes)]
+    files = [
+        File(path=name, size=size) for name, size in zip(names, sizes, strict=False)
+    ]
 
     ds = dc.read_values(file=files, ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(fname=Column("file.path"))
@@ -3083,7 +3099,9 @@ def test_filter_in_memory(test_session):
 def test_rename_column_with_mutate(test_session):
     names = ["a", "b", "c"]
     sizes = [1, 2, 3]
-    files = [File(path=name, size=size) for name, size in zip(names, sizes)]
+    files = [
+        File(path=name, size=size) for name, size in zip(names, sizes, strict=False)
+    ]
 
     ds = dc.read_values(file=files, ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(my_file=Column("file"))
@@ -4360,7 +4378,7 @@ def test_column_compute(test_session):
                 s3=s * 3,
             ),
         )
-        for i, f, s in zip(i1, f1, s1)
+        for i, f, s in zip(i1, f1, s1, strict=False)
     ]
 
     chain = dc.read_values(

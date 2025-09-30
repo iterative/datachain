@@ -1,5 +1,4 @@
 import random
-from typing import Optional
 
 from datachain import C, DataChain
 
@@ -9,7 +8,7 @@ RESOLUTION = 2**31 - 1  # Maximum positive value for a 32-bit signed integer.
 def train_test_split(
     dc: DataChain,
     weights: list[float],
-    seed: Optional[int] = None,
+    seed: int | None = None,
 ) -> list[DataChain]:
     """
     Splits a DataChain into multiple subsets based on the provided weights.

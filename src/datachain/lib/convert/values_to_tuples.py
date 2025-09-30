@@ -1,13 +1,8 @@
 import itertools
 from collections.abc import Sequence
-from typing import Any, Union
+from typing import Any
 
-from datachain.lib.data_model import (
-    DataType,
-    DataTypeNames,
-    DataValue,
-    is_chain_type,
-)
+from datachain.lib.data_model import DataType, DataTypeNames, DataValue, is_chain_type
 from datachain.lib.utils import DataChainParamsError
 
 
@@ -20,7 +15,7 @@ class ValuesToTupleError(DataChainParamsError):
 
 def values_to_tuples(  # noqa: C901, PLR0912
     ds_name: str = "",
-    output: Union[None, DataType, Sequence[str], dict[str, DataType]] = None,
+    output: DataType | Sequence[str] | dict[str, DataType] | None = None,
     **fr_map: Sequence[DataValue],
 ) -> tuple[Any, Any, Any]:
     if output:
@@ -111,7 +106,7 @@ def values_to_tuples(  # noqa: C901, PLR0912
     if len(output) > 1:  # type: ignore[arg-type]
         tuple_type = tuple(output_types)
         res_type = tuple[tuple_type]  # type: ignore[valid-type]
-        res_values: Sequence[Any] = list(zip(*fr_map.values()))
+        res_values: Sequence[Any] = list(zip(*fr_map.values(), strict=False))
     else:
         res_type = output_types[0]  # type: ignore[misc]
         res_values = next(iter(fr_map.values()))

@@ -1,7 +1,7 @@
 import os
 import sys
 import traceback
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
@@ -10,8 +10,8 @@ if TYPE_CHECKING:
 def query(
     catalog: "Catalog",
     script: str,
-    parallel: Optional[int] = None,
-    params: Optional[dict[str, str]] = None,
+    parallel: int | None = None,
+    params: dict[str, str] | None = None,
 ) -> None:
     from datachain.data_storage import JobQueryType, JobStatus
 

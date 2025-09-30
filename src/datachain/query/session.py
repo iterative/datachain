@@ -52,7 +52,7 @@ class Session:
         self,
         name="",
         catalog: Optional["Catalog"] = None,
-        client_config: Optional[dict] = None,
+        client_config: dict | None = None,
         in_memory: bool = False,
     ):
         if re.match(r"^[0-9a-zA-Z]*$", name) is None:
@@ -128,7 +128,7 @@ class Session:
         cls,
         session: Optional["Session"] = None,
         catalog: Optional["Catalog"] = None,
-        client_config: Optional[dict] = None,
+        client_config: dict | None = None,
         in_memory: bool = False,
     ) -> "Session":
         """Creates a Session() object from a catalog.
