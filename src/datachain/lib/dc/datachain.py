@@ -699,7 +699,9 @@ class DataChain:
         from .datasets import read_dataset
 
         metastore = self.session.catalog.metastore
-        checkpoints_reset = env2bool("DATACHAIN_CHECKPOINTS_RESET")
+
+        job_id = os.getenv("DATACHAIN_JOB_ID")
+        checkpoints_reset = env2bool("DATACHAIN_CHECKPOINTS_RESET", undefined=True)
 
         _hash = self._calculate_job_hash(job.id)
 
