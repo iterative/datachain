@@ -4019,7 +4019,7 @@ def test_update_versions_wrong_value(test_session):
         chain.save(ds_name, update_version="wrong")
 
     assert str(excinfo.value) == (
-        "update_version can have one of the following values: major, minor or patch"
+        "update_version must be one of ['major', 'minor', 'patch']"
     )
 
 

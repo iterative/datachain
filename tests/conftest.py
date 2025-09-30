@@ -456,9 +456,12 @@ def cloud_server(request, tmp_upath_factory, cloud_type, version_aware, tree):
     return make_cloud_server(src_path, cloud_type, tree)
 
 
-@pytest.fixture()
-def datachain_job_id(monkeypatch):
-    job_id = str(uuid.uuid4())
+@pytest.fixture
+def datachain_job_id(test_session, monkeypatch):
+    job_id = test_session.catalog.metastore.create_job(
+        "my-job",
+        'import datachain as dc; dc.read_values(num=[1, 2, 3].save("nums")',
+    )
     monkeypatch.setenv("DATACHAIN_JOB_ID", job_id)
     return job_id
 
