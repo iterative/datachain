@@ -194,6 +194,7 @@ def test_checkpoints_check_valid_chain_is_returned(
 
 
 def test_checkpoints_invalid_parent_job_id(test_session, monkeypatch, nums_dataset):
-    monkeypatch.setenv("DATACHAIN_JOB_ID", "wrong")
+    # setting wrong job id
+    monkeypatch.setenv("DATACHAIN_JOB_ID", "caee6c54-6328-4bcd-8ca6-2b31cb4fff94")
     with pytest.raises(JobNotFoundError):
         dc.read_dataset("nums", session=test_session).save("nums1")
