@@ -469,13 +469,24 @@ class SignalSchema:
                 try:
                     obj = fr(**j)
                 except ValidationError as e:
-                    logger.debug("Failed to create input for %s: %s", name, e)
-                    obj = None
+                    if self._all_values_none(j):
+                        logger.debug("Failed to create input for %s: %s", name, e)
+                        obj = None
+                    else:
+                        raise
                 objs.append(obj)
             else:
                 objs.append(row[pos])
                 pos += 1
         return objs
+
+    @staticmethod
+    def _all_values_none(value: Any) -> bool:
+        if isinstance(value, dict):
+            return all(SignalSchema._all_values_none(v) for v in value.values())
+        if isinstance(value, (list, tuple, set)):
+            return all(SignalSchema._all_values_none(v) for v in value)
+        return value is None
 
     def get_file_signal(self) -> Optional[str]:
         for signal_name, signal_type in self.values.items():
