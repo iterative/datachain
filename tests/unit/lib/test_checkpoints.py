@@ -171,6 +171,7 @@ def test_checkpoints_check_valid_chain_is_returned(
 ):
     catalog = test_session.catalog
 
+    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", False)
     chain = dc.read_dataset("nums", session=test_session)
 
     # -------------- FIRST RUN -------------------

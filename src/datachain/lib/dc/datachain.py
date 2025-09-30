@@ -700,7 +700,7 @@ class DataChain:
         metastore = self.session.catalog.metastore
 
         job_id = os.getenv("DATACHAIN_JOB_ID")
-        checkpoints_reset = env2bool("DATACHAIN_CHECKPOINTS_RESET")
+        checkpoints_reset = env2bool("DATACHAIN_CHECKPOINTS_RESET", undefined=True)
 
         if not job_id:
             return None, None, None
