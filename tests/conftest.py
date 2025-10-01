@@ -117,6 +117,16 @@ def clean_session() -> None:
     Session.cleanup_for_tests()
 
 
+@pytest.fixture(autouse=True)
+def clean_job_manager() -> None:
+    """
+    Make sure we clean leftover job_manager state before each test case
+    """
+    from datachain.job import job_manager
+
+    job_manager.reset()
+
+
 @pytest.fixture(scope="session", autouse=True)
 def clean_environment(
     monkeypatch_session: MonkeyPatch,
@@ -456,13 +466,6 @@ def cloud_server(request, tmp_upath_factory, cloud_type, version_aware, tree):
     else:
         src_path = tmp_upath_factory.mktemp(cloud_type, version_aware=version_aware)
     return make_cloud_server(src_path, cloud_type, tree)
-
-
-@pytest.fixture()
-def datachain_job_id(monkeypatch):
-    job_id = str(uuid.uuid4())
-    monkeypatch.setenv("DATACHAIN_JOB_ID", job_id)
-    return job_id
 
 
 @pytest.fixture

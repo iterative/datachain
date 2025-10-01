@@ -162,7 +162,7 @@ class UDFBase(AbstractUDF):
         inputs and outputs.
         """
         parts = [
-            hash_callable(self._func),
+            hash_callable(self._func) if self._func else "",
             self.params.hash() if self.params else "",
             self.output.hash(),
         ]

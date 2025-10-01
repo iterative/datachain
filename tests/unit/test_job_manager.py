@@ -109,7 +109,7 @@ def test_get_or_create_fallback_query(test_session, patch_argv):
     assert job.name.endswith("script.py")
 
 
-def test_finalize_failure_delegates_to_sys_excepthook(
+def test_finalize_failure_delegates_to_previous_excepthook(
     test_session, patch_argv, patch_user_script
 ):
     jm = JobManager()
@@ -120,7 +120,9 @@ def test_finalize_failure_delegates_to_sys_excepthook(
     def fake_excepthook(exc_type, exc_value, tb):
         called["exc"] = (exc_type, str(exc_value))
 
-    sys.__excepthook__, old_hook = fake_excepthook, sys.__excepthook__
+    # Replace the previous hook that JobManager saved
+    old_hook = jm._previous_excepthook
+    jm._previous_excepthook = fake_excepthook
 
     try:
         try:
@@ -128,7 +130,7 @@ def test_finalize_failure_delegates_to_sys_excepthook(
         except ValueError as e:
             jm.finalize_failure(test_session, type(e), e, e.__traceback__)
     finally:
-        sys.__excepthook__ = old_hook
+        jm._previous_excepthook = old_hook
 
     assert "bad stuff" in called["exc"][1]
     db_job = test_session.catalog.metastore.get_job(job.id)
@@ -167,9 +169,9 @@ def test_reset_restores_excepthook(test_session, patch_argv, patch_user_script):
     # Hook should be changed
     assert sys.excepthook != original_hook
 
-    # Reset should restore it
+    # Reset should restore it to what it was before JobManager modified it
     jm.reset()
-    assert sys.excepthook == sys.__excepthook__
+    assert sys.excepthook == original_hook
 
 
 def test_reset_allows_recreation(test_session, patch_argv, patch_user_script):

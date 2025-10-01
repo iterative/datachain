@@ -92,6 +92,7 @@ class JobManager:
         self.status = None
         self.owned = None  # True if this manager owns the Job lifecycle
         self._hooks_registered = False
+        self._previous_excepthook = None
 
     def get_or_create(self, session):
         """
@@ -155,6 +156,9 @@ class JobManager:
                 atexit.register(_finalize_success_hook)
                 self._hook_refs.append(_finalize_success_hook)
 
+                # Save the current excepthook (e.g. might be Session's or another hook)
+                self._previous_excepthook = sys.excepthook
+
                 sys.excepthook = lambda et, ev, tb: self.finalize_failure(
                     session, et, ev, tb
                 )
@@ -169,14 +173,16 @@ class JobManager:
             atexit.unregister(hook)
         self._hook_refs.clear()
 
-        # Restore original excepthook
-        sys.excepthook = sys.__excepthook__
+        # Restore previous excepthook
+        if self._previous_excepthook is not None:
+            sys.excepthook = self._previous_excepthook
 
         # Clear instance state
         self.job = None
         self.status = None
         self.owned = None
         self._hooks_registered = False
+        self._previous_excepthook = None
 
     def finalize_success(self, session):
         """
@@ -213,8 +219,11 @@ class JobManager:
                 error_stack=error_stack,
             )
             self.status = JobStatus.FAILED
-        # Delegate to default handler so exception still prints
-        sys.__excepthook__(exc_type, exc_value, tb)
+        # Delegate to previous hook (e.g Session's hook, or the original)
+        if self._previous_excepthook:
+            self._previous_excepthook(exc_type, exc_value, tb)
+        else:
+            sys.__excepthook__(exc_type, exc_value, tb)
 
 
 job_manager = JobManager()
