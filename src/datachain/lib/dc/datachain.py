@@ -1989,7 +1989,8 @@ class DataChain:
         results = self.results(include_hidden=include_hidden)
         if as_object:
             df = pd.DataFrame(results, columns=columns, dtype=object)
-            return df.where(pd.notna(df), None)
+            df.where(pd.notna(df), None, inplace=True)
+            return df
         return pd.DataFrame.from_records(results, columns=columns)
 
     def show(
