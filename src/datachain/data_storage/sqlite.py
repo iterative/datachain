@@ -201,9 +201,13 @@ class SQLiteDatabaseEngine(DatabaseEngine):
         """
         return (
             SQLiteDatabaseEngine.from_db_file,
-            [self.db_file],
+            [str(self.db_file)],
             {},
         )
+
+    @classmethod
+    def serialize_callable_name(cls) -> str:
+        return "sqlite.from_db_file"
 
     def _reconnect(self) -> None:
         if not self.is_closed:
@@ -402,6 +406,10 @@ class SQLiteMetastore(AbstractDBMetastore):
                 "db_clone_params": self.db.clone_params(),
             },
         )
+
+    @classmethod
+    def serialize_callable_name(cls) -> str:
+        return "sqlite.metastore.init_after_clone"
 
     @classmethod
     def init_after_clone(
@@ -609,6 +617,10 @@ class SQLiteWarehouse(AbstractWarehouse):
             [],
             {"db_clone_params": self.db.clone_params()},
         )
+
+    @classmethod
+    def serialize_callable_name(cls) -> str:
+        return "sqlite.warehouse.init_after_clone"
 
     @classmethod
     def init_after_clone(
