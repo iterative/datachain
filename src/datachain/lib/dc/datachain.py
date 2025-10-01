@@ -659,6 +659,7 @@ class DataChain:
                     attrs=attrs,
                     feature_schema=schema,
                     update_version=update_version,
+                    job_id=job.id,
                     **kwargs,
                 )
             )
@@ -699,8 +700,6 @@ class DataChain:
         from .datasets import read_dataset
 
         metastore = self.session.catalog.metastore
-
-        job_id = os.getenv("DATACHAIN_JOB_ID")
         checkpoints_reset = env2bool("DATACHAIN_CHECKPOINTS_RESET", undefined=True)
 
         _hash = self._calculate_job_hash(job.id)
