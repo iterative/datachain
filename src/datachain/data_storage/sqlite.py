@@ -830,6 +830,33 @@ class SQLiteWarehouse(AbstractWarehouse):
             if progress_cb:
                 progress_cb(len(batch_ids))
 
+    def _regenerate_sys_columns(self, subquery) -> "Select":
+        """
+        Regenerate sys__id and sys__rand columns for a subquery.
+
+        This is needed when a query may produce NULL sys__id values (e.g., from
+        full outer joins). ROW_NUMBER() generates sequential IDs and abs(random())
+        generates random values, avoiding NULL handling issues in copy_table().
+
+        The cast() is required because window functions like ROW_NUMBER() return
+        NullType in SQLAlchemy, which causes "Can't generate DDL for NullType"
+        errors when creating tables. Cast provides the concrete type information.
+
+        """
+        columns = []
+        for col in subquery.c:
+            if col.name == "sys__id":
+                columns.append(cast(func.row_number().over(), Integer).label("sys__id"))
+            elif col.name == "sys__rand":
+                columns.append(
+                    cast(func.abs(func.random()), Integer).label("sys__rand")
+                )
+            else:
+                columns.append(col)
+
+        result = sqlalchemy.select(*columns).select_from(subquery).subquery()
+        return sqlalchemy.select(*result.c).select_from(result)
+
     def join(
         self,
         left: "_FromClauseArgument",
@@ -876,7 +903,7 @@ class SQLiteWarehouse(AbstractWarehouse):
                     right_left_join = add_left_rows_filter(c)
 
         union = sqlalchemy.union(left_right_join, right_left_join).subquery()
-        return sqlalchemy.select(*union.c).select_from(union)
+        return self._regenerate_sys_columns(union)
 
     def create_pre_udf_table(self, query: "Select") -> "Table":
         """
