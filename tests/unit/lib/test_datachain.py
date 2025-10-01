@@ -3,6 +3,7 @@ import json
 import math
 import os
 import re
+from collections import Counter
 from collections.abc import Generator, Iterator
 from unittest.mock import ANY, patch
 
@@ -562,6 +563,32 @@ def test_from_features_simple_types_in_memory():
     assert len(df) == len(fib)
     assert df["fib"].tolist() == fib
     assert df["odds"].tolist() == values
+
+
+@skip_if_not_sqlite
+def test_to_pandas_as_object_preserves_none(test_session):
+    timestamp = datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)
+    chain = dc.read_values(
+        id=[1, None],
+        value=[3.14, None],
+        ts=[timestamp, None],
+        session=test_session,
+    )
+
+    df_default = chain.to_pandas()
+    assert df_default["id"].dtype != object
+    assert df_default["value"].dtype != object
+    assert df_default["id"].isna().sum() == 1
+    assert df_default["value"].isna().sum() == 1
+    assert pd.isna(df_default.loc[df_default["id"].isna(), "ts"]).all()
+
+    df_object = chain.to_pandas(as_object=True)
+    assert df_object["id"].dtype == object
+    assert df_object["value"].dtype == object
+    assert df_object["ts"].dtype == object
+    assert Counter(df_object["id"].tolist()) == Counter([1, None])
+    assert Counter(df_object["value"].tolist()) == Counter([3.14, None])
+    assert Counter(df_object["ts"].tolist()) == Counter([timestamp, None])
 
 
 def test_from_features_more_simple_types(test_session):
