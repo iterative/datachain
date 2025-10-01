@@ -1956,12 +1956,15 @@ class DataChain:
         self,
         flatten: bool = False,
         include_hidden: bool = True,
+        as_object: bool = False,
     ) -> "pd.DataFrame":
         """Return a pandas DataFrame from the chain.
 
         Parameters:
             flatten: Whether to use a multiindex or flatten column names.
             include_hidden: Whether to include hidden columns.
+            as_object: Whether to emit a dataframe backed by Python objects
+                rather than pandas-inferred dtypes.
 
         Returns:
             pd.DataFrame: A pandas DataFrame representation of the chain.
@@ -1977,6 +1980,9 @@ class DataChain:
             columns = pd.MultiIndex.from_tuples(map(tuple, headers))
 
         results = self.results(include_hidden=include_hidden)
+        if as_object:
+            df = pd.DataFrame(results, columns=columns, dtype=object)
+            return df.where(pd.notna(df), None)
         return pd.DataFrame.from_records(results, columns=columns)
 
     def show(
@@ -1999,7 +2005,11 @@ class DataChain:
         import pandas as pd
 
         dc = self.limit(limit) if limit > 0 else self  # type: ignore[misc]
-        df = dc.to_pandas(flatten, include_hidden=include_hidden)
+        df = dc.to_pandas(
+            flatten,
+            include_hidden=include_hidden,
+            as_object=True,
+        )
 
         if df.empty:
             print("Empty result")

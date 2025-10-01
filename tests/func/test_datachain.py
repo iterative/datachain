@@ -35,6 +35,7 @@ from tests.utils import (
     TARRED_TREE,
     df_equal,
     images_equal,
+    skip_if_not_sqlite,
     sorted_dicts,
     text_embedding,
 )
@@ -557,6 +558,25 @@ def test_show(capsys, test_session):
     assert "first_name age city" in normalized_output
     for i in range(3):
         assert f"{i} {first_name[i]}" in normalized_output
+
+
+@skip_if_not_sqlite
+def test_show_preserves_none(capsys, test_session):
+    chain = dc.read_values(
+        score=[1, None],
+        ts=[
+            datetime(2020, 1, 1, tzinfo=timezone.utc),
+            None,
+        ],
+        session=test_session,
+    )
+
+    chain.show()
+
+    captured = capsys.readouterr().out
+    assert "NaN" not in captured
+    assert "NaT" not in captured
+    assert captured.count("None") >= 2
 
 
 def test_show_without_temp_datasets(capsys, test_session):
