@@ -162,6 +162,22 @@ class JobManager:
 
         return self.job
 
+    def reset(self):
+        """Reset the JobManager state. Useful for testing."""
+        # Unregister atexit hooks
+        for hook in self._hook_refs:
+            atexit.unregister(hook)
+        self._hook_refs.clear()
+
+        # Restore original excepthook
+        sys.excepthook = sys.__excepthook__
+
+        # Clear instance state
+        self.job = None
+        self.status = None
+        self.owned = None
+        self._hooks_registered = False
+
     def finalize_success(self, session):
         """
         Mark the current job as completed.

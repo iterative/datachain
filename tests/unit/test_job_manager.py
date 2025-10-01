@@ -133,3 +133,55 @@ def test_finalize_failure_delegates_to_sys_excepthook(
     assert "bad stuff" in called["exc"][1]
     db_job = test_session.catalog.metastore.get_job(job.id)
     assert db_job.status == JobStatus.FAILED
+
+
+def test_reset_clears_state(test_session, patch_argv, patch_user_script):
+    """Test that reset() clears JobManager state."""
+    jm = JobManager()
+    jm.get_or_create(test_session)
+
+    # Verify initial state
+    assert jm.job is not None
+    assert jm.status == JobStatus.RUNNING
+    assert jm.owned is True
+    assert jm._hooks_registered is True
+    assert len(jm._hook_refs) > 0
+
+    # Reset
+    jm.reset()
+
+    # Verify state is cleared
+    assert jm.job is None
+    assert jm.status is None
+    assert jm.owned is None
+    assert jm._hooks_registered is False
+    assert len(jm._hook_refs) == 0
+
+
+def test_reset_restores_excepthook(test_session, patch_argv, patch_user_script):
+    """Test that reset() restores sys.excepthook."""
+    original_hook = sys.excepthook
+    jm = JobManager()
+    jm.get_or_create(test_session)
+
+    # Hook should be changed
+    assert sys.excepthook != original_hook
+
+    # Reset should restore it
+    jm.reset()
+    assert sys.excepthook == sys.__excepthook__
+
+
+def test_reset_allows_recreation(test_session, patch_argv, patch_user_script):
+    """Test that after reset(), get_or_create() works again."""
+    jm = JobManager()
+    job1 = jm.get_or_create(test_session)
+    job1_id = job1.id
+
+    jm.reset()
+
+    # Should be able to create a new job
+    job2 = jm.get_or_create(test_session)
+    assert job2.id != job1_id
+    assert jm.job is job2
+    assert jm.status == JobStatus.RUNNING
