@@ -166,7 +166,8 @@ def run_step(step, catalog):  # noqa: PLR0912
         # Windows has a different mechanism of creating a process group.
         popen_args = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
         # This is STATUS_CONTROL_C_EXIT which is equivalent to 0xC000013A
-        interrupt_exit_codes = (3221225786,)
+        # Also accept 130 as JobManager now uses this cross-platform exit code
+        interrupt_exit_codes = (3221225786, 130)
     else:
         popen_args = {"start_new_session": True}
     stdin_file = None
