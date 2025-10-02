@@ -830,33 +830,6 @@ class SQLiteWarehouse(AbstractWarehouse):
             if progress_cb:
                 progress_cb(len(batch_ids))
 
-    def _regenerate_sys_columns(self, subquery) -> "Select":
-        """
-        Regenerate sys__id and sys__rand columns for a subquery.
-
-        This is needed when a query may produce NULL sys__id values (e.g., from
-        full outer joins). ROW_NUMBER() generates sequential IDs and abs(random())
-        generates random values, avoiding NULL handling issues in copy_table().
-
-        The cast() is required because window functions like ROW_NUMBER() return
-        NullType in SQLAlchemy, which causes "Can't generate DDL for NullType"
-        errors when creating tables. Cast provides the concrete type information.
-
-        """
-        columns = []
-        for col in subquery.c:
-            if col.name == "sys__id":
-                columns.append(cast(func.row_number().over(), Integer).label("sys__id"))
-            elif col.name == "sys__rand":
-                columns.append(
-                    cast(func.abs(func.random()), Integer).label("sys__rand")
-                )
-            else:
-                columns.append(col)
-
-        result = sqlalchemy.select(*columns).select_from(subquery).subquery()
-        return sqlalchemy.select(*result.c).select_from(result)
-
     def join(
         self,
         left: "_FromClauseArgument",
@@ -902,8 +875,33 @@ class SQLiteWarehouse(AbstractWarehouse):
                 if isinstance(c, BinaryExpression):
                     right_left_join = add_left_rows_filter(c)
 
-        union = sqlalchemy.union(left_right_join, right_left_join).subquery()
-        return self._regenerate_sys_columns(union)
+        # Use CTE instead of subquery to force SQLite to materialize the result
+        # This breaks deep nesting and prevents parser stack overflow
+        union_cte = sqlalchemy.union(left_right_join, right_left_join).cte(
+            "union_result"
+        )
+
+        return self._regenerate_system_columns(union_cte)
+
+    def _regenerate_system_columns(self, selectable: Any) -> "Select":
+        """Return a SELECT that regenerates sys__id and sys__rand deterministically."""
+        base = selectable
+        rownum_expr = cast(func.row_number().over(), Integer)
+        non_sys_cols = [c for c in base.c if c.name not in ("sys__id", "sys__rand")]
+        # Derive a deterministic pseudo-random-looking value from row number.
+        # Simple LCG-style mix to avoid a monotonic sequence while staying fast.
+        sys_rand_expr = rownum_expr * 1103515245 + 12345
+        inner = (
+            sqlalchemy.select(
+                *non_sys_cols,
+                rownum_expr.label("sys__id"),
+                sys_rand_expr.label("sys__rand"),
+            )
+            .select_from(base)
+            .subquery()
+        )
+
+        return sqlalchemy.select(*inner.c).select_from(inner)
 
     def create_pre_udf_table(self, query: "Select") -> "Table":
         """

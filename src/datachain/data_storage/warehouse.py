@@ -923,6 +923,8 @@ class AbstractWarehouse(ABC, Serializable):
         right: "_FromClauseArgument",
         onclause: "_OnClauseArgument",
         inner: bool = True,
+        full: bool = False,
+        columns=None,
     ) -> sa.Select:
         """
         Join two tables together.
