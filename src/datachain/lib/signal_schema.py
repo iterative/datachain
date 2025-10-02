@@ -1,6 +1,7 @@
 import copy
 import hashlib
 import json
+import logging
 import warnings
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
@@ -23,7 +24,7 @@ from typing import (  # noqa: UP035
     get_origin,
 )
 
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, Field, ValidationError, create_model
 from sqlalchemy import ColumnElement
 from typing_extensions import Literal as LiteralEx
 
@@ -42,6 +43,8 @@ from datachain.sql.types import SQLType
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
 
+
+logger = logging.getLogger(__name__)
 
 NAMES_TO_TYPES = {
     "int": int,
@@ -463,11 +466,27 @@ class SignalSchema:
                 objs.append(self.setup_values.get(name))
             elif (fr := ModelStore.to_pydantic(fr_type)) is not None:
                 j, pos = unflatten_to_json_pos(fr, row, pos)
-                objs.append(fr(**j))
+                try:
+                    obj = fr(**j)
+                except ValidationError as e:
+                    if self._all_values_none(j):
+                        logger.debug("Failed to create input for %s: %s", name, e)
+                        obj = None
+                    else:
+                        raise
+                objs.append(obj)
             else:
                 objs.append(row[pos])
                 pos += 1
         return objs
+
+    @staticmethod
+    def _all_values_none(value: Any) -> bool:
+        if isinstance(value, dict):
+            return all(SignalSchema._all_values_none(v) for v in value.values())
+        if isinstance(value, (list, tuple, set)):
+            return all(SignalSchema._all_values_none(v) for v in value)
+        return value is None
 
     def get_file_signal(self) -> Optional[str]:
         for signal_name, signal_type in self.values.items():
