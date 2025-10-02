@@ -1009,7 +1009,9 @@ class SQLJoin(Step):
     rname: str
 
     def hash_inputs(self) -> str:
-        predicates = ensure_sequence(self.predicates or [])
+        predicates = (
+            ensure_sequence(self.predicates) if self.predicates is not None else []
+        )
 
         parts = [
             bytes.fromhex(self.query1.hash()),
