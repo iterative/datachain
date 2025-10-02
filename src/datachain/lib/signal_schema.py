@@ -486,6 +486,11 @@ class SignalSchema:
             return all(SignalSchema._all_values_none(v) for v in value.values())
         if isinstance(value, (list, tuple, set)):
             return all(SignalSchema._all_values_none(v) for v in value)
+        if isinstance(value, float):
+            # NaN is used to represent NULL and NaN float values in datachain
+            import math
+
+            return math.isnan(value) or value is None
         return value is None
 
     def get_file_signal(self) -> Optional[str]:
@@ -565,8 +570,15 @@ class SignalSchema:
                 pos += 1
             else:
                 json, pos = unflatten_to_json_pos(fr, row, pos)  # type: ignore[union-attr]
-                obj = fr(**json)
-                SignalSchema._set_file_stream(obj, catalog, cache)
+                try:
+                    obj = fr(**json)
+                    SignalSchema._set_file_stream(obj, catalog, cache)
+                except ValidationError as e:
+                    if self._all_values_none(json):
+                        logger.debug("Failed to create feature for %s: %s", fr_cls, e)
+                        obj = None
+                    else:
+                        raise
                 res.append(obj)
         return res
 
