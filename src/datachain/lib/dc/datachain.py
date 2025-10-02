@@ -1701,7 +1701,11 @@ class DataChain:
             )
 
         query = self._query.join(
-            right_ds._query, sqlalchemy.and_(*ops), inner, full, rname + "{name}"
+            right_ds._query,
+            sqlalchemy.and_(*ops),
+            inner,
+            full,
+            rname + "{name}",
         )
         query.feature_schema = None
         ds = self._evolve(query=query)
