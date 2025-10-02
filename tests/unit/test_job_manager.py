@@ -64,19 +64,48 @@ def test_finalize_success(test_session, patch_argv, patch_user_script):
     assert db_job.finished_at is not None
 
 
-def test_finalize_failure(test_session, patch_argv, patch_user_script):
+@pytest.mark.parametrize(
+    "exception_type,expected_status,should_have_error",
+    [
+        (RuntimeError("error"), JobStatus.FAILED, True),
+        (KeyboardInterrupt(), JobStatus.CANCELED, False),
+    ],
+)
+def test_finalize_failure(
+    test_session,
+    patch_argv,
+    patch_user_script,
+    exception_type,
+    expected_status,
+    should_have_error,
+):
     jm = JobManager()
     job = jm.get_or_create(test_session)
 
-    try:
-        raise RuntimeError("error")
-    except RuntimeError as e:
-        jm.finalize_failure(test_session, type(e), e, e.__traceback__)
+    # Mock sys.exit in the job module for KeyboardInterrupt to avoid actually exiting
+    with patch("datachain.job.sys.exit") as mock_exit:
+        try:
+            raise exception_type
+        except (RuntimeError, KeyboardInterrupt) as e:
+            jm.finalize_failure(test_session, type(e), e, e.__traceback__)
+
+        # Verify exit code for KeyboardInterrupt
+        if isinstance(exception_type, KeyboardInterrupt):
+            # Check that sys.exit was called with 130 (may be called multiple
+            # times due to hook chaining)
+            assert mock_exit.called
+            assert all(call[0][0] == 130 for call in mock_exit.call_args_list)
 
     db_job = test_session.catalog.metastore.get_job(job.id)
-    assert db_job.status == JobStatus.FAILED
-    assert "error" in db_job.error_message
-    assert "RuntimeError" in db_job.error_stack
+    assert db_job.status == expected_status
+
+    if should_have_error:
+        assert "error" in db_job.error_message
+        assert "RuntimeError" in db_job.error_stack
+    else:
+        # KeyboardInterrupt should not set error message/stack
+        assert db_job.error_message == ""
+        assert db_job.error_stack == ""
 
 
 def test_get_or_create_is_idempotent(test_session, patch_argv, patch_user_script):

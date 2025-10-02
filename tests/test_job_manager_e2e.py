@@ -5,6 +5,8 @@ import subprocess
 import sys
 import textwrap
 
+import pytest
+
 from datachain.data_storage import JobStatus
 from tests.utils import skip_if_not_sqlite
 
@@ -77,18 +79,35 @@ def test_single_job_for_multiple_saves(tmp_path, catalog_tmpfile):
 
 
 @skip_if_not_sqlite
-def test_job_marked_failed_on_exception(tmp_path, catalog_tmpfile):
+@pytest.mark.parametrize(
+    "exception_code,expected_status,expected_returncode,check_error_details",
+    [
+        ("raise RuntimeError('Intentional failure')", JobStatus.FAILED, 1, True),
+        ("raise KeyboardInterrupt()", JobStatus.CANCELED, 130, False),
+    ],
+    ids=["failed", "canceled"],
+)
+def test_job_marked_on_exception(
+    tmp_path,
+    catalog_tmpfile,
+    exception_code,
+    expected_status,
+    expected_returncode,
+    check_error_details,
+):
     """
-    Test that when a script fails, the Job is marked as FAILED.
+    Test that when a script raises an exception, the Job is marked appropriately.
+    - RuntimeError -> FAILED with error details
+    - KeyboardInterrupt -> CANCELED without error details
     Datasets in global context are rolled back on unhandled exceptions.
     """
-    script = tmp_path / "test_failing.py"
-    script_content = textwrap.dedent("""
+    script = tmp_path / "test_exception.py"
+    script_content = textwrap.dedent(f"""
         import datachain as dc
 
         dc.read_values(a=[1, 2, 3]).save("dataset_a")
         dc.read_values(b=[4, 5, 6]).save("dataset_b")
-        raise RuntimeError("Intentional failure")
+        {exception_code}
     """)
     script.write_text(script_content)
 
@@ -105,8 +124,11 @@ def test_job_marked_failed_on_exception(tmp_path, catalog_tmpfile):
         },
     )
 
-    assert result.returncode != 0
-    assert "Intentional failure" in result.stderr
+    assert result.returncode == expected_returncode
+    if check_error_details:
+        assert "Intentional failure" in result.stderr
+    else:
+        assert "KeyboardInterrupt" in result.stderr
 
     # Verify exactly ONE job was created
     query = catalog_tmpfile.metastore._jobs.select()
@@ -117,9 +139,16 @@ def test_job_marked_failed_on_exception(tmp_path, catalog_tmpfile):
     job = catalog_tmpfile.metastore.get_last_job_by_name(str(script))
     assert job is not None
     assert job.name == str(script)
-    assert job.status == JobStatus.FAILED
-    assert "Intentional failure" in job.error_message
-    assert "RuntimeError" in job.error_stack
+    assert job.status == expected_status
+
+    if check_error_details:
+        assert "Intentional failure" in job.error_message
+        assert "RuntimeError" in job.error_stack
+    else:
+        # KeyboardInterrupt should not set error message/stack
+        assert job.error_message == ""
+        assert job.error_stack == ""
+
     assert job.query == script_content
 
     # Verify datasets were rolled back (correct behavior for unhandled exceptions)

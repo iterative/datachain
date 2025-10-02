@@ -200,7 +200,7 @@ class JobManager:
 
     def finalize_failure(self, session, exc_type, exc_value, tb):
         """
-        Mark the current job as failed.
+        Mark the current job as failed or canceled.
 
         This is called automatically by sys.excepthook if an unhandled exception occurs.
 
@@ -210,6 +210,22 @@ class JobManager:
             exc_value (Exception): Exception instance.
             tb (traceback): Traceback object.
         """
+        # Handle KeyboardInterrupt specially - mark as canceled, exit with signal code
+        if exc_type is KeyboardInterrupt:
+            if self.job and self.owned and self.status == JobStatus.RUNNING:
+                session.catalog.metastore.set_job_status(
+                    self.job.id,
+                    JobStatus.CANCELED,
+                )
+                self.status = JobStatus.CANCELED
+            # Delegate to previous hook for cleanup (e.g., Session cleanup)
+            if self._previous_excepthook:
+                self._previous_excepthook(exc_type, exc_value, tb)
+            else:
+                sys.__excepthook__(exc_type, exc_value, tb)
+            # Exit with SIGINT signal code (128 + 2 = 130, or -2 in subprocess terms)
+            sys.exit(130)
+
         if self.job and self.owned and self.status == JobStatus.RUNNING:
             error_stack = "".join(traceback.format_exception(exc_type, exc_value, tb))
             session.catalog.metastore.set_job_status(
