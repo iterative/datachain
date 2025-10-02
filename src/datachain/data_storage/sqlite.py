@@ -881,25 +881,11 @@ class SQLiteWarehouse(AbstractWarehouse):
 
         return self._regenerate_system_columns(union_cte)
 
-    def _regenerate_system_columns(self, selectable: Any) -> "Select":
-        """Return a SELECT that regenerates sys__id and sys__rand deterministically."""
-        base = selectable
-        rownum_expr = cast(func.row_number().over(), Integer)
-        non_sys_cols = [c for c in base.c if c.name not in ("sys__id", "sys__rand")]
-        # Derive a deterministic pseudo-random-looking value from row number.
-        # Simple LCG-style mix to avoid a monotonic sequence while staying fast.
-        sys_rand_expr = rownum_expr * 1103515245 + 12345
-        inner = (
-            sqlalchemy.select(
-                *non_sys_cols,
-                rownum_expr.label("sys__id"),
-                sys_rand_expr.label("sys__rand"),
-            )
-            .select_from(base)
-            .subquery()
-        )
+    def _system_row_number_expr(self):
+        return func.row_number().over()
 
-        return sqlalchemy.select(*inner.c).select_from(inner)
+    def _system_random_expr(self):
+        return self._system_row_number_expr() * 1103515245 + 12345
 
     def create_pre_udf_table(self, query: "Select") -> "Table":
         """

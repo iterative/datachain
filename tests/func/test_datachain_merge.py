@@ -111,11 +111,13 @@ def test_full_outer_join_preserves_all_rows(test_session):
     ds1 = dc.read_values(
         id=[1, 2, 3],
         file=[File(path=str(i)) for i in [1, 2, 3]],
+        session=test_session,
     ).persist()
 
     ds2 = dc.read_values(
         id=[5, 6, 7],
         file=[File(path=str(i)) for i in [5, 6, 7]],
+        session=test_session,
     ).persist()
 
     merged = ds1.merge(ds2, on="file.path", full=True)
@@ -138,6 +140,6 @@ def test_full_outer_join_preserves_all_rows(test_session):
 
     # Save and verify all rows are persisted
     merged.save("test_merge")
-    count_after = dc.read_dataset("test_merge").count()
+    count_after = dc.read_dataset("test_merge", session=test_session).count()
 
     assert count_before == count_after == 6
