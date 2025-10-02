@@ -876,10 +876,8 @@ class SQLiteWarehouse(AbstractWarehouse):
                     right_left_join = add_left_rows_filter(c)
 
         # Use CTE instead of subquery to force SQLite to materialize the result
-        # This breaks deep nesting and prevents parser stack overflow
-        union_cte = sqlalchemy.union(left_right_join, right_left_join).cte(
-            "union_result"
-        )
+        # This breaks deep nesting and prevents parser stack overflow.
+        union_cte = sqlalchemy.union(left_right_join, right_left_join).cte()
 
         return self._regenerate_system_columns(union_cte)
 
