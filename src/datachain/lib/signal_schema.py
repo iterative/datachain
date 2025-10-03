@@ -2,6 +2,7 @@ import copy
 import hashlib
 import json
 import logging
+import math
 import warnings
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
@@ -488,8 +489,7 @@ class SignalSchema:
             return all(SignalSchema._all_values_none(v) for v in value)
         if isinstance(value, float):
             # NaN is used to represent NULL and NaN float values in datachain
-            import math
-
+            # Since SQLite does not have a separate NULL type, we need to check for NaN
             return math.isnan(value) or value is None
         return value is None
 

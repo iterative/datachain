@@ -132,7 +132,6 @@ def test_udf_none_nested_datamodel_after_outer_merge(test_session):
 
 
 def test_udf(cloud_test_catalog):
-    """Test basic UDF functionality with filtering and mapping."""
     session = cloud_test_catalog.session
 
     def name_len(path):
@@ -165,7 +164,6 @@ def test_udf(cloud_test_catalog):
 )
 @pytest.mark.xdist_group(name="tmpfile")
 def test_udf_parallel(cloud_test_catalog_tmpfile):
-    """Test UDF execution with parallel processing enabled."""
     session = cloud_test_catalog_tmpfile.session
 
     def name_len(name):
@@ -187,7 +185,6 @@ def test_udf_parallel(cloud_test_catalog_tmpfile):
 
 
 def test_class_udf(cloud_test_catalog):
-    """Test Mapper class with initialization parameters."""
     session = cloud_test_catalog.session
 
     class MyUDF(Mapper):
@@ -227,7 +224,6 @@ def test_class_udf(cloud_test_catalog):
 )
 @pytest.mark.xdist_group(name="tmpfile")
 def test_class_udf_parallel(cloud_test_catalog_tmpfile):
-    """Test Mapper class execution with parallel processing."""
     session = cloud_test_catalog_tmpfile.session
 
     class MyUDF(Mapper):
@@ -267,7 +263,6 @@ def test_class_udf_parallel(cloud_test_catalog_tmpfile):
     indirect=True,
 )
 def test_udf_after_limit(cloud_test_catalog):
-    """Test UDF behavior when applied after limit() operation."""
     ctc = cloud_test_catalog
 
     def name_int(name: str) -> int:
@@ -296,7 +291,6 @@ def test_udf_after_limit(cloud_test_catalog):
 
 
 def test_udf_different_types(cloud_test_catalog):
-    """Test UDF output with various data types (int, float, arrays, json, binary)."""
     obj = {"name": "John", "age": 30}
 
     def test_types():
@@ -384,9 +378,8 @@ def test_udf_different_types(cloud_test_catalog):
 
 
 @pytest.mark.parametrize("use_cache", [False, True])
-@pytest.mark.parametrize("prefetch", [0, 16])
+@pytest.mark.parametrize("prefetch", [0, 2])
 def test_map_file(cloud_test_catalog, use_cache, prefetch, monkeypatch):
-    """Test file handling in map() with various cache and prefetch settings."""
     monkeypatch.delenv("DATACHAIN_DISTRIBUTED", raising=False)
 
     ctc = cloud_test_catalog
@@ -445,9 +438,8 @@ def test_map_file(cloud_test_catalog, use_cache, prefetch, monkeypatch):
 
 
 @pytest.mark.parametrize("use_cache", [False, True])
-@pytest.mark.parametrize("prefetch", [0, 16])
+@pytest.mark.parametrize("prefetch", [0, 2])
 def test_gen_file(cloud_test_catalog, use_cache, prefetch, monkeypatch):
-    """Test file handling in gen() with various cache and prefetch settings."""
     monkeypatch.delenv("DATACHAIN_DISTRIBUTED", raising=False)
 
     ctc = cloud_test_catalog
@@ -510,7 +502,6 @@ def test_gen_file(cloud_test_catalog, use_cache, prefetch, monkeypatch):
 
 
 def test_batch_for_map(test_session):
-    """Test UDF execution with custom batch size settings."""
     # Create a chain with batch settings
     chain = dc.read_values(x=list(range(100)), session=test_session)
     chain_with_settings = chain.settings(batch_size=15)
@@ -535,7 +526,6 @@ def test_batch_for_map(test_session):
 )
 @pytest.mark.xdist_group(name="tmpfile")
 def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
-    """Test error handling in parallel UDF execution."""
     session = cloud_test_catalog_tmpfile.session
 
     def name_len_error(_name):
@@ -567,7 +557,6 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
 )
 @pytest.mark.xdist_group(name="tmpfile")
 def test_udf_reuse_on_error(cloud_test_catalog_tmpfile):
-    """Test that UDF can be reused after fixing errors."""
     session = cloud_test_catalog_tmpfile.session
 
     error_state = {"error": True}
@@ -608,7 +597,6 @@ def test_udf_reuse_on_error(cloud_test_catalog_tmpfile):
 )
 @pytest.mark.xdist_group(name="tmpfile")
 def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
-    """Test interrupt handling in parallel UDF execution."""
     session = cloud_test_catalog_tmpfile.session
 
     def name_len_interrupt(_name):
@@ -634,7 +622,6 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
 
 @pytest.mark.xdist_group(name="tmpfile")
 def test_udf_parallel_boostrap(test_session_tmpfile):
-    """Test Mapper bootstrap and teardown functionality in parallel execution."""
     vals = ["a", "b", "c", "d", "e", "f"]
 
     class MyMapper(Mapper):
@@ -679,7 +666,6 @@ def test_udf_parallel_boostrap(test_session_tmpfile):
 def test_udf_distributed(
     cloud_test_catalog_tmpfile, workers, parallel, tree, run_datachain_worker
 ):
-    """Test UDF execution in distributed mode with multiple workers."""
     session = cloud_test_catalog_tmpfile.session
 
     def name_len(name):
@@ -716,7 +702,6 @@ def test_udf_distributed(
 def test_udf_distributed_exec_error(
     cloud_test_catalog_tmpfile, workers, parallel, tree, run_datachain_worker
 ):
-    """Test error handling in distributed UDF execution."""
     session = cloud_test_catalog_tmpfile.session
 
     def name_len_error(_name):
@@ -750,7 +735,6 @@ def test_udf_distributed_exec_error(
 def test_udf_distributed_interrupt(
     cloud_test_catalog_tmpfile, capfd, tree, workers, parallel, run_datachain_worker
 ):
-    """Test interrupt handling in distributed UDF execution."""
     session = cloud_test_catalog_tmpfile.session
 
     def name_len_interrupt(_name):
