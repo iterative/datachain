@@ -160,9 +160,15 @@ class UDFBase(AbstractUDF):
         """
         Creates SHA hash of this UDF function. It takes into account function,
         inputs and outputs.
+
+        For function-based UDFs, hashes self._func.
+        For class-based UDFs, hashes the process method.
         """
+        # Hash user code: either _func (function-based) or process method (class-based)
+        func_to_hash = self._func if self._func else self.process
+
         parts = [
-            hash_callable(self._func) if self._func else "",
+            hash_callable(func_to_hash),
             self.params.hash() if self.params else "",
             self.output.hash(),
         ]
