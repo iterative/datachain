@@ -75,6 +75,22 @@ def custom_feature_gen(m_fr):
     )
 
 
+# Class-based UDFs for testing hash calculation
+class DoubleMapper(Mapper):
+    """Class-based Mapper that overrides process()."""
+
+    def process(self, x):
+        return x * 2
+
+
+class TripleGenerator(Generator):
+    """Class-based Generator that overrides process()."""
+
+    def process(self, x):
+        yield x * 3
+        yield x * 3 + 1
+
+
 @pytest.fixture
 def numbers_dataset(test_session):
     """
@@ -394,6 +410,12 @@ def test_subtract_hash(test_session, numbers_dataset, on, _hash):
             {"x": CustomFeature},
             "b4edceaa18ed731085e1c433a6d21deabec8d92dfc338fb1d709ed7951977fc5",
         ),
+        (
+            DoubleMapper(),
+            ["x"],
+            {"double": int},
+            "7994436106fef0486b04078b02ee437be3aa73ade2d139fb8c020e2199515e26",
+        ),
     ],
 )
 def test_udf_mapper_hash(
@@ -427,6 +449,12 @@ def test_udf_mapper_hash(
             ["t1"],
             {"x": CustomFeature},
             "7ff702d242612cbb83cbd1777aa79d2792fb2a341db5ea406cd9fd3f42543b9c",
+        ),
+        (
+            TripleGenerator(),
+            ["x"],
+            {"triple": int},
+            "02b4c6bf98ffa011b7c62f3374f219f21796ece5b001d99e4c2f69edf0a94f4a",
         ),
     ],
 )
