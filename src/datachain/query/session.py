@@ -166,26 +166,6 @@ class Session:
         assert self.job is not None
         return self.job
 
-    def reset_job_state(self):
-        """
-        Reset job state for testing purposes.
-        Useful for simulating multiple script runs.
-        """
-        # Unregister atexit hook if registered
-        if self._job_finalize_hook is not None:
-            try:
-                atexit.unregister(self._job_finalize_hook)
-            except ValueError:
-                # Hook was already unregistered
-                pass
-            self._job_finalize_hook = None
-
-        # Clear job state
-        self.job = None
-        self.job_status = None
-        self.owns_job = None
-        self._job_hooks_registered = False
-
     def _finalize_job_success(self):
         """Mark the current job as completed."""
         if self.job and self.owns_job and self.job_status == JobStatus.RUNNING:
