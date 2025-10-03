@@ -8,7 +8,6 @@ def test_union_persist_no_duplication_large_session(test_session, monkeypatch):
         "datachain.data_storage.warehouse.INSERT_BATCH_SIZE", 20, raising=False
     )
     monkeypatch.setattr("datachain.query.dataset.INSERT_BATCH_SIZE", 20, raising=False)
-    # Choose N large enough to cross the insert batch boundary
     n = 20 + 7
 
     x_ids = list(range(n))
@@ -16,23 +15,6 @@ def test_union_persist_no_duplication_large_session(test_session, monkeypatch):
 
     x = dc.read_values(idx=x_ids, session=test_session)
     y = dc.read_values(idx=y_ids, session=test_session)
-
-    # Ensure both branches have identical sys__id domains before union
-    # This validates the original precondition that caused duplication on persist
-    # when batching by sys__id and the ids overlapped across branches.
-    # Access internal sys__id via the underlying DatasetQuery API
-    x_sys_ids = {rec["sys__id"] for rec in x._query.to_db_records()}
-    y_sys_ids = {rec["sys__id"] for rec in y._query.to_db_records()}
-    # ClickHouse may generate sys__id independently per chain for read_values,
-    # so the sets can differ there. Keep strict equality on other dialects and
-    # enforce cardinality on ClickHouse.
-    db_dialect = test_session.catalog.warehouse.db.dialect
-    dialect_name = getattr(db_dialect, "name", None)
-    if dialect_name == "clickhouse":
-        assert len(x_sys_ids) == n
-        assert len(y_sys_ids) == n
-    else:
-        assert x_sys_ids == y_sys_ids
 
     xy = x.union(y)
     assert xy.count() == 2 * n
@@ -64,14 +46,11 @@ def test_union_parallel_udf_ids_only_no_dup(test_session_tmpfile, monkeypatch):
     x = dc.read_values(idx=x_ids, session=test_session_tmpfile)
     y = dc.read_values(idx=y_ids, session=test_session_tmpfile)
 
-    # Union and run a trivial UDF in parallel; parallel>1 forces the ids-only path
-    # in the worker entrypoint, which would have amplified duplicates previously.
     xy = x.union(y)
     mapped = xy.settings(parallel=2).map(
         out=lambda idx: idx, output=int, params=("idx",)
     )
 
-    # Count should match the number of input rows (2n) and equal distinct idx size.
     total = mapped.count()
     distinct_idx = {v for (v,) in mapped.select("idx").results()}
 

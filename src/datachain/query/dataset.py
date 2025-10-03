@@ -982,21 +982,25 @@ class SQLUnion(Step):
 
         columns1, columns2 = _order_columns(q1.columns, q2.columns)
 
-        columns1 = _remap_sys_id_dense(columns1, branch_offset=0)
-        columns2 = _remap_sys_id_dense(columns2, branch_offset=1)
+        union_select = sqlalchemy.select(*columns1).union_all(
+            sqlalchemy.select(*columns2)
+        )
+        regenerated = self.query1.catalog.warehouse._regenerate_system_columns(
+            union_select
+        )
+        result_columns = tuple(regenerated.selected_columns)
 
         def q(*columns):
-            names = {c.name for c in columns}
-            col1 = [c for c in columns1 if c.name in names]
-            col2 = [c for c in columns2 if c.name in names]
-            res = sqlalchemy.select(*col1).union_all(sqlalchemy.select(*col2))
+            if not columns:
+                return regenerated
 
-            subquery = res.subquery()
-            return sqlalchemy.select(*subquery.c).select_from(subquery)
+            names = {c.name for c in columns}
+            selected = [c for c in result_columns if c.name in names]
+            return regenerated.with_only_columns(*selected)
 
         return step_result(
             q,
-            columns1,
+            result_columns,
             dependencies=self.query1.dependencies | self.query2.dependencies,
         )
 
@@ -1223,28 +1227,6 @@ def _order_columns(
     ]
 
     return [[d[n] for n in column_order] for d in column_dicts]
-
-
-def _remap_sys_id_dense(
-    columns: Iterable[ColumnElement], branch_offset: int
-) -> list[ColumnElement]:
-    """Return a new column list where sys__id is remapped to a dense row number.
-
-    The resulting sys__id is computed as:
-      row_number(order by sys__id) * 2 + branch_offset
-
-    This guarantees uniqueness across branches (even vs odd) and avoids
-    arithmetic overflow from scaling arbitrary pre-existing ids.
-    """
-    remapped: list[ColumnElement] = []
-    for col in columns:
-        if getattr(col, "name", None) == "sys__id":
-            rn = sqlalchemy.func.row_number().over(order_by=col)
-            new_id = (rn * 2) + sqlalchemy.literal(branch_offset)
-            remapped.append(new_id.label("sys__id"))
-        else:
-            remapped.append(col)
-    return remapped
 
 
 @attrs.define
