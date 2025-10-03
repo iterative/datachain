@@ -1665,8 +1665,6 @@ def test_process_and_open_tar(cloud_test_catalog, cloud_type):
 
 @pytest.mark.parametrize("use_datachain_job_id_env", [True, False])
 def test_job_is_created_after_save(test_session, monkeypatch, use_datachain_job_id_env):
-    from datachain.job import job_manager
-
     if use_datachain_job_id_env:
         job_id = test_session.catalog.metastore.create_job("my-job", "echo 1;")
         monkeypatch.setenv("DATACHAIN_JOB_ID", job_id)
@@ -1675,18 +1673,16 @@ def test_job_is_created_after_save(test_session, monkeypatch, use_datachain_job_
 
     dataset = test_session.catalog.get_dataset("my-ds")
     result_job_id = dataset.get_version(dataset.latest_version).job_id
-    assert result_job_id == job_manager.job.id
+    assert result_job_id == test_session.job.id
 
 
 def test_checkpoint_is_created_after_save(test_session, catalog):
-    from datachain.job import job_manager
-
     dc.read_values(value=["val1", "val2"], session=test_session).save("my-ds")
 
-    checkpoints = list(catalog.metastore.list_checkpoints(job_manager.job.id))
+    checkpoints = list(catalog.metastore.list_checkpoints(test_session.job.id))
     assert len(checkpoints) == 1
     checkpoint = checkpoints[0]
-    assert checkpoint.job_id == job_manager.job.id
+    assert checkpoint.job_id == test_session.job.id
     assert checkpoint.hash
     assert checkpoint.partial is False
     assert checkpoint.created_at

@@ -36,7 +36,7 @@ from datachain.error import (
 from datachain.func import literal
 from datachain.func.base import Function
 from datachain.func.func import Func
-from datachain.job import Job, job_manager
+from datachain.job import Job
 from datachain.lib.convert.python_to_sql import python_to_sql
 from datachain.lib.data_model import (
     DataModel,
@@ -629,7 +629,7 @@ class DataChain:
         self._validate_update_version(update_version)
 
         # get existing job if running in SaaS, or creating new one if running locally
-        job = job_manager.get_or_create(self.session)
+        job = self.session.get_or_create_job()
 
         namespace_name, project_name, name = catalog.get_full_dataset_name(
             name,

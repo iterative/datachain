@@ -1,17 +1,21 @@
 import atexit
 import gc
 import logging
+import os
 import re
 import sys
-from typing import TYPE_CHECKING, ClassVar, Optional
+import traceback
+from typing import TYPE_CHECKING, Callable, ClassVar, Optional
 from uuid import uuid4
 
 from datachain.catalog import get_catalog
-from datachain.error import TableMissingError
+from datachain.data_storage import JobQueryType, JobStatus
+from datachain.error import JobNotFoundError, TableMissingError
 
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
     from datachain.dataset import DatasetRecord
+    from datachain.job import Job
 
 logger = logging.getLogger("datachain")
 
@@ -71,6 +75,13 @@ class Session:
         )
         self.dataset_versions: list[tuple[DatasetRecord, str, bool]] = []
 
+        # Job management attributes
+        self.job: Optional[Job] = None
+        self.job_status: Optional[JobStatus] = None
+        self.owns_job: Optional[bool] = None
+        self._job_hooks_registered: bool = False
+        self._job_finalize_hook: Optional[Callable[[], None]] = None
+
     def __enter__(self):
         # Push the current context onto the stack
         Session.SESSION_CONTEXTS.append(self)
@@ -93,6 +104,114 @@ class Session:
         self, dataset: "DatasetRecord", version: str, listing: bool = False
     ) -> None:
         self.dataset_versions.append((dataset, version, listing))
+
+    def get_or_create_job(self) -> "Job":
+        """
+        Get or create a Job for this session.
+
+        Returns:
+            Job: The active Job instance.
+
+        Behavior:
+            - If a job already exists in this session, it is returned.
+            - If ``DATACHAIN_JOB_ID`` is set, the corresponding job is fetched.
+            - Otherwise, a new job is created:
+                * Name = absolute path to the Python script.
+                * Query = script source code if available, otherwise the command line.
+                * Parent = last job with the same name, if available.
+                * Status = "running".
+              Exit hooks are registered to finalize the job.
+        """
+        if self.job:
+            return self.job
+
+        if env_job_id := os.getenv("DATACHAIN_JOB_ID"):
+            # SaaS run: just fetch existing job
+            self.job = self.catalog.metastore.get_job(env_job_id)
+            if not self.job:
+                raise JobNotFoundError(
+                    f"Job {env_job_id} from DATACHAIN_JOB_ID env not found"
+                )
+            self.owns_job = False
+        else:
+            # Local run: create new job
+            from datachain.utils import get_user_script_source
+
+            script = os.path.abspath(sys.argv[0]) if sys.argv else "interactive"
+            source_code = get_user_script_source()
+            python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+
+            # try to find the parent job
+            parent = self.catalog.metastore.get_last_job_by_name(script)
+
+            job_id = self.catalog.metastore.create_job(
+                name=script,
+                query=source_code or f"python {script}",
+                query_type=JobQueryType.PYTHON,
+                status=JobStatus.RUNNING,
+                python_version=python_version,
+                parent_job_id=parent.id if parent else None,
+            )
+            self.job = self.catalog.metastore.get_job(job_id)
+            self.owns_job = True
+            self.job_status = JobStatus.RUNNING
+
+            # register cleanup hooks only once for the global session
+            if not self._job_hooks_registered and self is self.GLOBAL_SESSION_CTX:
+
+                def _finalize_success_hook() -> None:
+                    self._finalize_job_success()
+
+                self._job_finalize_hook = _finalize_success_hook
+                atexit.register(self._job_finalize_hook)
+                self._job_hooks_registered = True
+
+        assert self.job is not None
+        return self.job
+
+    def reset_job_state(self):
+        """
+        Reset job state for testing purposes.
+        Useful for simulating multiple script runs.
+        """
+        # Unregister atexit hook if registered
+        if self._job_finalize_hook is not None:
+            try:
+                atexit.unregister(self._job_finalize_hook)
+            except ValueError:
+                # Hook was already unregistered
+                pass
+            self._job_finalize_hook = None
+
+        # Clear job state
+        self.job = None
+        self.job_status = None
+        self.owns_job = None
+        self._job_hooks_registered = False
+
+    def _finalize_job_success(self):
+        """Mark the current job as completed."""
+        if self.job and self.owns_job and self.job_status == JobStatus.RUNNING:
+            self.catalog.metastore.set_job_status(self.job.id, JobStatus.COMPLETE)
+            self.job_status = JobStatus.COMPLETE
+
+    def _finalize_job_as_canceled(self):
+        """Mark the current job as canceled."""
+        if self.job and self.owns_job and self.job_status == JobStatus.RUNNING:
+            self.catalog.metastore.set_job_status(self.job.id, JobStatus.CANCELED)
+            self.job_status = JobStatus.CANCELED
+
+    def _finalize_job_as_failed(self, exc_type, exc_value, tb):
+        """Mark the current job as failed with error details."""
+        if self.job and self.owns_job and self.job_status == JobStatus.RUNNING:
+            error_stack = "".join(traceback.format_exception(exc_type, exc_value, tb))
+            self.catalog.metastore.set_job_status(
+                self.job.id,
+                JobStatus.FAILED,
+                error_message=str(exc_value),
+                error_stack=error_stack,
+            )
+            self.job_status = JobStatus.FAILED
 
     def generate_temp_dataset_name(self) -> str:
         return self.get_temp_prefix() + uuid4().hex[: self.TEMP_TABLE_UUID_LEN]
@@ -173,11 +292,30 @@ class Session:
 
     @staticmethod
     def except_hook(exc_type, exc_value, exc_traceback):
-        Session.GLOBAL_SESSION_CTX.__exit__(exc_type, exc_value, exc_traceback)
-        Session._global_cleanup()
+        # Handle KeyboardInterrupt specially - mark as canceled and exit with
+        # signal code
+        if exc_type is KeyboardInterrupt:
+            if Session.GLOBAL_SESSION_CTX:
+                Session.GLOBAL_SESSION_CTX._finalize_job_as_canceled()
+                Session.GLOBAL_SESSION_CTX.__exit__(exc_type, exc_value, exc_traceback)
+            Session._global_cleanup()
 
-        if Session.ORIGINAL_EXCEPT_HOOK:
-            Session.ORIGINAL_EXCEPT_HOOK(exc_type, exc_value, exc_traceback)
+            if Session.ORIGINAL_EXCEPT_HOOK:
+                Session.ORIGINAL_EXCEPT_HOOK(exc_type, exc_value, exc_traceback)
+
+            # Exit with SIGINT signal code (128 + 2 = 130, or -2 in subprocess terms)
+            sys.exit(130)
+        else:
+            # Regular exception - mark as failed
+            if Session.GLOBAL_SESSION_CTX:
+                Session.GLOBAL_SESSION_CTX._finalize_job_as_failed(
+                    exc_type, exc_value, exc_traceback
+                )
+                Session.GLOBAL_SESSION_CTX.__exit__(exc_type, exc_value, exc_traceback)
+            Session._global_cleanup()
+
+            if Session.ORIGINAL_EXCEPT_HOOK:
+                Session.ORIGINAL_EXCEPT_HOOK(exc_type, exc_value, exc_traceback)
 
     @classmethod
     def cleanup_for_tests(cls):
