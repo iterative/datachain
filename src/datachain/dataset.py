@@ -1,5 +1,6 @@
 import builtins
 import json
+import re
 from dataclasses import dataclass, fields
 from datetime import datetime
 from functools import cached_property
@@ -10,7 +11,6 @@ from typing import (
     TypeVar,
     Union,
 )
-from urllib.parse import urlparse
 
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
@@ -43,25 +43,34 @@ DATASET_NAME_REPLACEMENT_CHAR = "_"
 StorageURI = NewType("StorageURI", str)
 
 
-def parse_dataset_uri(uri: str) -> tuple[str, Optional[str]]:
+def parse_dataset_uri(
+    uri: str,
+) -> tuple[Optional[str], Optional[str], str, Optional[str]]:
     """
-    Parse dataser uri to extract name and version out of it (if version is defined)
-    Example:
-        Input: ds://zalando@v3.0.1
-        Output: (zalando, 3.0.1)
+    Parse a dataset URI of the form:
+
+        ds://[<namespace>.][<project>.]<name>[@v<semver>]
+
+    Returns:
+        (namespace, project, name, version)
     """
-    p = urlparse(uri)
-    if p.scheme != "ds":
-        raise Exception("Dataset uri should start with ds://")
-    s = p.netloc.split("@v")
-    name = s[0]
-    if len(s) == 1:
-        return name, None
-    if len(s) != 2:
-        raise Exception(
-            "Wrong dataset uri format, it should be: ds://<name>@v<version>"
-        )
-    return name, s[1]
+
+    if not uri.startswith("ds://"):
+        raise ValueError(f"Invalid dataset URI: {uri}")
+
+    body = uri[len("ds://") :]
+
+    # Split off optional @v<version>
+    match = re.match(r"^(?P<name>.+?)(?:@v(?P<version>\d+\.\d+\.\d+))?$", body)
+    if not match:
+        raise ValueError(f"Invalid dataset URI format: {uri}")
+
+    dataset_name = match.group("name")
+    version = match.group("version")
+
+    namespace, project, name = parse_dataset_name(dataset_name)
+
+    return namespace, project, name, version
 
 
 def create_dataset_uri(
