@@ -985,8 +985,9 @@ class SQLUnion(Step):
         union_select = sqlalchemy.select(*columns1).union_all(
             sqlalchemy.select(*columns2)
         )
+        union_cte = union_select.cte()
         regenerated = self.query1.catalog.warehouse._regenerate_system_columns(
-            union_select
+            union_cte
         )
         result_columns = tuple(regenerated.selected_columns)
 
