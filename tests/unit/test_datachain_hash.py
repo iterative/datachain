@@ -1,11 +1,17 @@
 from unittest.mock import patch
 
+import pandas as pd
 import pytest
 from pydantic import BaseModel
 
 import datachain as dc
 from datachain import func
 from datachain.lib.dc import C
+
+DF_DATA = {
+    "first_name": ["Alice", "Bob", "Charlie", "David", "Eva"],
+    "age": [25, 30, 35, 40, 45],
+}
 
 
 class Person(BaseModel):
@@ -55,13 +61,55 @@ def mock_get_listing():
 
 
 def test_read_values():
-    pytest.skip(
-        "Hash of the chain started with read_values is currently inconsistent,"
-        " meaning it produces different hash every time. This happens because we"
-        " create random name dataset in the process. Correct solution would be"
-        " to calculate hash of all those input values."
+    """
+    Hash of the chain started with read_values is currently inconsistent.
+    Goal of this test is just to check it doesn't break.
+    """
+    assert dc.read_values(num=[1, 2, 3]).hash() is not None
+
+
+def test_read_csv(test_session, tmp_dir):
+    """
+    Hash of the chain started with read_csv is currently inconsistent.
+    Goal of this test is just to check it doesn't break.
+    """
+    path = tmp_dir / "test.csv"
+    pd.DataFrame(DF_DATA).to_csv(path, index=False)
+    assert dc.read_csv(path.as_uri(), session=test_session).hash() is not None
+
+
+@pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
+def test_read_json(test_session, tmp_dir):
+    """
+    Hash of the chain started with read_json is currently inconsistent.
+    Goal of this test is just to check it doesn't break.
+    """
+    path = tmp_dir / "test.jsonl"
+    dc.read_pandas(pd.DataFrame(DF_DATA), session=test_session).to_jsonl(path)
+    assert (
+        dc.read_json(path.as_uri(), format="jsonl", session=test_session).hash()
+        is not None
     )
-    assert dc.read_values(num=[1, 2, 3]).hash() == ""
+
+
+def test_read_pandas(test_session, tmp_dir):
+    """
+    Hash of the chain started with read_pandas is currently inconsistent.
+    Goal of this test is just to check it doesn't break.
+    """
+    df = pd.DataFrame(DF_DATA)
+    assert dc.read_pandas(df, session=test_session).hash() is not None
+
+
+def test_read_parquet(test_session, tmp_dir):
+    """
+    Hash of the chain started with read_parquet is currently inconsistent.
+    Goal of this test is just to check it doesn't break.
+    """
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.parquet"
+    dc.read_pandas(df, session=test_session).to_parquet(path)
+    assert dc.read_parquet(path.as_uri(), session=test_session).hash() is not None
 
 
 def test_read_storage(mock_get_listing):
