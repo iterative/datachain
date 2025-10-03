@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 import pytest
 
 from datachain.data_storage import JobStatus
@@ -13,15 +11,6 @@ def patch_argv(monkeypatch, tmp_path):
     fake_script.write_text("print('hello world')\n")
     monkeypatch.setattr("sys.argv", [str(fake_script)])
     yield
-
-
-@pytest.fixture
-def patch_user_script():
-    """Patch get_user_script_source to always return deterministic code."""
-    with patch(
-        "datachain.utils.get_user_script_source", return_value="print('hello world')\n"
-    ):
-        yield
 
 
 def test_reuse_job_from_env_var(test_session, monkeypatch):
@@ -40,17 +29,17 @@ def test_reuse_job_from_env_var(test_session, monkeypatch):
     assert test_session.job_status is None
 
 
-def test_get_or_create_creates_job(test_session, patch_argv, patch_user_script):
+def test_get_or_create_creates_job(test_session, patch_argv):
     job = test_session.get_or_create_job()
 
     db_job = test_session.catalog.metastore.get_job(job.id)
     assert db_job is not None
     assert db_job.name.endswith("script.py")
-    assert db_job.query == "print('hello world')\n"
+    assert db_job.query == ""
     assert db_job.status == JobStatus.RUNNING
 
 
-def test_finalize_success(test_session, patch_argv, patch_user_script):
+def test_finalize_success(test_session, patch_argv):
     job = test_session.get_or_create_job()
 
     test_session._finalize_job_success()
@@ -70,7 +59,6 @@ def test_finalize_success(test_session, patch_argv, patch_user_script):
 def test_finalize_failure(
     test_session,
     patch_argv,
-    patch_user_script,
     exception_type,
     expected_status,
     should_have_error,
@@ -97,7 +85,7 @@ def test_finalize_failure(
         assert db_job.error_stack == ""
 
 
-def test_get_or_create_is_idempotent(test_session, patch_argv, patch_user_script):
+def test_get_or_create_is_idempotent(test_session, patch_argv):
     job1 = test_session.get_or_create_job()
     job2 = test_session.get_or_create_job()
 
@@ -105,7 +93,7 @@ def test_get_or_create_is_idempotent(test_session, patch_argv, patch_user_script
     assert test_session.job is job1
 
 
-def test_get_or_create_links_to_parent(test_session, patch_argv, patch_user_script):
+def test_get_or_create_links_to_parent(test_session, patch_argv):
     job1 = test_session.get_or_create_job()
     test_session._finalize_job_success()
 
@@ -116,16 +104,7 @@ def test_get_or_create_links_to_parent(test_session, patch_argv, patch_user_scri
     assert job2.parent_job_id == job1.id
 
 
-def test_get_or_create_fallback_query(test_session, patch_argv):
-    # Patch to return None for script source
-    with patch("datachain.utils.get_user_script_source", return_value=None):
-        job = test_session.get_or_create_job()
-
-    assert job.query.startswith("python ")
-    assert job.name.endswith("script.py")
-
-
-def test_except_hook_delegates_to_original(test_session, patch_argv, patch_user_script):
+def test_except_hook_delegates_to_original(test_session, patch_argv):
     """Test that Session.except_hook delegates to ORIGINAL_EXCEPT_HOOK."""
     # Set up global session for this test
     Session.GLOBAL_SESSION_CTX = test_session

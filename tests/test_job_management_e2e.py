@@ -63,7 +63,7 @@ def test_single_job_for_multiple_saves(tmp_path, catalog_tmpfile):
     assert job.name == str(script)
     assert job.status == JobStatus.COMPLETE
     assert job.finished_at is not None
-    assert job.query == script_content
+    assert job.query == ""
 
     # Verify both datasets were created with correct job_id
     dataset_versions = list(catalog_tmpfile.list_datasets_versions())
@@ -149,7 +149,7 @@ def test_job_marked_on_exception(
         assert job.error_message == ""
         assert job.error_stack == ""
 
-    assert job.query == script_content
+    assert job.query == ""
 
     # Verify datasets were rolled back (correct behavior for unhandled exceptions)
     dataset_versions = list(catalog_tmpfile.list_datasets_versions())

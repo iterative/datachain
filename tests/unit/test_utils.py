@@ -1,5 +1,4 @@
 import os
-import sys
 
 import pytest
 
@@ -9,7 +8,6 @@ from datachain.utils import (
     datachain_paths_join,
     determine_processes,
     determine_workers,
-    get_user_script_source,
     nested_dict_path_set,
     retry_with_backoff,
     row_to_nested_dict,
@@ -299,35 +297,3 @@ def test_batched_it(num_rows, batch_size):
 
     assert num_batches == num_rows / batch_size
     assert len(uniq_data) == num_rows
-
-
-def test_user_script_code_returns_content(monkeypatch, tmp_dir):
-    script_path = tmp_dir / "myscript.py"
-    script_code = "print('hello world')"
-    script_path.write_text(script_code)
-
-    monkeypatch.setattr(sys, "argv", [str(script_path)])
-
-    content = get_user_script_source()
-    assert content == script_code
-
-
-def test_user_script_code_non_python_argv_returns_none(monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["-c"])
-    assert get_user_script_source() is None
-
-
-def test_user_script_code_empty_argv_returns_none(monkeypatch):
-    monkeypatch.setattr(sys, "argv", [])
-    assert get_user_script_source() is None
-
-
-def test_user_script_code_missing_file_returns_none(monkeypatch, tmp_dir):
-    script_path = tmp_dir / "missing.py"
-    monkeypatch.setattr(sys, "argv", [str(script_path)])
-    assert get_user_script_source() is None
-
-
-def test_user_script_code_interactive_returns_none(monkeypatch):
-    monkeypatch.setattr(sys, "argv", [""])
-    assert get_user_script_source() is None

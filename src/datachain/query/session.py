@@ -117,7 +117,7 @@ class Session:
             - If ``DATACHAIN_JOB_ID`` is set, the corresponding job is fetched.
             - Otherwise, a new job is created:
                 * Name = absolute path to the Python script.
-                * Query = script source code if available, otherwise the command line.
+                * Query = empty string.
                 * Parent = last job with the same name, if available.
                 * Status = "running".
               Exit hooks are registered to finalize the job.
@@ -135,10 +135,7 @@ class Session:
             self.owns_job = False
         else:
             # Local run: create new job
-            from datachain.utils import get_user_script_source
-
             script = os.path.abspath(sys.argv[0]) if sys.argv else "interactive"
-            source_code = get_user_script_source()
             python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
 
             # try to find the parent job
@@ -146,7 +143,7 @@ class Session:
 
             job_id = self.catalog.metastore.create_job(
                 name=script,
-                query=source_code or f"python {script}",
+                query="",
                 query_type=JobQueryType.PYTHON,
                 status=JobStatus.RUNNING,
                 python_version=python_version,

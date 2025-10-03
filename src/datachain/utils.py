@@ -543,24 +543,3 @@ def ensure_sequence(x) -> Sequence:
     if isinstance(x, Sequence) and not isinstance(x, (str, bytes)):
         return x
     return [x]
-
-
-def get_user_script_source():
-    """
-    Attempt to read the source code of the user's Python script.
-
-    Returns:
-        Optional[str]: The script source code if available, otherwise None.
-
-    Notes:
-        - Works when script is launched with ``python my_script.py``.
-        - Does not work in interactive shells, Jupyter notebooks, or module execution.
-    """
-    if sys.argv and sys.argv[0] and sys.argv[0].endswith(".py"):
-        script_path = os.path.abspath(sys.argv[0])
-        try:
-            with open(script_path, encoding="utf-8") as f:
-                return f.read()
-        except Exception:  # noqa: BLE001
-            return None
-    return None
