@@ -281,6 +281,13 @@ def test_union_hash(test_session, numbers_dataset):
             "{name}_r",
             "f637c82a2a197823ec5dc6614623c860d682110ceec60821759534a9e24ec6cf",
         ),
+        (
+            sa.column("id"),
+            True,
+            False,
+            "{name}_right",
+            "fc55d6192d0859f0df3bfa7981540a8ec0640de707b23c18bc2e0059560be8f8",
+        ),
     ],
 )
 def test_join_hash(
