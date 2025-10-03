@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Any, Dict, Final, List, Literal, Optional, Union  # noqa: UP035
 
 import pytest
+from pydantic import ValidationError
 
 from datachain import Column, DataModel, Sys, func
 from datachain.lib.convert.flatten import flatten
@@ -996,6 +997,44 @@ def test_row_to_objs():
     res = schema.row_to_objs(row)
 
     assert res == ["myname", 12.5, val, None]
+
+
+def test_row_to_objs_all_none_returns_none():
+    schema = SignalSchema({"fr": MyType2})
+
+    row = (None, None, None)
+
+    res = schema.row_to_objs(row)
+
+    assert res == [None]
+
+
+def test_row_to_objs_partial_none_raises():
+    schema = SignalSchema({"fr": MyType2})
+
+    row = ("name", None, None)
+
+    with pytest.raises(ValidationError):
+        schema.row_to_objs(row)
+
+
+def test_row_to_objs_all_none_nested_collections():
+    schema = SignalSchema({"id": int, "complex": MyTypeComplex, "label": str})
+
+    row = (5, None, None, None, "tag")
+
+    res = schema.row_to_objs(row)
+
+    assert res == [5, None, "tag"]
+
+
+def test_row_to_objs_nested_collections_partial_data_raises():
+    schema = SignalSchema({"id": int, "complex": MyTypeComplex, "label": str})
+
+    row = (5, "component", ["bad"], {"key": "value"}, "tag")
+
+    with pytest.raises(ValidationError):
+        schema.row_to_objs(row)
 
 
 def test_row_to_objs_setup():

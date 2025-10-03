@@ -875,8 +875,17 @@ class SQLiteWarehouse(AbstractWarehouse):
                 if isinstance(c, BinaryExpression):
                     right_left_join = add_left_rows_filter(c)
 
-        union = sqlalchemy.union(left_right_join, right_left_join).subquery()
-        return sqlalchemy.select(*union.c).select_from(union)
+        # Use CTE instead of subquery to force SQLite to materialize the result
+        # This breaks deep nesting and prevents parser stack overflow.
+        union_cte = sqlalchemy.union(left_right_join, right_left_join).cte()
+
+        return self._regenerate_system_columns(union_cte)
+
+    def _system_row_number_expr(self):
+        return func.row_number().over()
+
+    def _system_random_expr(self):
+        return self._system_row_number_expr() * 1103515245 + 12345
 
     def create_pre_udf_table(self, query: "Select") -> "Table":
         """

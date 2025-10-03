@@ -246,6 +246,44 @@ class AbstractWarehouse(ABC, Serializable):
                     break  # no more results
                 offset += page_size
 
+    def _regenerate_system_columns(self, selectable):
+        """Return a SELECT that regenerates sys__id and sys__rand deterministically."""
+
+        base = selectable.subquery() if hasattr(selectable, "subquery") else selectable
+
+        system_types: dict[str, sa.types.TypeEngine] = {
+            sys_col.name: sys_col.type
+            for sys_col in self.schema.dataset_row_cls.sys_columns()
+        }
+
+        result_columns = []
+        for col in base.c:
+            if col.name == "sys__id":
+                expr = self._system_row_number_expr()
+                expr = sa.cast(expr, system_types["sys__id"])
+                result_columns.append(expr.label("sys__id"))
+            elif col.name == "sys__rand":
+                expr = self._system_random_expr()
+                expr = sa.cast(expr, system_types["sys__rand"])
+                result_columns.append(expr.label("sys__rand"))
+            else:
+                result_columns.append(col)
+
+        # Wrap in subquery to materialize window functions, then wrap again in SELECT
+        # This ensures window functions are computed before INSERT...FROM SELECT
+        inner = sa.select(*result_columns).select_from(base).subquery()
+        return sa.select(*inner.c).select_from(inner)
+
+    def _system_row_number_expr(self):
+        """Return an expression that produces deterministic row numbers."""
+
+        raise NotImplementedError
+
+    def _system_random_expr(self):
+        """Return an expression that produces deterministic random values."""
+
+        raise NotImplementedError
+
     #
     # Table Name Internal Functions
     #
@@ -923,6 +961,8 @@ class AbstractWarehouse(ABC, Serializable):
         right: "_FromClauseArgument",
         onclause: "_OnClauseArgument",
         inner: bool = True,
+        full: bool = False,
+        columns=None,
     ) -> sa.Select:
         """
         Join two tables together.
