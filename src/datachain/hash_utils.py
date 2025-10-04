@@ -8,9 +8,14 @@ from typing import TypeVar, Union
 from sqlalchemy.sql.elements import (
     BinaryExpression,
     BindParameter,
+    Case,
+    Cast,
     ColumnElement,
+    ExpressionClauseList,
+    Grouping,
     Label,
     Over,
+    Tuple,
     UnaryExpression,
 )
 from sqlalchemy.sql.functions import Function
@@ -23,7 +28,6 @@ def serialize_column_element(expr: Union[str, ColumnElement]) -> dict:  # noqa: 
     """
     Recursively serialize a SQLAlchemy ColumnElement into a deterministic structure.
     """
-
     # Binary operations: col > 5, col1 + col2, etc.
     if isinstance(expr, BinaryExpression):
         op = (
@@ -49,6 +53,57 @@ def serialize_column_element(expr: Union[str, ColumnElement]) -> dict:  # noqa: 
         return {
             "type": "unary",
             "op": op,
+            "element": serialize_column_element(expr.element),  # type: ignore[arg-type]
+        }
+
+    # Clause lists: AND/OR expressions
+    if isinstance(expr, ExpressionClauseList):
+        op = (
+            expr.operator.__name__
+            if hasattr(expr, "operator") and hasattr(expr.operator, "__name__")
+            else str(getattr(expr, "operator", "and"))
+        )
+        return {
+            "type": "clause_list",
+            "op": op,
+            "clauses": [serialize_column_element(c) for c in expr.clauses],
+        }
+
+    # Cast expressions: CAST(col AS type)
+    if isinstance(expr, Cast):
+        return {
+            "type": "cast",
+            "clause": serialize_column_element(expr.clause),
+            "to_type": str(expr.type),
+        }
+
+    # Case expressions: CASE WHEN ... THEN ... ELSE ...
+    if isinstance(expr, Case):
+        return {
+            "type": "case",
+            "value": serialize_column_element(expr.value)
+            if expr.value is not None
+            else None,
+            "whens": [
+                (serialize_column_element(w[0]), serialize_column_element(w[1]))
+                for w in expr.whens
+            ],
+            "else": serialize_column_element(expr.else_)
+            if expr.else_ is not None
+            else None,
+        }
+
+    # Tuple expressions: (col1, col2, ...)
+    if isinstance(expr, Tuple):
+        return {
+            "type": "tuple",
+            "clauses": [serialize_column_element(c) for c in expr.clauses],
+        }
+
+    # Grouping expressions: (expr) - wraps expressions in parentheses
+    if isinstance(expr, Grouping):
+        return {
+            "type": "grouping",
             "element": serialize_column_element(expr.element),  # type: ignore[arg-type]
         }
 

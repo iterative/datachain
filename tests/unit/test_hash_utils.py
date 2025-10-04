@@ -1,5 +1,6 @@
 import pytest
 import sqlalchemy as sa
+from sqlalchemy import Integer, case, cast, tuple_
 
 from datachain import C, func
 from datachain.hash_utils import hash_callable, hash_column_elements
@@ -55,7 +56,23 @@ lambda3 = lambda z: z - 1  # noqa: E731
         ),
         (
             [sa.and_(C("age") > 20, C("name") != "")],
-            "a27c392ad1c294783ab70175478bf7cf2110fe559bf68504026f773e5aa361ab",
+            "c838f28d4d0808687d38515e1373f03298d0d87fdd350303842274e1fb30a3c7",
+        ),
+        (
+            [cast(C("age"), Integer)],
+            "17dec1a895eedb1f1ab2321f9dbeccd9207e69e03df9d19d1aac83ba9552c3aa",
+        ),
+        (
+            [case((C("age") > 20, "adult"), else_="child")],
+            "6c407f30e3684f06f50e16a229d0245891500b79f7cfbf38d8de79820ab218da",
+        ),
+        (
+            [tuple_(C("name"), C("age"))],
+            "b6ade1f13d9801d9e9fca6b73115412e2514aaed9368d3e056f2380a38fd7033",
+        ),
+        (
+            [(C("age") + 10).self_group()],
+            "9c8daff94d345e35521feeb0a3e72a09e5980ba82923df6234b93cccca637183",
         ),
         (
             [],

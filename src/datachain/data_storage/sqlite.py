@@ -55,6 +55,7 @@ if TYPE_CHECKING:
     from sqlalchemy.sql.elements import ColumnElement
     from sqlalchemy.types import TypeEngine
 
+    from datachain.job import Job
     from datachain.lib.file import File
 
 
@@ -558,6 +559,18 @@ class SQLiteMetastore(AbstractDBMetastore):
     #
     def _checkpoints_insert(self) -> "Insert":
         return sqlite.insert(self._checkpoints)
+
+    def get_last_job_by_name(self, name: str, conn=None) -> Optional["Job"]:
+        query = (
+            self._jobs_query()
+            .where(self._jobs.c.name == name)
+            .order_by(self._jobs.c.created_at.desc())
+            .limit(1)
+        )
+        results = list(self.db.execute(query, conn=conn))
+        if not results:
+            return None
+        return self._parse_job(results[0])
 
     #
     # Namespaces
