@@ -3686,7 +3686,10 @@ def test_group_by_schema(test_session):
         "cnt": "int",
         "sum": "float",
     }
-    assert chain.to_records() == [
+    assert sorted(
+        chain.to_records(),
+        key=lambda row: (row["signal__name"], row["parent__signal__name"]),
+    ) == [
         {
             "signal__name": "a",
             "parent__signal__name": "a",
