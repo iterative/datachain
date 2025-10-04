@@ -52,6 +52,11 @@ def put_into_queue(queue: Queue, item: Any) -> None:
             queue.put_nowait(item)
             return
         except Full:
+            # If queue is full, avoid blocking on progress notifications
+            # that can be lossy without affecting correctness.
+            status = item.get("status") if isinstance(item, dict) else None
+            if status in (OK_STATUS, NOTIFY_STATUS):
+                return
             sleep(0.01)
 
 
