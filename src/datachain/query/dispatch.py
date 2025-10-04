@@ -310,6 +310,9 @@ class UDFDispatcher:
                 elif status == FINISHED_STATUS:
                     n_workers -= 1  # Worker finished
                 else:  # Failed / error
+                    # On first failure, stop scheduling more work and raise.
+                    # Reduce worker count for the failing one;
+                    # cleanup in finally will terminate others.
                     n_workers -= 1
                     if exc := result.get("exception"):
                         raise exc
@@ -325,26 +328,26 @@ class UDFDispatcher:
             normal_completion = True
         finally:
             if not normal_completion:
-                # Stop all workers if there is an unexpected exception
+                # Failure path: fail fast. Stop feeding tasks and terminate workers.
                 for _ in pool:
-                    put_into_queue(self.task_queue, STOP_SIGNAL)
+                    with contextlib.suppress(Exception):
+                        put_into_queue(self.task_queue, STOP_SIGNAL)
 
-                # This allows workers (and this process) to exit without
-                # consuming any remaining data in the queues.
-                # (If they exit due to an exception.)
-                self.task_queue.close()
-                self.task_queue.join_thread()
+                # Close task queue to unblock any pending puts/gets.
+                with contextlib.suppress(Exception):
+                    self.task_queue.close()
+                    self.task_queue.join_thread()
 
-                # Flush all items from the done queue.
-                # This is needed if any workers are still running.
-                while n_workers > 0:
-                    result = get_from_queue(self.done_queue)
-                    status = result["status"]
-                    if status != OK_STATUS:
-                        n_workers -= 1
+                # Terminate any remaining workers immediately to avoid deadlocks
+                for p in pool:
+                    with contextlib.suppress(Exception):
+                        if p.is_alive():
+                            p.terminate()
 
-                self.done_queue.close()
-                self.done_queue.join_thread()
+                # Do not block draining done_queue indefinitely; just close it.
+                with contextlib.suppress(Exception):
+                    self.done_queue.close()
+                    self.done_queue.join_thread()
 
             # Wait for workers to stop
             for p in pool:
