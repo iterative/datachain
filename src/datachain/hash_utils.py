@@ -28,7 +28,6 @@ def _serialize_value(val):  # noqa: PLR0911
         return [_serialize_value(v) for v in val]
     if callable(val):
         return val.__name__ if hasattr(val, "__name__") else str(val)
-    # For type objects and other complex values
     return str(val)
 
 
