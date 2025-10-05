@@ -293,30 +293,26 @@ class Session:
 
     @staticmethod
     def except_hook(exc_type, exc_value, exc_traceback):
-        # Handle KeyboardInterrupt specially - mark as canceled and exit with
-        # signal code
-        if exc_type is KeyboardInterrupt:
-            if Session.GLOBAL_SESSION_CTX:
+        if Session.GLOBAL_SESSION_CTX:
+            # Handle KeyboardInterrupt specially - mark as canceled and exit with
+            # signal code
+            if exc_type is KeyboardInterrupt:
                 Session.GLOBAL_SESSION_CTX._finalize_job_as_canceled()
-                Session.GLOBAL_SESSION_CTX.__exit__(exc_type, exc_value, exc_traceback)
-            Session._global_cleanup()
-
-            if Session.ORIGINAL_EXCEPT_HOOK:
-                Session.ORIGINAL_EXCEPT_HOOK(exc_type, exc_value, exc_traceback)
-
-            # Exit with SIGINT signal code (128 + 2 = 130, or -2 in subprocess terms)
-            sys.exit(130)
-        else:
-            # Regular exception - mark as failed
-            if Session.GLOBAL_SESSION_CTX:
+            else:
                 Session.GLOBAL_SESSION_CTX._finalize_job_as_failed(
                     exc_type, exc_value, exc_traceback
                 )
-                Session.GLOBAL_SESSION_CTX.__exit__(exc_type, exc_value, exc_traceback)
-            Session._global_cleanup()
+            Session.GLOBAL_SESSION_CTX.__exit__(exc_type, exc_value, exc_traceback)
 
-            if Session.ORIGINAL_EXCEPT_HOOK:
-                Session.ORIGINAL_EXCEPT_HOOK(exc_type, exc_value, exc_traceback)
+        Session._global_cleanup()
+
+        # Always delegate to original hook if it exists
+        if Session.ORIGINAL_EXCEPT_HOOK:
+            Session.ORIGINAL_EXCEPT_HOOK(exc_type, exc_value, exc_traceback)
+
+        if exc_type is KeyboardInterrupt:
+            # Exit with SIGINT signal code (128 + 2 = 130, or -2 in subprocess terms)
+            sys.exit(130)
 
     @classmethod
     def cleanup_for_tests(cls):
