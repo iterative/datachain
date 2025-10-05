@@ -19,8 +19,6 @@ def _serialize_value(val):  # noqa: PLR0911
         return None
     if isinstance(val, (str, int, float, bool)):
         return val
-    # Check ColumnElement BEFORE checking for list/tuple since some ColumnElements
-    # look like sequences but don't support iteration
     if isinstance(val, ColumnElement):
         return serialize_column_element(val)
     if isinstance(val, dict):
@@ -39,7 +37,6 @@ def serialize_column_element(expr: Union[str, ColumnElement]) -> dict:
     Recursively serialize a SQLAlchemy ColumnElement into a deterministic structure.
     Uses SQLAlchemy's _traverse_internals to automatically handle all expression types.
     """
-    # Import here to avoid circular imports
     from sqlalchemy.sql.elements import BindParameter
 
     # Special case: BindParameter has non-deterministic 'key' attribute, only use value
