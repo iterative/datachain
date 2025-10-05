@@ -7,6 +7,8 @@ from typing import TypeVar, Union
 
 from sqlalchemy.sql.elements import ColumnElement
 
+from datachain.utils import ensure_sequence
+
 T = TypeVar("T", bound=ColumnElement)
 ColumnLike = Union[str, T]
 
@@ -71,10 +73,7 @@ def hash_column_elements(columns: Union[ColumnLike, Sequence[ColumnLike]]) -> st
     Hash a list of ColumnElements deterministically, dialect agnostic.
     Only accepts ordered iterables (like list or tuple).
     """
-    # Handle case where a single ColumnElement is passed instead of a sequence
-    if isinstance(columns, ColumnElement):
-        columns = (columns,)
-
+    columns = ensure_sequence(columns)
     serialized = [serialize_column_element(c) for c in columns]
     json_str = json.dumps(serialized, sort_keys=True)  # stable JSON
     return hashlib.sha256(json_str.encode("utf-8")).hexdigest()
