@@ -7,11 +7,9 @@ ColT = Union[sa.ColumnClause, sa.Column, sa.ColumnElement, sa.TextClause, sa.Lab
 
 def column_name(col: ColT) -> str:
     """Returns column name from column element."""
-    return (
-        col.name
-        if isinstance(col, (sa.ColumnClause, sa.Column, sa.Label))
-        else str(col)
-    )
+    if isinstance(col, (sa.TextClause)):
+        raise TypeError(f"Got text clause column in select: {col!s}")
+    return col.name
 
 
 def get_query_column(query: sa.Select, name: str) -> Optional[ColT]:
@@ -23,18 +21,3 @@ def get_query_id_column(query: sa.Select) -> Optional[sa.ColumnElement]:
     """Returns ID column element from query or None if column not found."""
     col = get_query_column(query, "sys__id")
     return col if col is not None and isinstance(col, sa.ColumnElement) else None
-
-
-def select_only_columns(query: sa.Select, *names: str) -> sa.Select:
-    """Returns query selecting defined columns only."""
-    if not names:
-        return query
-
-    cols: list[ColT] = []
-    for name in names:
-        col = get_query_column(query, name)
-        if col is None:
-            raise ValueError(f"Column '{name}' not found in query")
-        cols.append(col)
-
-    return query.with_only_columns(*cols)
