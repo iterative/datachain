@@ -138,7 +138,12 @@ class Session:
             Session._OWNS_JOB = False
         else:
             # Local run: create new job
-            script = os.path.abspath(sys.argv[0]) if sys.argv else "interactive"
+            if sys.argv:
+                script = os.path.abspath(sys.argv[0])
+            else:
+                # Interactive session - use unique name to avoid linking unrelated
+                # sessions
+                script = f"interactive_{uuid4().hex[:8]}"
             python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
 
             # try to find the parent job
