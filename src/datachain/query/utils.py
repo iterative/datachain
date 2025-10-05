@@ -2,12 +2,16 @@ from typing import Optional, Union
 
 import sqlalchemy as sa
 
-ColT = Union[sa.Column, sa.ColumnElement, sa.TextClause, sa.Label]
+ColT = Union[sa.ColumnClause, sa.Column, sa.ColumnElement, sa.TextClause, sa.Label]
 
 
 def column_name(col: ColT) -> str:
     """Returns column name from column element."""
-    return col.name if isinstance(col, (sa.Column, sa.Label)) else str(col)
+    return (
+        col.name
+        if isinstance(col, (sa.ColumnClause, sa.Column, sa.Label))
+        else str(col)
+    )
 
 
 def get_query_column(query: sa.Select, name: str) -> Optional[ColT]:
