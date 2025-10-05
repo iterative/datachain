@@ -47,6 +47,13 @@ class Session:
     SESSION_CONTEXTS: ClassVar[list["Session"]] = []
     ORIGINAL_EXCEPT_HOOK = None
 
+    # Job management - class-level to ensure one job per process
+    _CURRENT_JOB: ClassVar[Optional["Job"]] = None
+    _JOB_STATUS: ClassVar[Optional[JobStatus]] = None
+    _OWNS_JOB: ClassVar[Optional[bool]] = None
+    _JOB_HOOKS_REGISTERED: ClassVar[bool] = False
+    _JOB_FINALIZE_HOOK: ClassVar[Optional[Callable[[], None]]] = None
+
     DATASET_PREFIX = "session_"
     GLOBAL_SESSION_NAME = "global"
     SESSION_UUID_LEN = 6
@@ -75,13 +82,6 @@ class Session:
         )
         self.dataset_versions: list[tuple[DatasetRecord, str, bool]] = []
 
-        # Job management attributes
-        self.job: Optional[Job] = None
-        self.job_status: Optional[JobStatus] = None
-        self.owns_job: Optional[bool] = None
-        self._job_hooks_registered: bool = False
-        self._job_finalize_hook: Optional[Callable[[], None]] = None
-
     def __enter__(self):
         # Push the current context onto the stack
         Session.SESSION_CONTEXTS.append(self)
@@ -107,13 +107,13 @@ class Session:
 
     def get_or_create_job(self) -> "Job":
         """
-        Get or create a Job for this session.
+        Get or create a Job for this process.
 
         Returns:
             Job: The active Job instance.
 
         Behavior:
-            - If a job already exists in this session, it is returned.
+            - If a job already exists, it is returned.
             - If ``DATACHAIN_JOB_ID`` is set, the corresponding job is fetched.
             - Otherwise, a new job is created:
                 * Name = absolute path to the Python script.
@@ -121,18 +121,21 @@ class Session:
                 * Parent = last job with the same name, if available.
                 * Status = "running".
               Exit hooks are registered to finalize the job.
+
+        Note:
+            Job is shared across all Session instances to ensure one job per process.
         """
-        if self.job:
-            return self.job
+        if Session._CURRENT_JOB:
+            return Session._CURRENT_JOB
 
         if env_job_id := os.getenv("DATACHAIN_JOB_ID"):
             # SaaS run: just fetch existing job
-            self.job = self.catalog.metastore.get_job(env_job_id)
-            if not self.job:
+            Session._CURRENT_JOB = self.catalog.metastore.get_job(env_job_id)
+            if not Session._CURRENT_JOB:
                 raise JobNotFoundError(
                     f"Job {env_job_id} from DATACHAIN_JOB_ID env not found"
                 )
-            self.owns_job = False
+            Session._OWNS_JOB = False
         else:
             # Local run: create new job
             script = os.path.abspath(sys.argv[0]) if sys.argv else "interactive"
@@ -149,46 +152,62 @@ class Session:
                 python_version=python_version,
                 parent_job_id=parent.id if parent else None,
             )
-            self.job = self.catalog.metastore.get_job(job_id)
-            self.owns_job = True
-            self.job_status = JobStatus.RUNNING
+            Session._CURRENT_JOB = self.catalog.metastore.get_job(job_id)
+            Session._OWNS_JOB = True
+            Session._JOB_STATUS = JobStatus.RUNNING
 
-            # register cleanup hooks only once for the global session
-            if not self._job_hooks_registered and self is self.GLOBAL_SESSION_CTX:
+            # register cleanup hooks only once
+            if not Session._JOB_HOOKS_REGISTERED:
 
                 def _finalize_success_hook() -> None:
                     self._finalize_job_success()
 
-                self._job_finalize_hook = _finalize_success_hook
-                atexit.register(self._job_finalize_hook)
-                self._job_hooks_registered = True
+                Session._JOB_FINALIZE_HOOK = _finalize_success_hook
+                atexit.register(Session._JOB_FINALIZE_HOOK)
+                Session._JOB_HOOKS_REGISTERED = True
 
-        assert self.job is not None
-        return self.job
+        assert Session._CURRENT_JOB is not None
+        return Session._CURRENT_JOB
 
     def _finalize_job_success(self):
         """Mark the current job as completed."""
-        if self.job and self.owns_job and self.job_status == JobStatus.RUNNING:
-            self.catalog.metastore.set_job_status(self.job.id, JobStatus.COMPLETE)
-            self.job_status = JobStatus.COMPLETE
+        if (
+            Session._CURRENT_JOB
+            and Session._OWNS_JOB
+            and Session._JOB_STATUS == JobStatus.RUNNING
+        ):
+            self.catalog.metastore.set_job_status(
+                Session._CURRENT_JOB.id, JobStatus.COMPLETE
+            )
+            Session._JOB_STATUS = JobStatus.COMPLETE
 
     def _finalize_job_as_canceled(self):
         """Mark the current job as canceled."""
-        if self.job and self.owns_job and self.job_status == JobStatus.RUNNING:
-            self.catalog.metastore.set_job_status(self.job.id, JobStatus.CANCELED)
-            self.job_status = JobStatus.CANCELED
+        if (
+            Session._CURRENT_JOB
+            and Session._OWNS_JOB
+            and Session._JOB_STATUS == JobStatus.RUNNING
+        ):
+            self.catalog.metastore.set_job_status(
+                Session._CURRENT_JOB.id, JobStatus.CANCELED
+            )
+            Session._JOB_STATUS = JobStatus.CANCELED
 
     def _finalize_job_as_failed(self, exc_type, exc_value, tb):
         """Mark the current job as failed with error details."""
-        if self.job and self.owns_job and self.job_status == JobStatus.RUNNING:
+        if (
+            Session._CURRENT_JOB
+            and Session._OWNS_JOB
+            and Session._JOB_STATUS == JobStatus.RUNNING
+        ):
             error_stack = "".join(traceback.format_exception(exc_type, exc_value, tb))
             self.catalog.metastore.set_job_status(
-                self.job.id,
+                Session._CURRENT_JOB.id,
                 JobStatus.FAILED,
                 error_message=str(exc_value),
                 error_stack=error_stack,
             )
-            self.job_status = JobStatus.FAILED
+            Session._JOB_STATUS = JobStatus.FAILED
 
     def generate_temp_dataset_name(self) -> str:
         return self.get_temp_prefix() + uuid4().hex[: self.TEMP_TABLE_UUID_LEN]
@@ -300,6 +319,18 @@ class Session:
             cls.GLOBAL_SESSION_CTX.__exit__(None, None, None)
             cls.GLOBAL_SESSION_CTX = None
             atexit.unregister(cls._global_cleanup)
+
+        # Reset job-related class variables
+        if cls._JOB_FINALIZE_HOOK:
+            try:
+                atexit.unregister(cls._JOB_FINALIZE_HOOK)
+            except ValueError:
+                pass  # Hook was not registered
+        cls._CURRENT_JOB = None
+        cls._JOB_STATUS = None
+        cls._OWNS_JOB = None
+        cls._JOB_HOOKS_REGISTERED = False
+        cls._JOB_FINALIZE_HOOK = None
 
         if cls.ORIGINAL_EXCEPT_HOOK:
             sys.excepthook = cls.ORIGINAL_EXCEPT_HOOK

@@ -2,6 +2,7 @@ import pytest
 
 from datachain.data_storage import JobStatus
 from datachain.query.session import Session
+from tests.utils import reset_session_job_state
 
 
 @pytest.fixture
@@ -25,8 +26,8 @@ def test_reuse_job_from_env_var(test_session, monkeypatch):
 
     assert job.id == job_id
     assert job.name == "my-job"
-    assert test_session.owns_job is False
-    assert test_session.job_status is None
+    assert Session._OWNS_JOB is False
+    assert Session._JOB_STATUS is None
 
 
 def test_get_or_create_creates_job(test_session, patch_argv):
@@ -90,18 +91,44 @@ def test_get_or_create_is_idempotent(test_session, patch_argv):
     job2 = test_session.get_or_create_job()
 
     assert job1 is job2
-    assert test_session.job is job1
+    assert Session._CURRENT_JOB is job1
 
 
 def test_get_or_create_links_to_parent(test_session, patch_argv):
     job1 = test_session.get_or_create_job()
     test_session._finalize_job_success()
 
+    # Reset job state to simulate a new script run
+    reset_session_job_state()
+
     # Create a new session to get a new job
     session2 = Session(catalog=test_session.catalog)
     job2 = session2.get_or_create_job()
 
     assert job2.parent_job_id == job1.id
+
+
+def test_nested_sessions_share_same_job(test_session, patch_argv):
+    """Test that nested sessions share the same job (one job per process)."""
+    # Outer session creates a job
+    job1 = test_session.get_or_create_job()
+
+    # Create nested session
+    with Session("nested", catalog=test_session.catalog) as nested_session:
+        job2 = nested_session.get_or_create_job()
+
+        # Both sessions should have the same job
+        assert job1.id == job2.id
+        assert job1 is job2
+
+        # Class-level job should be the same
+        assert Session._CURRENT_JOB is job1
+        assert Session._CURRENT_JOB is job2
+
+    # After nested session exits, job should still be the same
+    job3 = test_session.get_or_create_job()
+    assert job3.id == job1.id
+    assert job3 is job1
 
 
 def test_except_hook_delegates_to_original(test_session, patch_argv):
@@ -129,5 +156,5 @@ def test_except_hook_delegates_to_original(test_session, patch_argv):
         Session.GLOBAL_SESSION_CTX = None
 
     assert "bad stuff" in called["exc"][1]
-    db_job = test_session.catalog.metastore.get_job(test_session.job.id)
+    db_job = test_session.catalog.metastore.get_job(test_session.get_or_create_job().id)
     assert db_job.status == JobStatus.FAILED

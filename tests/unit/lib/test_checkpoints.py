@@ -1,35 +1,13 @@
-import atexit
-
 import pytest
 
 import datachain as dc
 from datachain.error import DatasetNotFoundError, JobNotFoundError
 from datachain.lib.utils import DataChainError
+from tests.utils import reset_session_job_state
 
 
 def mapper_fail(num) -> int:
     raise Exception("Error")
-
-
-def reset_session_job_state(session):
-    """
-    Reset job state for testing purposes.
-    Useful for simulating multiple script runs.
-    """
-    # Unregister atexit hook if registered
-    if session._job_finalize_hook is not None:
-        try:
-            atexit.unregister(session._job_finalize_hook)
-        except ValueError:
-            # Hook was already unregistered
-            pass
-        session._job_finalize_hook = None
-
-    # Clear job state
-    session.job = None
-    session.job_status = None
-    session.owns_job = None
-    session._job_hooks_registered = False
 
 
 @pytest.fixture
@@ -71,7 +49,7 @@ def test_checkpoints(
     chain.save("nums2")
     with pytest.raises(DataChainError):
         chain.map(new=mapper_fail).save("nums3")
-    first_job_id = test_session.job.id
+    first_job_id = test_session.get_or_create_job().id
 
     catalog.get_dataset("nums1")
     catalog.get_dataset("nums2")
@@ -89,7 +67,7 @@ def test_checkpoints(
     chain.save("nums1")
     chain.save("nums2")
     chain.save("nums3")
-    second_job_id = test_session.job.id
+    second_job_id = test_session.get_or_create_job().id
 
     assert len(catalog.get_dataset("nums1").versions) == 2 if reset_checkpoints else 1
     assert len(catalog.get_dataset("nums2").versions) == 2 if reset_checkpoints else 1
@@ -113,14 +91,14 @@ def test_checkpoints_modified_chains(
     chain.save("nums1")
     chain.save("nums2")
     chain.save("nums3")
-    first_job_id = test_session.job.id
+    first_job_id = test_session.get_or_create_job().id
 
     # -------------- SECOND RUN -------------------
     reset_session_job_state(test_session)
     chain.save("nums1")
     chain.filter(dc.C("num") > 1).save("nums2")  # added change from first run
     chain.save("nums3")
-    second_job_id = test_session.job.id
+    second_job_id = test_session.get_or_create_job().id
 
     assert len(catalog.get_dataset("nums1").versions) == 2 if reset_checkpoints else 1
     assert len(catalog.get_dataset("nums2").versions) == 2
@@ -146,7 +124,7 @@ def test_checkpoints_multiple_runs(
     chain.save("nums2")
     with pytest.raises(DataChainError):
         chain.map(new=mapper_fail).save("nums3")
-    first_job_id = test_session.job.id
+    first_job_id = test_session.get_or_create_job().id
 
     catalog.get_dataset("nums1")
     catalog.get_dataset("nums2")
@@ -158,7 +136,7 @@ def test_checkpoints_multiple_runs(
     chain.save("nums1")
     chain.save("nums2")
     chain.save("nums3")
-    second_job_id = test_session.job.id
+    second_job_id = test_session.get_or_create_job().id
 
     # -------------- THIRD RUN -------------------
     reset_session_job_state(test_session)
@@ -166,14 +144,14 @@ def test_checkpoints_multiple_runs(
     chain.filter(dc.C("num") > 1).save("nums2")
     with pytest.raises(DataChainError):
         chain.map(new=mapper_fail).save("nums3")
-    third_job_id = test_session.job.id
+    third_job_id = test_session.get_or_create_job().id
 
     # -------------- FOURTH RUN -------------------
     reset_session_job_state(test_session)
     chain.save("nums1")
     chain.filter(dc.C("num") > 1).save("nums2")
     chain.save("nums3")
-    fourth_job_id = test_session.job.id
+    fourth_job_id = test_session.get_or_create_job().id
 
     num1_versions = len(catalog.get_dataset("nums1").versions)
     num2_versions = len(catalog.get_dataset("nums2").versions)

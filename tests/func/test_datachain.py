@@ -1046,16 +1046,18 @@ def test_job_is_created_after_save(test_session, monkeypatch, use_datachain_job_
 
     dataset = test_session.catalog.get_dataset("my-ds")
     result_job_id = dataset.get_version(dataset.latest_version).job_id
-    assert result_job_id == test_session.job.id
+    assert result_job_id == test_session.get_or_create_job().id
 
 
 def test_checkpoint_is_created_after_save(test_session, catalog):
     dc.read_values(value=["val1", "val2"], session=test_session).save("my-ds")
 
-    checkpoints = list(catalog.metastore.list_checkpoints(test_session.job.id))
+    checkpoints = list(
+        catalog.metastore.list_checkpoints(test_session.get_or_create_job().id)
+    )
     assert len(checkpoints) == 1
     checkpoint = checkpoints[0]
-    assert checkpoint.job_id == test_session.job.id
+    assert checkpoint.job_id == test_session.get_or_create_job().id
     assert checkpoint.hash
     assert checkpoint.partial is False
     assert checkpoint.created_at
