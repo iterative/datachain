@@ -982,18 +982,26 @@ class SQLUnion(Step):
 
         columns1, columns2 = _order_columns(q1.columns, q2.columns)
 
-        def q(*columns):
-            names = {c.name for c in columns}
-            col1 = [c for c in columns1 if c.name in names]
-            col2 = [c for c in columns2 if c.name in names]
-            res = sqlalchemy.select(*col1).union_all(sqlalchemy.select(*col2))
+        union_select = sqlalchemy.select(*columns1).union_all(
+            sqlalchemy.select(*columns2)
+        )
+        union_cte = union_select.cte()
+        regenerated = self.query1.catalog.warehouse._regenerate_system_columns(
+            union_cte
+        )
+        result_columns = tuple(regenerated.selected_columns)
 
-            subquery = res.subquery()
-            return sqlalchemy.select(*subquery.c).select_from(subquery)
+        def q(*columns):
+            if not columns:
+                return regenerated
+
+            names = {c.name for c in columns}
+            selected = [c for c in result_columns if c.name in names]
+            return regenerated.with_only_columns(*selected)
 
         return step_result(
             q,
-            columns1,
+            result_columns,
             dependencies=self.query1.dependencies | self.query2.dependencies,
         )
 
