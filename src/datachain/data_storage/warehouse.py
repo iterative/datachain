@@ -22,7 +22,6 @@ from datachain.lib.signal_schema import SignalSchema
 from datachain.node import DirType, DirTypeGroup, Node, NodeWithPath, get_path
 from datachain.query.batch import RowsOutput
 from datachain.query.schema import ColumnMeta
-from datachain.query.utils import get_query_id_column
 from datachain.sql.functions import path as pathfunc
 from datachain.sql.types import Int, SQLType
 from datachain.utils import sql_escape_like
@@ -228,7 +227,8 @@ class AbstractWarehouse(ABC, Serializable):
             while True:
                 if limit is not None:
                     limit -= num_yielded
-                    if limit == 0:
+                    num_yielded = 0
+                    if limit <= 0:
                         break
                     if limit < page_size:
                         paginated_query = paginated_query.limit(None).limit(limit)
@@ -380,7 +380,7 @@ class AbstractWarehouse(ABC, Serializable):
         """
         Fetch dataset rows from database using a list of IDs.
         """
-        if (id_col := get_query_id_column(query)) is None:
+        if (id_col := query.selected_columns.get("sys__id")) is None:
             raise RuntimeError("sys__id column not found in query")
 
         query = query._clone().offset(None).limit(None).order_by(None)

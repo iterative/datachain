@@ -240,3 +240,18 @@ def test_partition_ids_only(warehouse, partitioned_animal_dataset_query):
 
     assert not db_ids
     assert not partition_ids
+
+
+@pytest.mark.parametrize("cloud_type,version_aware", [("file", False)], indirect=True)
+def test_partition_missing_column_raises(warehouse, animal_dataset):
+    table = warehouse.get_table(
+        warehouse.dataset_table_name(animal_dataset, animal_dataset.latest_version)
+    )
+
+    # Build a query without partition_id to ensure Partition raises
+    query = sa.select(table.c.sys__id, table.c.file__path).order_by(table.c.sys__id)
+
+    batching = Partition()
+    with pytest.raises(RuntimeError, match="partition column not found in query"):
+        # exhaust the generator to trigger execution
+        list(batching(warehouse.dataset_select_paginated, query))

@@ -22,7 +22,6 @@ from datachain.query.dataset import (
 )
 from datachain.query.queue import get_from_queue, put_into_queue
 from datachain.query.udf import UdfInfo
-from datachain.query.utils import get_query_id_column
 from datachain.utils import batched, flatten, safe_closing
 
 if TYPE_CHECKING:
@@ -65,7 +64,7 @@ def udf_entrypoint() -> int:
     wh_cls, wh_args, wh_kwargs = udf_info["warehouse_clone_params"]
     warehouse: AbstractWarehouse = wh_cls(*wh_args, **wh_kwargs)
 
-    id_col = get_query_id_column(query)
+    id_col = query.selected_columns.get("sys__id")
 
     with contextlib.closing(
         batching(warehouse.dataset_select_paginated, query, id_col=id_col)
