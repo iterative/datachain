@@ -509,6 +509,44 @@ def clone_catalog_with_cache(catalog: "Catalog", cache: "Cache") -> "Catalog":
     return clone
 
 
+def get_all_ids(d):
+    ids = set()
+    for key, value in d.items():
+        ids.add(int(key))
+        if isinstance(value, dict):
+            ids.update(get_all_ids(value))
+    return sorted(ids)
+
+
+def build_nested_dependencies(dataset_deps, dependency_structure, indirect=True):
+    def build_deps(dep_id, deps_dict):
+        if dep_id not in dataset_deps:
+            return []
+
+        deps = []
+        if dep_id in deps_dict:
+            for child_id in deps_dict[dep_id]:
+                if child_id in dataset_deps:
+                    # Recursively build child dependencies if indirect=True
+                    child_deps = (
+                        build_deps(child_id, deps_dict[dep_id]) if indirect else []
+                    )
+                    child_dep = dataset_deps[child_id]
+                    child_dep.dependencies = child_deps
+                    deps.append(child_dep)
+        return deps
+
+    result = []
+    for root_id in dependency_structure:
+        if root_id in dataset_deps:
+            deps = build_deps(root_id, dependency_structure)
+            root_dep = dataset_deps[root_id]
+            root_dep.dependencies = deps
+            result.append(root_dep)
+
+    return result
+
+
 class Catalog:
     def __init__(
         self,
@@ -1198,40 +1236,82 @@ class Catalog:
 
     def get_dataset_dependencies(
         self,
-        name: str,
-        version: str,
+        name: str | None = None,
+        version: str | None = None,
         namespace_name: str | None = None,
         project_name: str | None = None,
         indirect=False,
+        dataset_id: int | None = None,
+        dataset_version_id: int | None = None,
     ) -> list[DatasetDependency | None]:
-        dataset = self.get_dataset(
-            name,
-            namespace_name=namespace_name,
-            project_name=project_name,
-        )
+        if (name and dataset_id) or (version and dataset_version_id):
+            raise ValueError(
+                "Either name and version or"
+                " dataset_id and dataset_version_id must be provided"
+            )
 
-        direct_dependencies = self.metastore.get_direct_dataset_dependencies(
-            dataset, version
-        )
-
-        if not indirect:
-            return direct_dependencies
-
-        for d in direct_dependencies:
-            if not d:
-                # dependency has been removed
-                continue
-            if d.is_dataset:
-                # only datasets can have dependencies
-                d.dependencies = self.get_dataset_dependencies(
-                    d.name,
-                    d.version,
-                    namespace_name=d.namespace,
-                    project_name=d.project,
-                    indirect=indirect,
+        if not dataset_id:
+            if not name or not version:
+                raise ValueError(
+                    "name and version must be provided when dataset_id is not provided"
                 )
+            dataset = self.get_dataset(
+                name,
+                namespace_name=namespace_name,
+                project_name=project_name,
+            )
+            dataset_version = dataset.get_version(version)
+            dataset_id = dataset.id
+            dataset_version_id = dataset_version.id
 
-        return direct_dependencies
+        if dataset_version_id is None:
+            raise ValueError(
+                "dataset_version_id must be provided when dataset_id is provided"
+            )
+
+        dependency_ids = self.get_dataset_dependency_ids(
+            dataset_id,
+            dataset_version_id,
+            indirect=indirect,
+        )
+        all_ids = get_all_ids(dependency_ids)
+
+        dependencies = {
+            str(d.id): d
+            for d in self.metastore.get_direct_dataset_dependencies_by_ids(all_ids)
+        }
+        return build_nested_dependencies(dependencies, dependency_ids, indirect)
+
+    def get_dataset_dependency_ids(
+        self,
+        dataset_id: int,
+        version_id: int,
+        indirect=False,
+    ) -> dict[str, dict]:
+        dependency_tree: dict[str, dict] = {}
+        direct_dependencies = self.metastore.get_dataset_dependency_minimal(
+            dataset_id=dataset_id,
+            version_id=version_id,
+        )
+        for d in direct_dependencies:
+            if not indirect:
+                dependency_tree[str(d.id)] = {}
+                continue
+
+            nested_dependencies = d.nested_dependencies
+            if (
+                nested_dependencies is None
+                and indirect
+                and d.dataset_id
+                and d.dataset_version_id
+            ):
+                nested_dependencies = self.get_dataset_dependency_ids(
+                    d.dataset_id,
+                    d.dataset_version_id,
+                    indirect=True,
+                )
+            dependency_tree[str(d.id)] = nested_dependencies or {}
+        return dependency_tree
 
     def ls_datasets(
         self,

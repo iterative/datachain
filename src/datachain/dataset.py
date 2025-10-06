@@ -20,6 +20,7 @@ LT = TypeVar("LT", bound="DatasetListRecord")
 V = TypeVar("V", bound="DatasetVersion")
 LV = TypeVar("LV", bound="DatasetListVersion")
 DD = TypeVar("DD", bound="DatasetDependency")
+DDM = TypeVar("DDM", bound="DatasetDependencyMinimal")
 
 DATASET_PREFIX = "ds://"
 QUERY_DATASET_PREFIX = "ds_query_"
@@ -92,6 +93,35 @@ def parse_dataset_name(name: str) -> tuple[str | None, str | None, str]:
 class DatasetDependencyType:
     DATASET = "dataset"
     STORAGE = "storage"
+
+
+@dataclass
+class DatasetDependencyMinimal:
+    id: int
+    dataset_id: int | None
+    dataset_version_id: int | None
+    source_dataset_id: int
+    source_dataset_version_id: int | None
+    nested_dependencies: dict | None
+
+    @classmethod
+    def parse(
+        cls: builtins.type[DDM],
+        id: int,
+        source_dataset_id: int,
+        source_dataset_version_id: int | None,
+        dataset_id: int | None,
+        dataset_version_id: int | None,
+        nested_dependencies: str | None,
+    ) -> "DatasetDependencyMinimal | None":
+        return cls(
+            id,
+            dataset_id,
+            dataset_version_id,
+            source_dataset_id,
+            source_dataset_version_id,
+            json.loads(nested_dependencies) if nested_dependencies else None,
+        )
 
 
 @dataclass
@@ -173,6 +203,12 @@ class DatasetDependency:
 
     def __hash__(self):
         return hash(f"{self.type}_{self.name}_{self.version}")
+
+    def set_dependencies(
+        self, dependencies: list["DatasetDependency | None"]
+    ) -> "DatasetDependency":
+        self.dependencies = dependencies
+        return self
 
 
 class DatasetStatus:

@@ -31,6 +31,7 @@ from datachain.data_storage import JobQueryType, JobStatus
 from datachain.data_storage.serializer import Serializable
 from datachain.dataset import (
     DatasetDependency,
+    DatasetDependencyMinimal,
     DatasetListRecord,
     DatasetListVersion,
     DatasetRecord,
@@ -78,6 +79,7 @@ class AbstractMetastore(ABC, Serializable):
     dataset_list_class: type[DatasetListRecord] = DatasetListRecord
     dataset_list_version_class: type[DatasetListVersion] = DatasetListVersion
     dependency_class: type[DatasetDependency] = DatasetDependency
+    dependency_minimal_class: type[DatasetDependencyMinimal] = DatasetDependencyMinimal
     job_class: type[Job] = Job
     checkpoint_class: type[Checkpoint] = Checkpoint
 
@@ -347,6 +349,7 @@ class AbstractMetastore(ABC, Serializable):
         source_dataset_version: str,
         dep_dataset: "DatasetRecord",
         dep_dataset_version: str,
+        nested_dependencies: dict | None = None,
     ) -> None:
         """Adds dataset dependency to dataset."""
 
@@ -365,6 +368,18 @@ class AbstractMetastore(ABC, Serializable):
         self, dataset: DatasetRecord, version: str
     ) -> list[DatasetDependency | None]:
         """Gets direct dataset dependencies."""
+
+    @abstractmethod
+    def get_dataset_dependency_minimal(
+        self, dataset_id: int, version_id: int
+    ) -> list[DatasetDependencyMinimal]:
+        """Gets dataset dependency minimal."""
+
+    @abstractmethod
+    def get_direct_dataset_dependencies_by_ids(
+        self, ids: list[int]
+    ) -> list[DatasetDependency]:
+        """Gets dataset dependency minimal by ids."""
 
     @abstractmethod
     def remove_dataset_dependencies(
@@ -639,6 +654,14 @@ class AbstractDBMetastore(AbstractMetastore):
         ]
 
     @classmethod
+    def _datasets_dependency_nested(cls) -> Column:
+        return Column(
+            "nested_dependencies",
+            JSON,
+            nullable=True,
+        )
+
+    @classmethod
     def _datasets_dependencies_columns(cls) -> list["SchemaItem"]:
         """Datasets dependencies table columns."""
         return [
@@ -669,6 +692,7 @@ class AbstractDBMetastore(AbstractMetastore):
                 ForeignKey(f"{cls.DATASET_VERSION_TABLE}.id"),
                 nullable=True,
             ),
+            cls._datasets_dependency_nested(),
         ]
 
     #
@@ -1406,6 +1430,7 @@ class AbstractDBMetastore(AbstractMetastore):
         source_dataset_version: str,
         dep_dataset: "DatasetRecord",
         dep_dataset_version: str,
+        nested_dependencies: dict | None = None,
     ) -> None:
         """Adds dataset dependency to dataset."""
         self.db.execute(
@@ -1416,6 +1441,7 @@ class AbstractDBMetastore(AbstractMetastore):
                 ),
                 dataset_id=dep_dataset.id,
                 dataset_version_id=dep_dataset.get_version(dep_dataset_version).id,
+                nested_dependencies=nested_dependencies,
             )
         )
 
@@ -1482,6 +1508,54 @@ class AbstractDBMetastore(AbstractMetastore):
         )
 
         return [self.dependency_class.parse(*r) for r in self.db.execute(query)]
+
+    def get_direct_dataset_dependencies_by_ids(
+        self, ids: list[int]
+    ) -> list[DatasetDependency]:
+        n = self._namespaces
+        p = self._projects
+        d = self._datasets
+        dd = self._datasets_dependencies
+        dv = self._datasets_versions
+
+        select_cols = self._dataset_dependencies_select_columns()
+
+        query = (
+            self._datasets_dependencies_select(*select_cols)
+            .select_from(
+                dd.join(d, dd.c.dataset_id == d.c.id, isouter=True)
+                .join(dv, dd.c.dataset_version_id == dv.c.id, isouter=True)
+                .join(p, d.c.project_id == p.c.id, isouter=True)
+                .join(n, p.c.namespace_id == n.c.id, isouter=True)
+            )
+            .where(dd.c.id.in_(ids))
+        )
+
+        return [
+            dep
+            for dep in [self.dependency_class.parse(*r) for r in self.db.execute(query)]
+            if dep is not None
+        ]
+
+    def get_dataset_dependency_minimal(
+        self, dataset_id: int, version_id: int
+    ) -> list[DatasetDependencyMinimal]:
+        dd = self._datasets_dependencies
+
+        select_cols = self._datasets_dependencies_columns()
+
+        query = self._datasets_dependencies_select(*select_cols).where(
+            (dd.c.source_dataset_id == dataset_id)
+            & (dd.c.source_dataset_version_id == version_id)
+        )
+
+        return [
+            dep
+            for dep in [
+                self.dependency_minimal_class.parse(*r) for r in self.db.execute(query)
+            ]
+            if dep is not None
+        ]
 
     def remove_dataset_dependencies(
         self, dataset: DatasetRecord, version: str | None = None
