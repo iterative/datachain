@@ -5,7 +5,7 @@ import textwrap
 from collections.abc import Sequence
 from typing import TypeAlias, TypeVar
 
-from sqlalchemy.sql.elements import ColumnElement
+from sqlalchemy.sql.elements import ClauseElement, ColumnElement
 
 T = TypeVar("T", bound=ColumnElement)
 ColumnLike: TypeAlias = str | T
@@ -17,7 +17,7 @@ def _serialize_value(val):  # noqa: PLR0911
         return None
     if isinstance(val, (str, int, float, bool)):
         return val
-    if isinstance(val, ColumnElement):
+    if isinstance(val, ClauseElement):
         return serialize_column_element(val)
     if isinstance(val, dict):
         # Sort dict keys for deterministic serialization
@@ -40,8 +40,8 @@ def serialize_column_element(expr: str | ColumnElement) -> dict:
     if isinstance(expr, BindParameter):
         return {"type": "bind", "value": _serialize_value(expr.value)}
 
-    # Generic handling for all ColumnElement types using SQLAlchemy's internals
-    if isinstance(expr, ColumnElement):
+    # Generic handling for all ClauseElement types using SQLAlchemy's internals
+    if isinstance(expr, ClauseElement):
         # All standard SQLAlchemy types have _traverse_internals
         if hasattr(expr, "_traverse_internals"):
             result = {"type": expr.__class__.__name__}
@@ -54,7 +54,7 @@ def serialize_column_element(expr: str | ColumnElement) -> dict:
                     val = getattr(expr, attr_name)
                     result[attr_name] = _serialize_value(val)
             return result
-        # Rare case: custom user-defined ColumnElement without _traverse_internals
+        # Rare case: custom user-defined ClauseElement without _traverse_internals
         # We don't know its structure, so just stringify it
         return {"type": expr.__class__.__name__, "repr": str(expr)}
 

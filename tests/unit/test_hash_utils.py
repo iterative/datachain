@@ -67,11 +67,11 @@ lambda3 = lambda z: z - 1  # noqa: E731
         ),
         (
             [sa_func.coalesce(C("name"), "unknown")],
-            "49288fcd7afd2eca76fb80cde99b9da79a9e4d007d73ba31ae7125a548fb219f",
+            "54f932d64722aeb4cc167d68e12c149e10547b3737f4fce91c536d56cbf8c6bd",
         ),
         (
             [sa_func.nullif(C("age"), 0)],
-            "74ab91fcbb6fc8fb15a99fce74d265d10530b94b9bf6e2f99b3245d6868153ab",
+            "ff437af7c0cf5586358b78ecd7bc6cdfdd714bb23d6a0732b940e671585a8d50",
         ),
         # Window functions
         (
@@ -84,7 +84,7 @@ lambda3 = lambda z: z - 1  # noqa: E731
         ),
         (
             [sa_func.rank().over(order_by=C("age").desc())],
-            "33ef6c6c5b2291578f9c3d5851cd7859c165be7a9e3390f9e69bcb88305aabac",
+            "e3f3f509be6686c7195e26f4c05d4dfea71770422f149f76a563a4c85182fbee",
         ),
         # Labels
         (
@@ -157,11 +157,11 @@ lambda3 = lambda z: z - 1  # noqa: E731
         ),
         (
             [sa_func.concat(C("first_name"), " ", C("last_name"))],
-            "3c85ac41e43dff536599bfc78e79b1bf4aaa0ff3110dbd1f13f83a1174d8ac95",
+            "6bb32f278bc048cb177941749d1e30e18d5eb747b1d74e274a118ea27e5044eb",
         ),
         (
             [sa_func.lower(C("name"))],
-            "a53c5bd08f8dbe1a6e36443275285671d955f6cd382ce77cfe1988c5cf106b47",
+            "fcc14e7bdef5ffd2400a81bf8dcc38a42186da7114fa10bd44734d8a85ad14a8",
         ),
         # NULL operations
         (
@@ -322,11 +322,11 @@ lambda3 = lambda z: z - 1  # noqa: E731
         ),
         (
             [sa_func.abs(C("value"))],
-            "6c70579c1bf7cfec78b0b95d933e37ce91333db25c6c0fc3a882ca073d57d8cc",
+            "1b7730de86ee63596f01acb68a8b894b4fc1d3e0b166f6c285614b20e7535fc6",
         ),
         (
             [sa_func.round(C("price"), 2)],
-            "b77ea29b5f5f664f3765860b260364f875c702e5326b7f289092cdaf7533ea17",
+            "215bb8748e030d0dcab919f730d35bef28a40eace1d14c04f79f31783822592b",
         ),
     ],
 )
