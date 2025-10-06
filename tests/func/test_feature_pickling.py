@@ -1,5 +1,5 @@
 import json
-from typing import List, Literal  # noqa: UP035
+from typing import Literal
 
 import cloudpickle
 import pytest
@@ -239,7 +239,7 @@ def test_feature_udf_parallel_local_pydantic_old(cloud_test_catalog_tmpfile):
 
     class AIMessageLocalPydantic(BaseModel):
         id: str = ""
-        content: List[TextBlockLocalPydantic]  # noqa: UP006
+        content: list[TextBlockLocalPydantic]
         model: str = "Test AI Model Local Pydantic Old"
         type: Literal["message"] = "message"
         input_file_info: FileInfoLocalPydantic = FileInfoLocalPydantic()

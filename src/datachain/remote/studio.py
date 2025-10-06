@@ -4,13 +4,7 @@ import os
 from collections.abc import AsyncIterator, Iterable, Iterator
 from datetime import datetime, timedelta, timezone
 from struct import unpack
-from typing import (
-    Any,
-    BinaryIO,
-    Generic,
-    Optional,
-    TypeVar,
-)
+from typing import Any, BinaryIO, Generic, TypeVar
 from urllib.parse import urlparse, urlunparse
 
 import websockets
@@ -22,14 +16,14 @@ from datachain.error import DataChainError
 from datachain.utils import STUDIO_URL, retry_with_backoff
 
 T = TypeVar("T")
-LsData = Optional[list[dict[str, Any]]]
-DatasetInfoData = Optional[dict[str, Any]]
-DatasetRowsData = Optional[Iterable[dict[str, Any]]]
-DatasetJobVersionsData = Optional[dict[str, Any]]
-DatasetExportStatus = Optional[dict[str, Any]]
-DatasetExportSignedUrls = Optional[list[str]]
-FileUploadData = Optional[dict[str, Any]]
-JobData = Optional[dict[str, Any]]
+LsData = list[dict[str, Any]] | None
+DatasetInfoData = dict[str, Any] | None
+DatasetRowsData = Iterable[dict[str, Any]] | None
+DatasetJobVersionsData = dict[str, Any] | None
+DatasetExportStatus = dict[str, Any] | None
+DatasetExportSignedUrls = list[str] | None
+FileUploadData = dict[str, Any] | None
+JobData = dict[str, Any] | None
 JobListData = list[dict[str, Any]]
 ClusterListData = list[dict[str, Any]]
 
@@ -93,7 +87,7 @@ class Response(Generic[T]):
 
 
 class StudioClient:
-    def __init__(self, timeout: float = 3600.0, team: Optional[str] = None) -> None:
+    def __init__(self, timeout: float = 3600.0, team: str | None = None) -> None:
         self._check_dependencies()
         self.timeout = timeout
         self._config = None
@@ -154,7 +148,7 @@ class StudioClient:
             ) from None
 
     def _send_request_msgpack(
-        self, route: str, data: dict[str, Any], method: Optional[str] = "POST"
+        self, route: str, data: dict[str, Any], method: str | None = "POST"
     ) -> Response[Any]:
         import msgpack
         import requests
@@ -192,7 +186,7 @@ class StudioClient:
 
     @retry_with_backoff(retries=3, errors=(HTTPError, Timeout))
     def _send_request(
-        self, route: str, data: dict[str, Any], method: Optional[str] = "POST"
+        self, route: str, data: dict[str, Any], method: str | None = "POST"
     ) -> Response[Any]:
         """
         Function that communicate Studio API.
@@ -241,7 +235,7 @@ class StudioClient:
         return Response(data, ok, message, response.status_code)
 
     def _send_multipart_request(
-        self, route: str, files: dict[str, Any], params: Optional[dict[str, Any]] = None
+        self, route: str, files: dict[str, Any], params: dict[str, Any] | None = None
     ) -> Response[Any]:
         """
         Function that communicates with Studio API using multipart/form-data.
@@ -345,7 +339,7 @@ class StudioClient:
             response = self._send_request_msgpack("datachain/ls", {"source": path})
             yield path, response
 
-    def ls_datasets(self, prefix: Optional[str] = None) -> Response[LsData]:
+    def ls_datasets(self, prefix: str | None = None) -> Response[LsData]:
         return self._send_request(
             "datachain/datasets", {"prefix": prefix}, method="GET"
         )
@@ -355,9 +349,9 @@ class StudioClient:
         name: str,
         namespace: str,
         project: str,
-        new_name: Optional[str] = None,
-        description: Optional[str] = None,
-        attrs: Optional[list[str]] = None,
+        new_name: str | None = None,
+        description: str | None = None,
+        attrs: list[str] | None = None,
     ) -> Response[DatasetInfoData]:
         body = {
             "new_name": new_name,
@@ -378,8 +372,8 @@ class StudioClient:
         name: str,
         namespace: str,
         project: str,
-        version: Optional[str] = None,
-        force: Optional[bool] = False,
+        version: str | None = None,
+        force: bool | None = False,
     ) -> Response[DatasetInfoData]:
         return self._send_request(
             "datachain/datasets",
@@ -461,18 +455,18 @@ class StudioClient:
         self,
         query: str,
         query_type: str,
-        environment: Optional[str] = None,
-        workers: Optional[int] = None,
-        query_name: Optional[str] = None,
-        files: Optional[list[str]] = None,
-        python_version: Optional[str] = None,
-        requirements: Optional[str] = None,
-        repository: Optional[str] = None,
-        priority: Optional[int] = None,
-        cluster: Optional[str] = None,
-        start_time: Optional[str] = None,
-        cron: Optional[str] = None,
-        credentials_name: Optional[str] = None,
+        environment: str | None = None,
+        workers: int | None = None,
+        query_name: str | None = None,
+        files: list[str] | None = None,
+        python_version: str | None = None,
+        requirements: str | None = None,
+        repository: str | None = None,
+        priority: int | None = None,
+        cluster: str | None = None,
+        start_time: str | None = None,
+        cron: str | None = None,
+        credentials_name: str | None = None,
     ) -> Response[JobData]:
         data = {
             "query": query,
@@ -494,9 +488,9 @@ class StudioClient:
 
     def get_jobs(
         self,
-        status: Optional[str] = None,
+        status: str | None = None,
         limit: int = 20,
-        job_id: Optional[str] = None,
+        job_id: str | None = None,
     ) -> Response[JobListData]:
         params: dict[str, Any] = {"limit": limit}
         if status is not None:

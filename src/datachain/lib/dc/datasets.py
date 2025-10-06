@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Optional, Union, get_origin, get_type_hints
+from typing import TYPE_CHECKING, get_origin, get_type_hints
 
 from datachain.error import (
     DatasetNotFoundError,
@@ -26,20 +26,20 @@ if TYPE_CHECKING:
 
 def read_dataset(
     name: str,
-    namespace: Optional[str] = None,
-    project: Optional[str] = None,
-    version: Optional[Union[str, int]] = None,
-    session: Optional[Session] = None,
-    settings: Optional[dict] = None,
-    delta: Optional[bool] = False,
-    delta_on: Optional[Union[str, Sequence[str]]] = (
+    namespace: str | None = None,
+    project: str | None = None,
+    version: str | int | None = None,
+    session: Session | None = None,
+    settings: dict | None = None,
+    delta: bool | None = False,
+    delta_on: str | Sequence[str] | None = (
         "file.path",
         "file.etag",
         "file.version",
     ),
-    delta_result_on: Optional[Union[str, Sequence[str]]] = None,
-    delta_compare: Optional[Union[str, Sequence[str]]] = None,
-    delta_retry: Optional[Union[bool, str]] = None,
+    delta_result_on: str | Sequence[str] | None = None,
+    delta_compare: str | Sequence[str] | None = None,
+    delta_retry: bool | str | None = None,
     delta_unsafe: bool = False,
     update: bool = False,
 ) -> "DataChain":
@@ -215,13 +215,13 @@ def read_dataset(
 
 
 def datasets(
-    session: Optional[Session] = None,
-    settings: Optional[dict] = None,
+    session: Session | None = None,
+    settings: dict | None = None,
     in_memory: bool = False,
-    column: Optional[str] = None,
+    column: str | None = None,
     include_listing: bool = False,
     studio: bool = False,
-    attrs: Optional[list[str]] = None,
+    attrs: list[str] | None = None,
 ) -> "DataChain":
     """Generate chain with list of registered datasets.
 
@@ -298,12 +298,12 @@ def datasets(
 
 def delete_dataset(
     name: str,
-    namespace: Optional[str] = None,
-    project: Optional[str] = None,
-    version: Optional[str] = None,
-    force: Optional[bool] = False,
-    studio: Optional[bool] = False,
-    session: Optional[Session] = None,
+    namespace: str | None = None,
+    project: str | None = None,
+    version: str | None = None,
+    force: bool | None = False,
+    studio: bool | None = False,
+    session: Session | None = None,
     in_memory: bool = False,
 ) -> None:
     """Removes specific dataset version or all dataset versions, depending on
@@ -377,7 +377,7 @@ def delete_dataset(
 def move_dataset(
     src: str,
     dest: str,
-    session: Optional[Session] = None,
+    session: Session | None = None,
     in_memory: bool = False,
 ) -> None:
     """Moves an entire dataset between namespaces and projects.

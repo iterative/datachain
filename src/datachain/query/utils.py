@@ -1,21 +1,23 @@
-from typing import Optional, Union
-
 import sqlalchemy as sa
 
-ColT = Union[sa.Column, sa.ColumnElement, sa.TextClause, sa.Label]
+ColT = sa.ColumnClause | sa.Column | sa.ColumnElement | sa.TextClause | sa.Label
 
 
 def column_name(col: ColT) -> str:
     """Returns column name from column element."""
-    return col.name if isinstance(col, (sa.Column, sa.Label)) else str(col)
+    return (
+        col.name
+        if isinstance(col, (sa.ColumnClause, sa.Column, sa.Label))
+        else str(col)
+    )
 
 
-def get_query_column(query: sa.Select, name: str) -> Optional[ColT]:
+def get_query_column(query: sa.Select, name: str) -> ColT | None:
     """Returns column element from query by name or None if column not found."""
     return next((col for col in query.inner_columns if column_name(col) == name), None)
 
 
-def get_query_id_column(query: sa.Select) -> Optional[sa.ColumnElement]:
+def get_query_id_column(query: sa.Select) -> sa.ColumnElement | None:
     """Returns ID column element from query or None if column not found."""
     col = get_query_column(query, "sys__id")
     return col if col is not None and isinstance(col, sa.ColumnElement) else None

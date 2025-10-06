@@ -11,14 +11,13 @@ license-files = ["LICENSE"]
 authors = [{name = "Dmitry Petrov", email = "support@dvc.org"}]
 classifiers = [
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Development Status :: 2 - Pre-Alpha"
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dynamic = ["version"]
 dependencies = [
   "pyyaml",
@@ -314,10 +313,13 @@ max-complexity = 15
 
 [tool.ruff.lint.per-file-ignores]
 "examples/**" = ["INP001"]
+"src/datachain/lib/convert/python_to_sql.py" = ["UP035"]
+"src/datachain/lib/signal_schema.py" = ["UP035"]
 "!src/datachain/lib/dc.py" = ["D"]
 "tests/scripts/**" = ["INP001"]
 "tests/**" = ["DTZ"]
 "tests/examples/wds_data.py" = ["E501"]
+"tests/unit/lib/test_signal_schema.py" = ["UP006", "UP007", "UP035", "UP045"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

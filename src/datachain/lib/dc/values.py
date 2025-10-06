@@ -1,8 +1,5 @@
 from collections.abc import Iterator
-from typing import (
-    TYPE_CHECKING,
-    Optional,
-)
+from typing import TYPE_CHECKING
 
 from datachain.lib.convert.values_to_tuples import values_to_tuples
 from datachain.lib.data_model import dict_to_data_model
@@ -20,8 +17,8 @@ if TYPE_CHECKING:
 
 def read_values(
     ds_name: str = "",
-    session: Optional[Session] = None,
-    settings: Optional[dict] = None,
+    session: Session | None = None,
+    settings: dict | None = None,
     in_memory: bool = False,
     output: OutputType = None,
     column: str = "",

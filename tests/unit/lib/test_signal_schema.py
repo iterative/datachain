@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-from typing import Any, Dict, Final, List, Literal, Optional, Union  # noqa: UP035
+from typing import Any, Dict, Final, List, Literal, Optional, Union
 
 import pytest
 from pydantic import ValidationError
@@ -68,8 +68,8 @@ class MyTypeComplex(DataModel):
 
 class MyTypeComplexOld(DataModel):
     name: str
-    items: List[MyType1]  # noqa: UP006
-    lookup: Dict[str, MyType2]  # noqa: UP006
+    items: list[MyType1]
+    lookup: dict[str, MyType2]
 
 
 def test_deserialize_basic():
@@ -129,14 +129,14 @@ def test_serialize_basic():
 
 def test_feature_schema_serialize_optional():
     schema = {
-        "name": Optional[str],
-        "feature": Optional[MyType1],
+        "name": str | None,
+        "feature": MyType1 | None,
     }
     signals = SignalSchema(schema).serialize()
 
     assert len(signals) == 3
-    assert signals["name"] == "Union[str, NoneType]"
-    assert signals["feature"] == "Union[MyType1@v1, NoneType]"
+    assert signals["name"] == "Optional[str]"
+    assert signals["feature"] == "Optional[MyType1@v1]"
     assert signals["_custom_types"] == {
         "MyType1@v1": {
             "schema_version": 2,
@@ -158,13 +158,13 @@ def test_feature_schema_serialize_optional():
 
 def test_feature_schema_serialize_list():
     schema = {
-        "name": Optional[str],
+        "name": str | None,
         "features": list[MyType1],
     }
     signals = SignalSchema(schema).serialize()
 
     assert len(signals) == 3
-    assert signals["name"] == "Union[str, NoneType]"
+    assert signals["name"] == "Optional[str]"
     assert signals["features"] == "list[MyType1@v1]"
     assert signals["_custom_types"] == {
         "MyType1@v1": {
@@ -187,13 +187,13 @@ def test_feature_schema_serialize_list():
 
 def test_feature_schema_serialize_list_old():
     schema = {
-        "name": Optional[str],
-        "features": List[MyType1],  # noqa: UP006
+        "name": str | None,
+        "features": list[MyType1],
     }
     signals = SignalSchema(schema).serialize()
 
     assert len(signals) == 3
-    assert signals["name"] == "Union[str, NoneType]"
+    assert signals["name"] == "Optional[str]"
     assert signals["features"] == "list[MyType1@v1]"
     assert signals["_custom_types"] == {
         "MyType1@v1": {
@@ -211,7 +211,7 @@ def test_feature_schema_serialize_list_old():
     }
 
     new_schema = {
-        "name": Optional[str],
+        "name": str | None,
         "features": list[MyType1],
     }
 
@@ -221,14 +221,14 @@ def test_feature_schema_serialize_list_old():
 
 def test_feature_schema_serialize_nested_types():
     schema = {
-        "name": Optional[str],
-        "feature_nested": Optional[MyType2],
+        "name": str | None,
+        "feature_nested": MyType2 | None,
     }
     signals = SignalSchema(schema).serialize()
 
     assert len(signals) == 3
-    assert signals["name"] == "Union[str, NoneType]"
-    assert signals["feature_nested"] == "Union[MyType2@v1, NoneType]"
+    assert signals["name"] == "Optional[str]"
+    assert signals["feature_nested"] == "Optional[MyType2@v1]"
     assert signals["_custom_types"] == {
         "MyType1@v1": {
             "schema_version": 2,
@@ -262,16 +262,16 @@ def test_feature_schema_serialize_nested_types():
 
 def test_feature_schema_serialize_nested_duplicate_types():
     schema = {
-        "name": Optional[str],
-        "feature_nested": Optional[MyType2],
-        "feature_not_nested": Optional[MyType1],
+        "name": str | None,
+        "feature_nested": MyType2 | None,
+        "feature_not_nested": MyType1 | None,
     }
     signals = SignalSchema(schema).serialize()
 
     assert len(signals) == 4
-    assert signals["name"] == "Union[str, NoneType]"
-    assert signals["feature_nested"] == "Union[MyType2@v1, NoneType]"
-    assert signals["feature_not_nested"] == "Union[MyType1@v1, NoneType]"
+    assert signals["name"] == "Optional[str]"
+    assert signals["feature_nested"] == "Optional[MyType2@v1]"
+    assert signals["feature_not_nested"] == "Optional[MyType1@v1]"
     assert signals["_custom_types"] == {
         "MyType1@v1": {
             "schema_version": 2,
@@ -305,14 +305,14 @@ def test_feature_schema_serialize_nested_duplicate_types():
 
 def test_feature_schema_serialize_complex():
     schema = {
-        "name": Optional[str],
-        "feature": Optional[MyTypeComplex],
+        "name": str | None,
+        "feature": MyTypeComplex | None,
     }
     signals = SignalSchema(schema).serialize()
 
     assert len(signals) == 3
-    assert signals["name"] == "Union[str, NoneType]"
-    assert signals["feature"] == "Union[MyTypeComplex@v1, NoneType]"
+    assert signals["name"] == "Optional[str]"
+    assert signals["feature"] == "Optional[MyTypeComplex@v1]"
     assert signals["_custom_types"] == {
         "MyType1@v1": {
             "schema_version": 2,
@@ -366,14 +366,14 @@ def test_feature_schema_serialize_complex():
 
 def test_feature_schema_serialize_complex_old():
     schema = {
-        "name": Optional[str],
-        "feature": Optional[MyTypeComplexOld],
+        "name": str | None,
+        "feature": MyTypeComplexOld | None,
     }
     signals = SignalSchema(schema).serialize()
 
     assert len(signals) == 3
-    assert signals["name"] == "Union[str, NoneType]"
-    assert signals["feature"] == "Union[MyTypeComplexOld@v1, NoneType]"
+    assert signals["name"] == "Optional[str]"
+    assert signals["feature"] == "Optional[MyTypeComplexOld@v1]"
     assert signals["_custom_types"] == {
         "MyType1@v1": {
             "schema_version": 2,
@@ -749,7 +749,7 @@ def test_select_complex_names_custom_types():
     assert {n: fi.annotation for n, fi in nested_type_complex.model_fields.items()} == {
         "aa": float,
         "bb": bytes,
-        "items": list[Union[dict[str, float], dict[str, int]]],
+        "items": list[dict[str, float] | dict[str, int]],
         "maybe_texts": Union[list[Any], dict[str, Any], None],
         "anything": Any,
     }
@@ -842,27 +842,45 @@ def test_print_types():
         Any: "Any",
         Literal: "Literal",
         Final: "Final",
-        Optional[MyType2]: "Union[MyType2@v1, NoneType]",
+        Optional[MyType2]: "Optional[MyType2@v1]",
+        Union[MyType2 | None]: "Optional[MyType2@v1]",
+        Optional[MyType2]: "Optional[MyType2@v1]",
+        MyType2 | None: "Optional[MyType2@v1]",
         Union[str, int]: "Union[str, int]",
+        str | int: "Union[str, int]",
         Union[str, int, bool]: "Union[str, int, bool]",
-        Union[Optional[MyType2]]: "Union[MyType2@v1, NoneType]",
+        str | int | bool: "Union[str, int, bool]",
+        List: "list",
         list: "list",
         list[bool]: "list[bool]",
-        List[bool]: "list[bool]",  # noqa: UP006
-        list[Optional[bool]]: "list[Union[bool, NoneType]]",
-        List[Optional[bool]]: "list[Union[bool, NoneType]]",  # noqa: UP006
+        list[bool]: "list[bool]",
+        list[bool | None]: "list[Optional[bool]]",
+        list[bool | None]: "list[Optional[bool]]",
+        list[bool | None]: "list[Optional[bool]]",
+        list[bool | None]: "list[Optional[bool]]",
+        Dict: "dict",
         dict: "dict",
         dict[str, bool]: "dict[str, bool]",
-        Dict[str, bool]: "dict[str, bool]",  # noqa: UP006
-        dict[str, Optional[MyType1]]: "dict[str, Union[MyType1@v1, NoneType]]",
-        Dict[str, Optional[MyType1]]: "dict[str, Union[MyType1@v1, NoneType]]",  # noqa: UP006
+        dict[str, bool]: "dict[str, bool]",
+        dict[str, MyType1 | None]: "dict[str, Optional[MyType1@v1]]",
+        dict[str, MyType1 | None]: "dict[str, Optional[MyType1@v1]]",
+        dict[str, MyType1 | None]: "dict[str, Optional[MyType1@v1]]",
+        dict[str, MyType1 | None]: "dict[str, Optional[MyType1@v1]]",
+        dict[str, MyType1 | None]: "dict[str, Optional[MyType1@v1]]",
         Union[str, list[str]]: "Union[str, list[str]]",
-        Union[str, List[str]]: "Union[str, list[str]]",  # noqa: UP006
-        Optional[Literal["x"]]: "Union[Literal, NoneType]",
-        Optional[list[bytes]]: "Union[list[bytes], NoneType]",
-        Optional[List[bytes]]: "Union[list[bytes], NoneType]",  # noqa: UP006
+        Union[str, list[str]]: "Union[str, list[str]]",
+        str | list[str]: "Union[str, list[str]]",
+        str | list[str]: "Union[str, list[str]]",
+        Optional[Literal["x"]]: "Optional[Literal]",
+        Literal["x"] | None: "Optional[Literal]",
+        Optional[list[bytes]]: "Optional[list[bytes]]",
+        Optional[list[bytes]]: "Optional[list[bytes]]",
+        Union[list[bytes], None]: "Optional[list[bytes]]",
+        Union[list[bytes], None]: "Optional[list[bytes]]",
+        list[bytes] | None: "Optional[list[bytes]]",
+        list[bytes] | None: "Optional[list[bytes]]",
         list[Any]: "list[Any]",
-        List[Any]: "list[Any]",  # noqa: UP006
+        list[Any]: "list[Any]",
     }
 
     for t, v in mapping.items():
@@ -887,30 +905,30 @@ def test_resolve_types():
         "Any": Any,
         "Literal": Any,
         "Final": Final,
-        "Union[MyType2@v1, NoneType]": Optional[MyType2],
-        "Optional[MyType2@v1]": Optional[MyType2],
-        "Union[str, int]": Union[str, int],
-        "Union[str, int, bool]": Union[str, int, bool],
-        "Union[Optional[MyType2@v1]]": Union[Optional[MyType2]],
+        "Union[MyType2@v1, NoneType]": MyType2 | None,
+        "Optional[MyType2@v1]": MyType2 | None,
+        "Union[str, int]": str | int,
+        "Union[str, int, bool]": str | int | bool,
+        "Union[Optional[MyType2@v1]]": MyType2 | None,
         "list": list,
         "list[bool]": list[bool],
         "List[bool]": list[bool],
-        "list[Union[bool, NoneType]]": list[Optional[bool]],
-        "List[Union[bool, NoneType]]": list[Optional[bool]],
-        "list[Optional[bool]]": list[Optional[bool]],
-        "List[Optional[bool]]": list[Optional[bool]],
+        "list[Union[bool, NoneType]]": list[bool | None],
+        "List[Union[bool, NoneType]]": list[bool | None],
+        "list[Optional[bool]]": list[bool | None],
+        "List[Optional[bool]]": list[bool | None],
         "dict": dict,
         "dict[str, bool]": dict[str, bool],
         "Dict[str, bool]": dict[str, bool],
-        "dict[str, Union[MyType1@v1, NoneType]]": dict[str, Optional[MyType1]],
-        "Dict[str, Union[MyType1@v1, NoneType]]": dict[str, Optional[MyType1]],
-        "dict[str, Optional[MyType1@v1]]": dict[str, Optional[MyType1]],
-        "Dict[str, Optional[MyType1@v1]]": dict[str, Optional[MyType1]],
-        "Union[str, list[str]]": Union[str, list[str]],
-        "Union[str, List[str]]": Union[str, list[str]],
-        "Union[Literal, NoneType]": Optional[Any],
-        "Union[list[bytes], NoneType]": Optional[list[bytes]],
-        "Union[List[bytes], NoneType]": Optional[list[bytes]],
+        "dict[str, Union[MyType1@v1, NoneType]]": dict[str, MyType1 | None],
+        "Dict[str, Union[MyType1@v1, NoneType]]": dict[str, MyType1 | None],
+        "dict[str, Optional[MyType1@v1]]": dict[str, MyType1 | None],
+        "Dict[str, Optional[MyType1@v1]]": dict[str, MyType1 | None],
+        "Union[str, list[str]]": str | list[str],
+        "Union[str, List[str]]": str | list[str],
+        "Union[Literal, NoneType]": Any | None,
+        "Union[list[bytes], NoneType]": list[bytes] | None,
+        "Union[List[bytes], NoneType]": list[bytes] | None,
     }
 
     for s, t in mapping.items():
@@ -988,7 +1006,7 @@ def test_db_signals_as_columns():
 
 
 def test_row_to_objs():
-    spec = {"name": str, "age": float, "fr": MyType2, "foo": Optional[int]}
+    spec = {"name": str, "age": float, "fr": MyType2, "foo": int | None}
     schema = SignalSchema(spec)
 
     val = MyType2(name="Fred", deep=MyType1(aa=129, bb="qwe"))
@@ -1107,20 +1125,20 @@ def test_slice():
             [("name", str), ("age", float)],
         ),
         (
-            {"name": Optional[str], "age": float, "address": str},
+            {"name": str | None, "age": float, "address": str},
             {"name": Any, "age": Any},
             False,
-            [("name", Optional[str]), ("age", float)],
+            [("name", str | None), ("age", float)],
         ),
         (
-            {"name": Optional[str], "age": float, "address": str},
+            {"name": str | None, "age": float, "address": str},
             {"name": str, "age": Any},
             False,
             [("name", str), ("age", float)],
         ),
         (
-            {"name": Optional[str], "age": float, "address": str},
-            {"name": Optional[str], "age": Any},
+            {"name": str | None, "age": float, "address": str},
+            {"name": str | None, "age": Any},
             False,
             [("name", str), ("age", float)],
         ),
@@ -1609,10 +1627,10 @@ def test_to_partial_complex_signal_error_invalid_field():
     [
         (
             {
-                "name": Optional[str],
-                "feature": Optional[MyType1],
+                "name": str | None,
+                "feature": MyType1 | None,
             },
-            "73aa5b0c9e511027dc3aca0baea50b43a5451aad33f3261cc04c600649ff44ed",
+            "a817682b89b3aea1f03d7467bfa56065ef379b49a80848adc549f63426ddddaa",
         ),
         (
             {"file": File},

@@ -3,14 +3,14 @@ import inspect
 import json
 import textwrap
 from collections.abc import Sequence
-from typing import TypeVar, Union
+from typing import TypeAlias, TypeVar
 
 from sqlalchemy.sql.elements import ColumnElement
 
 from datachain.utils import ensure_sequence
 
 T = TypeVar("T", bound=ColumnElement)
-ColumnLike = Union[str, T]
+ColumnLike: TypeAlias = str | T
 
 
 def _serialize_value(val):  # noqa: PLR0911
@@ -31,7 +31,7 @@ def _serialize_value(val):  # noqa: PLR0911
     return str(val)
 
 
-def serialize_column_element(expr: Union[str, ColumnElement]) -> dict:
+def serialize_column_element(expr: str | ColumnElement) -> dict:
     """
     Recursively serialize a SQLAlchemy ColumnElement into a deterministic structure.
     Uses SQLAlchemy's _traverse_internals to automatically handle all expression types.
@@ -40,7 +40,7 @@ def serialize_column_element(expr: Union[str, ColumnElement]) -> dict:
 
     # Special case: BindParameter has non-deterministic 'key' attribute, only use value
     if isinstance(expr, BindParameter):
-        return {"type": "bind", "value": expr.value}
+        return {"type": "bind", "value": _serialize_value(expr.value)}
 
     # Generic handling for all ColumnElement types using SQLAlchemy's internals
     if isinstance(expr, ColumnElement):
@@ -64,7 +64,7 @@ def serialize_column_element(expr: Union[str, ColumnElement]) -> dict:
     return {"type": "other", "repr": str(expr)}
 
 
-def hash_column_elements(columns: Union[ColumnLike, Sequence[ColumnLike]]) -> str:
+def hash_column_elements(columns: ColumnLike | Sequence[ColumnLike]) -> str:
     """
     Hash a list of ColumnElements deterministically, dialect agnostic.
     Only accepts ordered iterables (like list or tuple).

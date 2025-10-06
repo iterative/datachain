@@ -251,6 +251,19 @@ lambda3 = lambda z: z - 1  # noqa: E731
             [literal(True)],
             "135ff6f6ae9586a85f39bab816405378f87cc1d6b38b3234020070bc991c7fb0",
         ),
+        # Bytes values
+        (
+            [C("data") == b"hello"],
+            "5b6b7a9ede886f536a823ef89d07e219a17659d500d2d0b686f1cdc68dc028bd",
+        ),
+        (
+            [C("data") == b"\x00\x01\x02\xff"],
+            "cef7cca1378bf28ed7c719250303023e112db589ed4c989effa00cdf8a29589f",
+        ),
+        (
+            [C("data") == b""],
+            "14bc6eb9bc46b0c0fd75c1e884fa0418c480028c639c9256c8a6388428cb8cd4",
+        ),
         # NULL literal
         (
             [null()],
