@@ -1253,8 +1253,8 @@ class Catalog:
     ) -> list[DatasetDependency | None]:
         if (name and dataset_id) or (version and dataset_version_id):
             raise ValueError(
-                "Either name and version or"
-                " dataset_id and dataset_version_id must be provided"
+                "Invalid arguments: only one set of identifiers should be supplied. "
+                "Provide either (name and version),(dataset_id and dataset_version_id)"
             )
 
         if not dataset_id:
@@ -1306,12 +1306,7 @@ class Catalog:
                 continue
 
             nested_dependencies = d.nested_dependencies
-            if (
-                nested_dependencies is None
-                and indirect
-                and d.dataset_id
-                and d.dataset_version_id
-            ):
+            if nested_dependencies is None and d.dataset_id and d.dataset_version_id:
                 nested_dependencies = self.get_dataset_dependency_ids(
                     d.dataset_id,
                     d.dataset_version_id,

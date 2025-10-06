@@ -204,12 +204,6 @@ class DatasetDependency:
     def __hash__(self):
         return hash(f"{self.type}_{self.name}_{self.version}")
 
-    def set_dependencies(
-        self, dependencies: list["DatasetDependency | None"]
-    ) -> "DatasetDependency":
-        self.dependencies = dependencies
-        return self
-
 
 class DatasetStatus:
     CREATED = 1
