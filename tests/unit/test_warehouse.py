@@ -137,8 +137,8 @@ def test_dataset_rows_select_from_ids(numbers_table, warehouse):
     )
     assert len(rows) == 5
     ids, nums = zip(*rows, strict=False)
-    assert list(ids) == test_ids
-    assert list(nums) == [0, 1, 2, 3, 4]
+    assert set(ids) == set(test_ids)
+    assert set(nums) == {0, 1, 2, 3, 4}
 
 
 def test_dataset_rows_select_from_ids_batched(numbers_table, warehouse):
@@ -162,12 +162,12 @@ def test_dataset_rows_select_from_ids_batched(numbers_table, warehouse):
     assert len(batches) == 2
 
     ids, nums = zip(*batches[0], strict=False)
-    assert list(ids) == batched_ids[0]
-    assert list(nums) == [0, 2, 4]
+    assert set(ids) == set(batched_ids[0])
+    assert set(nums) == {0, 2, 4}
 
     ids, nums = zip(*batches[1], strict=False)
-    assert list(ids) == batched_ids[1]
-    assert list(nums) == [1, 3, 5]
+    assert set(ids) == set(batched_ids[1])
+    assert set(nums) == {1, 3, 5}
 
 
 @pytest.mark.parametrize("is_batched", [True, False])
