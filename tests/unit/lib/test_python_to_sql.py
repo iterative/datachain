@@ -1,4 +1,3 @@
-import sys
 from collections.abc import Mapping
 from typing import Literal
 
@@ -46,7 +45,6 @@ def test_list_of_tuples_object():
     )
 
 
-@pytest.mark.skipif(sys.version_info < (3, 10), reason="PEP 604 requires Python 3.10+")
 def test_pep_604_union_syntax():
     from datachain.sql.types import Int64
 
