@@ -18,7 +18,7 @@ from sqlalchemy import (
     select,
 )
 from sqlalchemy.dialects import sqlite
-from sqlalchemy.schema import CreateIndex, CreateTable, DropTable
+from sqlalchemy.schema import CreateColumn, CreateIndex, CreateTable, DropTable
 from sqlalchemy.sql import func
 from sqlalchemy.sql.elements import BinaryExpression, BooleanClauseList
 from sqlalchemy.sql.expression import bindparam, cast
@@ -327,6 +327,20 @@ class SQLiteDatabaseEngine(DatabaseEngine):
     def create_table(self, table: "Table", if_not_exists: bool = True) -> None:
         self.execute(CreateTable(table, if_not_exists=if_not_exists))
 
+    def create_column(
+        self, table: "Table", column: "Column", if_not_exists: bool = True
+    ) -> None:
+        quoted_table_name = quote_schema(table.name)
+        if if_not_exists:
+            res = self.execute_str(
+                f"SELECT 1 FROM pragma_table_info('{table.name}') "  # noqa: S608
+                f" WHERE name = '{column.name}';"
+            )
+            if res.fetchone():
+                return
+        column_str = str(CreateColumn(column))
+        self.execute_str(f"ALTER TABLE {quoted_table_name} ADD COLUMN {column_str}")
+
     def drop_table(self, table: "Table", if_exists: bool = False) -> None:
         self.execute(DropTable(table, if_exists=if_exists))
 
@@ -460,6 +474,12 @@ class SQLiteMetastore(AbstractDBMetastore):
         self.default_table_names.append(self._datasets_dependencies.name)
         self.db.create_table(self._jobs, if_not_exists=True)
         self.default_table_names.append(self._jobs.name)
+        self.db.create_column(
+            self._datasets_dependencies,
+            self._datasets_dependency_nested(),
+        )
+
+        # ADD  metadata for dependencies
         self.db.create_table(self._checkpoints, if_not_exists=True)
         self.default_table_names.append(self._checkpoints.name)
 
