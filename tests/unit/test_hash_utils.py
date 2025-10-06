@@ -110,8 +110,6 @@ def test_lambda_different_hashes():
 
 
 def test_hash_callable_with_dependencies():
-    """Test that hash_callable includes dependencies from the same module."""
-
     # Define helper and function that uses it
     def helper(x):
         return x + 1
@@ -134,3 +132,48 @@ def test_hash_callable_with_dependencies():
 
     # Hashes should be different because helper changed
     assert hash1 != hash2
+
+
+def test_hash_callable_recursive():
+    def factorial(n):
+        if n <= 1:
+            return 1
+        return n * factorial(n - 1)
+
+    assert hash_callable(factorial) is not None
+
+
+def test_hash_callable_mutual_recursion():
+    def func_a(n):
+        return func_b(n - 1) if n > 0 else 0
+
+    def func_b(n):
+        return func_a(n - 1) if n > 0 else 1
+
+    hash_a = hash_callable(func_a)
+    hash_b = hash_callable(func_b)
+
+    assert hash_a is not None
+    assert hash_b is not None
+    # Hashes should be different since functions are different
+    assert hash_a != hash_b
+
+
+def test_hash_callable_global_variable_limitation():
+    # This test documents the current limitation - global variables don't affect hash
+
+    global THRESHOLD  # noqa: PLW0603
+    THRESHOLD = 100
+
+    def filter_data(x):
+        return x > THRESHOLD
+
+    hash1 = hash_callable(filter_data)
+
+    # Change global variable
+    THRESHOLD = 200
+
+    hash2 = hash_callable(filter_data)
+
+    # Hash is the same even though behavior changed (limitation)
+    assert hash1 == hash2

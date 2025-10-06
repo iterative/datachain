@@ -142,11 +142,13 @@ def hash_callable(func, _visited=None):
             lines, _ = inspect.getsourcelines(func)
             payload = textwrap.dedent("".join(lines)).strip()
         except (OSError, TypeError):
-            # Fallback: bytecode if source not available
-            payload = func.__code__.co_code
+            # Fallback: bytecode + constants if source not available
+            code = func.__code__
+            payload = (code.co_code, code.co_consts, code.co_names, code.co_varnames)
     else:
-        # For lambdas, fall back directly to bytecode
-        payload = func.__code__.co_code
+        # For lambdas, use bytecode + constants
+        code = func.__code__
+        payload = (code.co_code, code.co_consts, code.co_names, code.co_varnames)
 
     # Normalize annotations
     annotations = {
@@ -191,7 +193,11 @@ def hash_callable(func, _visited=None):
 
     # Compute SHA256
     h = hashlib.sha256()
-    h.update(str(payload).encode() if isinstance(payload, str) else payload)
+    if isinstance(payload, str):
+        h.update(payload.encode())
+    else:
+        # payload is a tuple of (bytecode, consts, names, varnames)
+        h.update(str(payload).encode())
     h.update(str(extras).encode())
     # Include dependency hashes in sorted order for determinism
     if dependencies:
