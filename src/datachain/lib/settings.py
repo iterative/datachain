@@ -1,4 +1,4 @@
-from typing import Any, Optional, Union
+from typing import Any
 
 from datachain.lib.utils import DataChainParamsError
 
@@ -15,25 +15,25 @@ class SettingsError(DataChainParamsError):
 class Settings:
     """Settings for datachain."""
 
-    _cache: Optional[bool]
-    _prefetch: Optional[int]
-    _parallel: Optional[Union[bool, int]]
-    _workers: Optional[int]
-    _namespace: Optional[str]
-    _project: Optional[str]
-    _min_task_size: Optional[int]
-    _batch_size: Optional[int]
+    _cache: bool | None
+    _prefetch: int | None
+    _parallel: bool | int | None
+    _workers: int | None
+    _namespace: str | None
+    _project: str | None
+    _min_task_size: int | None
+    _batch_size: int | None
 
     def __init__(  # noqa: C901, PLR0912
         self,
-        cache: Optional[bool] = None,
-        prefetch: Optional[Union[bool, int]] = None,
-        parallel: Optional[Union[bool, int]] = None,
-        workers: Optional[int] = None,
-        namespace: Optional[str] = None,
-        project: Optional[str] = None,
-        min_task_size: Optional[int] = None,
-        batch_size: Optional[int] = None,
+        cache: bool | None = None,
+        prefetch: bool | int | None = None,
+        parallel: bool | int | None = None,
+        workers: int | None = None,
+        namespace: str | None = None,
+        project: str | None = None,
+        min_task_size: int | None = None,
+        batch_size: int | None = None,
     ) -> None:
         if cache is None:
             self._cache = None
@@ -148,27 +148,27 @@ class Settings:
         return self._cache if self._cache is not None else DEFAULT_CACHE
 
     @property
-    def prefetch(self) -> Optional[int]:
+    def prefetch(self) -> int | None:
         return self._prefetch if self._prefetch is not None else DEFAULT_PREFETCH
 
     @property
-    def parallel(self) -> Optional[Union[bool, int]]:
+    def parallel(self) -> bool | int | None:
         return self._parallel if self._parallel is not None else None
 
     @property
-    def workers(self) -> Optional[int]:
+    def workers(self) -> int | None:
         return self._workers if self._workers is not None else None
 
     @property
-    def namespace(self) -> Optional[str]:
+    def namespace(self) -> str | None:
         return self._namespace if self._namespace is not None else None
 
     @property
-    def project(self) -> Optional[str]:
+    def project(self) -> str | None:
         return self._project if self._project is not None else None
 
     @property
-    def min_task_size(self) -> Optional[int]:
+    def min_task_size(self) -> int | None:
         return self._min_task_size if self._min_task_size is not None else None
 
     @property
