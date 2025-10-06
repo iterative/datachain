@@ -48,7 +48,6 @@ def test_list_of_tuples_object():
 def test_pep_604_union_syntax():
     from datachain.sql.types import Int64
 
-    # Use runtime type creation for Python 3.10+
     str_or_none = str | None
     int_or_none = int | None
     dict_or_list_dict = dict | list[dict]
