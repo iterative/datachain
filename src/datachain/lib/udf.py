@@ -4,7 +4,7 @@ import traceback
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import closing, nullcontext
 from functools import partial
-from typing import TYPE_CHECKING, Any, Optional, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import attrs
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
@@ -60,7 +60,7 @@ UDFResult = dict[str, Any]
 class UDFAdapter:
     inner: "UDFBase"
     output: UDFOutputSpec
-    batch_size: Optional[int] = None
+    batch_size: int | None = None
     batch: int = 1
 
     def hash(self) -> str:
@@ -152,7 +152,7 @@ class UDFBase(AbstractUDF):
     prefetch: int = 0
 
     def __init__(self):
-        self.params: Optional[SignalSchema] = None
+        self.params: SignalSchema | None = None
         self.output = None
         self._func = None
 
@@ -197,7 +197,7 @@ class UDFBase(AbstractUDF):
         self,
         sign: "UdfSignature",
         params: "SignalSchema",
-        func: Optional[Callable],
+        func: Callable | None,
     ):
         self.params = params
         self.output = sign.output_schema
@@ -246,7 +246,7 @@ class UDFBase(AbstractUDF):
 
     def to_udf_wrapper(
         self,
-        batch_size: Optional[int] = None,
+        batch_size: int | None = None,
         batch: int = 1,
     ) -> UDFAdapter:
         return UDFAdapter(
@@ -304,11 +304,11 @@ class UDFBase(AbstractUDF):
                     self._set_stream_recursive(field_value, catalog, cache, download_cb)
 
     def _prepare_row(self, row, udf_fields, catalog, cache, download_cb):
-        row_dict = RowDict(zip(udf_fields, row))
+        row_dict = RowDict(zip(udf_fields, row, strict=False))
         return self._parse_row(row_dict, catalog, cache, download_cb)
 
     def _prepare_row_and_id(self, row, udf_fields, catalog, cache, download_cb):
-        row_dict = RowDict(zip(udf_fields, row))
+        row_dict = RowDict(zip(udf_fields, row, strict=False))
         udf_input = self._parse_row(row_dict, catalog, cache, download_cb)
         return row_dict["sys__id"], *udf_input
 
@@ -333,7 +333,7 @@ def noop(*args, **kwargs):
 
 async def _prefetch_input(
     row: T,
-    download_cb: Optional["Callback"] = None,
+    download_cb: Callback | None = None,
     after_prefetch: "Callable[[], None]" = noop,
 ) -> T:
     for obj in row:
@@ -356,8 +356,8 @@ def _remove_prefetched(row: T) -> None:
 def _prefetch_inputs(
     prepared_inputs: "Iterable[T]",
     prefetch: int = 0,
-    download_cb: Optional["Callback"] = None,
-    after_prefetch: Optional[Callable[[], None]] = None,
+    download_cb: Callback | None = None,
+    after_prefetch: Callable[[], None] | None = None,
     remove_prefetched: bool = False,
 ) -> "abc.Generator[T, None, None]":
     if not prefetch:
@@ -426,7 +426,10 @@ class Mapper(UDFBase):
             for id_, *udf_args in prepared_inputs:
                 result_objs = self.process_safe(udf_args)
                 udf_output = self._flatten_row(result_objs)
-                output = [{"sys__id": id_} | dict(zip(self.signal_names, udf_output))]
+                output = [
+                    {"sys__id": id_}
+                    | dict(zip(self.signal_names, udf_output, strict=False))
+                ]
                 processed_cb.relative_update(1)
                 yield output
 
@@ -474,7 +477,8 @@ class BatchMapper(UDFBase):
                         row, udf_fields, catalog, cache, download_cb
                     )
                     for row in batch
-                ]
+                ],
+                strict=False,
             )
             result_objs = list(self.process_safe(udf_args))
             n_objs = len(result_objs)
@@ -483,8 +487,9 @@ class BatchMapper(UDFBase):
             )
             udf_outputs = (self._flatten_row(row) for row in result_objs)
             output = [
-                {"sys__id": row_id} | dict(zip(self.signal_names, signals))
-                for row_id, signals in zip(row_ids, udf_outputs)
+                {"sys__id": row_id}
+                | dict(zip(self.signal_names, signals, strict=False))
+                for row_id, signals in zip(row_ids, udf_outputs, strict=False)
             ]
             processed_cb.relative_update(n_rows)
             yield output
@@ -520,7 +525,7 @@ class Generator(UDFBase):
             with safe_closing(self.process_safe(row)) as result_objs:
                 for result_obj in result_objs:
                     udf_output = self._flatten_row(result_obj)
-                    yield dict(zip(self.signal_names, udf_output))
+                    yield dict(zip(self.signal_names, udf_output, strict=False))
 
         prepared_inputs = _prepare_rows(udf_inputs)
         prepared_inputs = _prefetch_inputs(
@@ -559,11 +564,14 @@ class Aggregator(UDFBase):
                 *[
                     self._prepare_row(row, udf_fields, catalog, cache, download_cb)
                     for row in batch
-                ]
+                ],
+                strict=False,
             )
             result_objs = self.process_safe(udf_args)
             udf_outputs = (self._flatten_row(row) for row in result_objs)
-            output = (dict(zip(self.signal_names, row)) for row in udf_outputs)
+            output = (
+                dict(zip(self.signal_names, row, strict=False)) for row in udf_outputs
+            )
             processed_cb.relative_update(len(batch))
             yield output
 

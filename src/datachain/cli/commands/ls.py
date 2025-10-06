@@ -1,7 +1,7 @@
 import shlex
 from collections.abc import Iterable, Iterator
 from itertools import chain
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
@@ -16,7 +16,7 @@ def ls(
     studio: bool = False,
     local: bool = False,
     all: bool = True,
-    team: Optional[str] = None,
+    team: str | None = None,
     **kwargs,
 ):
     token = Config().read().get("studio", {}).get("token")
@@ -32,7 +32,7 @@ def ls(
 def ls_local(
     sources,
     long: bool = False,
-    catalog: Optional["Catalog"] = None,
+    catalog: "Catalog | None" = None,
     client_config=None,
     **kwargs,
 ):
@@ -78,7 +78,7 @@ def format_ls_entry(entry: str) -> str:
 def ls_remote(
     paths: Iterable[str],
     long: bool = False,
-    team: Optional[str] = None,
+    team: str | None = None,
 ):
     from datachain.node import long_line_str
     from datachain.remote.studio import StudioClient

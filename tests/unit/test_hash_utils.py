@@ -36,7 +36,7 @@ lambda3 = lambda z: z - 1  # noqa: E731
         ),
         (
             [func.avg("age")],
-            "ddc23abe88c722954e568f7db548ddcbd060eed1a1a815bfcaabd1dce8add3aa",
+            "c9907855a9c841bcca29ff5a5a37c090e91de7c79601ec9b6b798f9751534af5",
         ),
         (
             [
@@ -44,7 +44,7 @@ lambda3 = lambda z: z - 1  # noqa: E731
                     func.window(partition_by="file.name", order_by="file.name")
                 )
             ],
-            "9da0e1581399e92f628c00879422835fc05ada2584e9962c0edb20f87637e8bf",
+            "e29ad55360fdd051808e4f9f2a15ed103510df6e4a94aaded28a3fabe881f1e3",
         ),
         (
             [C("age").label("user_age")],

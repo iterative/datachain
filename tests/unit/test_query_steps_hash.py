@@ -116,7 +116,7 @@ def numbers_dataset(test_session):
     [
         (
             (C("name"), C("age") * 10, func.avg("id"), C("country").label("country")),
-            "d03395827dcdddc2b2c3f0a3dafb71affa89c7f3b03b89e42734af2aea0e05ba",
+            "03c2064ade6e44200eb0a8be896d7f29d91375e16f9160e5e002310656a89a2b",
         ),
         ((), "3245ba76bc1e4b1b1d4d775b88448ff02df9473bd919929166c70e9e2b245345"),
         (
@@ -125,7 +125,7 @@ def numbers_dataset(test_session):
         ),
         (
             (func.rand().label("random"),),
-            "f99e28cd2023ae5a7855c72ffd44fc99e36442818d3855f46b3aed576ffc1d30",
+            "fbc0220208fa36dfc70c788a4bfa86fc728aea33cc835117382c8ecc0c629fa4",
         ),
         (("name",), "46eeec88c5f842bd478d3ec87032c49b22adcdd46572463b0acde4b2bac0900a"),
     ],
@@ -139,7 +139,7 @@ def test_select_hash(inputs, _hash):
     [
         (
             (C("name"), C("age") * 10, func.avg("id"), C("country").label("country")),
-            "19894de08d545f3db85242be292dea0bb1ef47b0feaaf2c9359b159c7aa588c6",
+            "e28b9dbf27e763cbeca5633075cfadf84f14f6fc387e5c56852188838be9efb6",
         ),
         ((), "0d27e4cfa3801628afc535190c64a426d9db66e5145c57129b9f5ca0935ef29e"),
         (
@@ -181,7 +181,7 @@ def test_filter_hash(inputs, _hash):
         (
             {"new_id": func.sum("id")},
             SignalSchema({"id": int}),
-            "d8e3af2fa2b5357643f80702455f0bbecb795b38bbb37eef24c644315e28617c",
+            "f6a1264f6de7d9eb29702f0b47d329f80df4813d69a8161eb5e1b6a606d71adf",
         ),
         (
             {"new_id": C("id") * 10, "old_id": C("id")},
@@ -334,17 +334,17 @@ def test_join_hash(
             [
                 C("id"),
             ],
-            "0f28ac6aa6daee1892d5e79b559c9c1c2072cec2d53d4e0f12c3ae42db1a869f",
+            "e172be2291a84e2fbbe7a7d690eca4c18b1461f65936d9cafb759b0dc4c08b1a",
         ),
         (
             {"cnt": func.count(), "sum": func.sum("id")},
             [C("id"), C("name")],
-            "f8ef71fc6d3438cd6905e0a4d96f9b13a465c4a955127d929837e3f0ac3d31d6",
+            "d435b484d2ba634f0ed0e1779b05cb3c08b6f7c9f2dfa4dc1160fa78219b7c48",
         ),
         (
             {"cnt": func.count()},
             [],
-            "fe833a3ce997c919bcf3a2c5de1e76f2481a0937320f9fa0c2a8b3c191cea480",
+            "346997cc03f46cc8003b4866b42b68041e77c2817a8389cf5837e3fb90abf426",
         ),
     ],
 )

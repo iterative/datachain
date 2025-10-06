@@ -9,20 +9,12 @@ import subprocess
 import sys
 import time
 import traceback
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from copy import copy
 from dataclasses import dataclass
 from functools import cached_property, reduce
 from threading import Thread
-from typing import (
-    IO,
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    NoReturn,
-    Optional,
-    Union,
-)
+from typing import IO, TYPE_CHECKING, Any, NoReturn
 from uuid import uuid4
 
 import sqlalchemy as sa
@@ -64,10 +56,7 @@ from datachain.utils import DataChainDir
 from .datasource import DataSource
 
 if TYPE_CHECKING:
-    from datachain.data_storage import (
-        AbstractMetastore,
-        AbstractWarehouse,
-    )
+    from datachain.data_storage import AbstractMetastore, AbstractWarehouse
     from datachain.dataset import DatasetListVersion
     from datachain.job import Job
     from datachain.lib.listing_info import ListingInfo
@@ -120,8 +109,8 @@ def is_namespace_local(namespace_name) -> bool:
 
 def shutdown_process(
     proc: subprocess.Popen,
-    interrupt_timeout: Optional[int] = None,
-    terminate_timeout: Optional[int] = None,
+    interrupt_timeout: int | None = None,
+    terminate_timeout: int | None = None,
 ) -> int:
     """Shut down the process gracefully with SIGINT -> SIGTERM -> SIGKILL."""
 
@@ -168,7 +157,7 @@ class DatasetRowsFetcher(NodesThreadPool):
         remote_ds_version: str,
         local_ds: DatasetRecord,
         local_ds_version: str,
-        schema: dict[str, Union[SQLType, type[SQLType]]],
+        schema: dict[str, SQLType | type[SQLType]],
         max_threads: int = PULL_DATASET_MAX_THREADS,
         progress_bar=None,
     ):
@@ -183,7 +172,7 @@ class DatasetRowsFetcher(NodesThreadPool):
         self.local_ds = local_ds
         self.local_ds_version = local_ds_version
         self.schema = schema
-        self.last_status_check: Optional[float] = None
+        self.last_status_check: float | None = None
         self.studio_client = StudioClient()
         self.progress_bar = progress_bar
 
@@ -287,16 +276,16 @@ class DatasetRowsFetcher(NodesThreadPool):
 class NodeGroup:
     """Class for a group of nodes from the same source"""
 
-    listing: Optional["Listing"]
-    client: "Client"
+    listing: "Listing | None"
+    client: Client
     sources: list[DataSource]
 
     # The source path within the bucket
     # (not including the bucket name or s3:// prefix)
     source_path: str = ""
-    dataset_name: Optional[str] = None
-    dataset_version: Optional[str] = None
-    instantiated_nodes: Optional[list[NodeWithPath]] = None
+    dataset_name: str | None = None
+    dataset_version: str | None = None
+    instantiated_nodes: list[NodeWithPath] | None = None
 
     @property
     def is_dataset(self) -> bool:
@@ -323,7 +312,7 @@ def prepare_output_for_cp(
     output: str,
     force: bool = False,
     no_cp: bool = False,
-) -> tuple[bool, Optional[str]]:
+) -> tuple[bool, str | None]:
     total_node_count = 0
     for node_group in node_groups:
         if not node_group.sources:
@@ -372,7 +361,7 @@ def collect_nodes_for_cp(
 
     # Collect all sources to process
     for node_group in node_groups:
-        listing: Optional[Listing] = node_group.listing
+        listing: Listing | None = node_group.listing
         valid_sources: list[DataSource] = []
         for dsrc in node_group.sources:
             if dsrc.is_single_object():
@@ -416,7 +405,7 @@ def instantiate_node_groups(
     recursive: bool = False,
     virtual_only: bool = False,
     always_copy_dir_contents: bool = False,
-    copy_to_filename: Optional[str] = None,
+    copy_to_filename: str | None = None,
 ) -> None:
     instantiate_progress_bar = (
         None
@@ -444,7 +433,7 @@ def instantiate_node_groups(
     for node_group in node_groups:
         if not node_group.sources:
             continue
-        listing: Optional[Listing] = node_group.listing
+        listing: Listing | None = node_group.listing
         source_path: str = node_group.source_path
 
         copy_dir_contents = always_copy_dir_contents or source_path.endswith("/")
@@ -527,10 +516,8 @@ class Catalog:
         warehouse: "AbstractWarehouse",
         cache_dir=None,
         tmp_dir=None,
-        client_config: Optional[dict[str, Any]] = None,
-        warehouse_ready_callback: Optional[
-            Callable[["AbstractWarehouse"], None]
-        ] = None,
+        client_config: dict[str, Any] | None = None,
+        warehouse_ready_callback: Callable[["AbstractWarehouse"], None] | None = None,
         in_memory: bool = False,
     ):
         datachain_dir = DataChainDir(cache=cache_dir, tmp=tmp_dir)
@@ -592,7 +579,7 @@ class Catalog:
         client_config=None,
         column="file",
         skip_indexing=False,
-    ) -> tuple[Optional["Listing"], "Client", str]:
+    ) -> tuple["Listing | None", Client, str]:
         from datachain import read_storage
         from datachain.listing import Listing
 
@@ -633,7 +620,7 @@ class Catalog:
         skip_indexing=False,
         client_config=None,
         only_index=False,
-    ) -> Optional[list["DataSource"]]:
+    ) -> list["DataSource"] | None:
         enlisted_sources = []
         for src in sources:  # Opt: parallel
             listing, client, file_path = self.enlist_source(
@@ -679,7 +666,7 @@ class Catalog:
         enlisted_sources: list[tuple[bool, bool, Any]] = []
         client_config = client_config or self.client_config
         for src in sources:  # Opt: parallel
-            listing: Optional[Listing]
+            listing: Listing | None
             if src.startswith("ds://"):
                 ds_name, ds_version = parse_dataset_uri(src)
                 ds_namespace, ds_project, ds_name = parse_dataset_name(ds_name)
@@ -785,20 +772,20 @@ class Catalog:
     def create_dataset(
         self,
         name: str,
-        project: Optional[Project] = None,
-        version: Optional[str] = None,
+        project: Project | None = None,
+        version: str | None = None,
         *,
         columns: Sequence[Column],
-        feature_schema: Optional[dict] = None,
+        feature_schema: dict | None = None,
         query_script: str = "",
-        create_rows: Optional[bool] = True,
-        validate_version: Optional[bool] = True,
-        listing: Optional[bool] = False,
-        uuid: Optional[str] = None,
-        description: Optional[str] = None,
-        attrs: Optional[list[str]] = None,
-        update_version: Optional[str] = "patch",
-        job_id: Optional[str] = None,
+        create_rows: bool | None = True,
+        validate_version: bool | None = True,
+        listing: bool | None = False,
+        uuid: str | None = None,
+        description: str | None = None,
+        attrs: list[str] | None = None,
+        update_version: str | None = "patch",
+        job_id: str | None = None,
     ) -> "DatasetRecord":
         """
         Creates new dataset of a specific version.
@@ -888,8 +875,8 @@ class Catalog:
         error_stack="",
         script_output="",
         create_rows_table=True,
-        job_id: Optional[str] = None,
-        uuid: Optional[str] = None,
+        job_id: str | None = None,
+        uuid: str | None = None,
     ) -> DatasetRecord:
         """
         Creates dataset version if it doesn't exist.
@@ -973,7 +960,7 @@ class Catalog:
         return dataset_updated
 
     def remove_dataset_version(
-        self, dataset: DatasetRecord, version: str, drop_rows: Optional[bool] = True
+        self, dataset: DatasetRecord, version: str, drop_rows: bool | None = True
     ) -> None:
         """
         Deletes one single dataset version.
@@ -1001,7 +988,7 @@ class Catalog:
         self,
         name: str,
         sources: list[str],
-        project: Optional[Project] = None,
+        project: Project | None = None,
         client_config=None,
         recursive=False,
     ) -> DatasetRecord:
@@ -1070,8 +1057,8 @@ class Catalog:
     def get_full_dataset_name(
         self,
         name: str,
-        project_name: Optional[str] = None,
-        namespace_name: Optional[str] = None,
+        project_name: str | None = None,
+        namespace_name: str | None = None,
     ) -> tuple[str, str, str]:
         """
         Returns dataset name together with separated namespace and project name.
@@ -1103,8 +1090,8 @@ class Catalog:
     def get_dataset(
         self,
         name: str,
-        namespace_name: Optional[str] = None,
-        project_name: Optional[str] = None,
+        namespace_name: str | None = None,
+        project_name: str | None = None,
     ) -> DatasetRecord:
         from datachain.lib.listing import is_listing_dataset
 
@@ -1124,7 +1111,7 @@ class Catalog:
         name: str,
         namespace_name: str,
         project_name: str,
-        version: Optional[str] = None,
+        version: str | None = None,
         pull_dataset: bool = False,
         update: bool = False,
     ) -> DatasetRecord:
@@ -1215,10 +1202,10 @@ class Catalog:
         self,
         name: str,
         version: str,
-        namespace_name: Optional[str] = None,
-        project_name: Optional[str] = None,
+        namespace_name: str | None = None,
+        project_name: str | None = None,
         indirect=False,
-    ) -> list[Optional[DatasetDependency]]:
+    ) -> list[DatasetDependency | None]:
         dataset = self.get_dataset(
             name,
             namespace_name=namespace_name,
@@ -1250,10 +1237,10 @@ class Catalog:
 
     def ls_datasets(
         self,
-        prefix: Optional[str] = None,
+        prefix: str | None = None,
         include_listing: bool = False,
         studio: bool = False,
-        project: Optional[Project] = None,
+        project: Project | None = None,
     ) -> Iterator[DatasetListRecord]:
         from datachain.remote.studio import StudioClient
 
@@ -1285,12 +1272,12 @@ class Catalog:
 
     def list_datasets_versions(
         self,
-        prefix: Optional[str] = None,
+        prefix: str | None = None,
         include_listing: bool = False,
         with_job: bool = True,
         studio: bool = False,
-        project: Optional[Project] = None,
-    ) -> Iterator[tuple[DatasetListRecord, "DatasetListVersion", Optional["Job"]]]:
+        project: Project | None = None,
+    ) -> Iterator[tuple[DatasetListRecord, "DatasetListVersion", "Job | None"]]:
         """Iterate over all dataset versions with related jobs."""
         datasets = list(
             self.ls_datasets(
@@ -1318,7 +1305,7 @@ class Catalog:
                 for v in d.versions
             )
 
-    def listings(self, prefix: Optional[str] = None) -> list["ListingInfo"]:
+    def listings(self, prefix: str | None = None) -> list["ListingInfo"]:
         """
         Returns list of ListingInfo objects which are representing specific
         storage listing datasets
@@ -1369,9 +1356,9 @@ class Catalog:
         self,
         source: str,
         path: str,
-        version_id: Optional[str] = None,
+        version_id: str | None = None,
         client_config=None,
-        content_disposition: Optional[str] = None,
+        content_disposition: str | None = None,
         **kwargs,
     ) -> str:
         client_config = client_config or self.client_config
@@ -1390,7 +1377,7 @@ class Catalog:
         bucket_uri: str,
         name: str,
         version: str,
-        project: Optional[Project] = None,
+        project: Project | None = None,
         client_config=None,
     ) -> list[str]:
         dataset = self.get_dataset(
@@ -1404,7 +1391,7 @@ class Catalog:
         )
 
     def dataset_table_export_file_names(
-        self, name: str, version: str, project: Optional[Project] = None
+        self, name: str, version: str, project: Project | None = None
     ) -> list[str]:
         dataset = self.get_dataset(
             name,
@@ -1416,9 +1403,9 @@ class Catalog:
     def remove_dataset(
         self,
         name: str,
-        project: Optional[Project] = None,
-        version: Optional[str] = None,
-        force: Optional[bool] = False,
+        project: Project | None = None,
+        version: str | None = None,
+        force: bool | None = False,
     ):
         dataset = self.get_dataset(
             name,
@@ -1446,10 +1433,10 @@ class Catalog:
     def edit_dataset(
         self,
         name: str,
-        project: Optional[Project] = None,
-        new_name: Optional[str] = None,
-        description: Optional[str] = None,
-        attrs: Optional[list[str]] = None,
+        project: Project | None = None,
+        new_name: str | None = None,
+        description: str | None = None,
+        attrs: list[str] | None = None,
     ) -> DatasetRecord:
         update_data = {}
         if new_name:
@@ -1489,9 +1476,9 @@ class Catalog:
     def pull_dataset(  # noqa: C901, PLR0915
         self,
         remote_ds_uri: str,
-        output: Optional[str] = None,
-        local_ds_name: Optional[str] = None,
-        local_ds_version: Optional[str] = None,
+        output: str | None = None,
+        local_ds_name: str | None = None,
+        local_ds_version: str | None = None,
         cp: bool = False,
         force: bool = False,
         *,
@@ -1765,14 +1752,14 @@ class Catalog:
     def query(
         self,
         query_script: str,
-        env: Optional[Mapping[str, str]] = None,
+        env: Mapping[str, str] | None = None,
         python_executable: str = sys.executable,
         capture_output: bool = False,
         output_hook: Callable[[str], None] = noop,
-        params: Optional[dict[str, str]] = None,
-        job_id: Optional[str] = None,
-        interrupt_timeout: Optional[int] = None,
-        terminate_timeout: Optional[int] = None,
+        params: dict[str, str] | None = None,
+        job_id: str | None = None,
+        interrupt_timeout: int | None = None,
+        terminate_timeout: int | None = None,
     ) -> None:
         cmd = [python_executable, "-c", query_script]
         env = dict(env or os.environ)
@@ -1789,7 +1776,7 @@ class Catalog:
         def raise_termination_signal(sig: int, _: Any) -> NoReturn:
             raise TerminationSignal(sig)
 
-        thread: Optional[Thread] = None
+        thread: Thread | None = None
         with subprocess.Popen(cmd, env=env, **popen_kwargs) as proc:  # noqa: S603
             logger.info("Starting process %s", proc.pid)
 
@@ -1852,7 +1839,7 @@ class Catalog:
         no_cp: bool = False,
         no_glob: bool = False,
         *,
-        client_config: Optional["dict"] = None,
+        client_config: dict | None = None,
     ) -> None:
         """
         This function copies files from cloud sources to local destination directory

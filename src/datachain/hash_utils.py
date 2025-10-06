@@ -3,7 +3,7 @@ import inspect
 import json
 import textwrap
 from collections.abc import Sequence
-from typing import TypeVar, Union
+from typing import TypeVar
 
 from sqlalchemy.sql.elements import (
     BinaryExpression,
@@ -18,13 +18,14 @@ from sqlalchemy.sql.elements import (
     Tuple,
     UnaryExpression,
 )
-from sqlalchemy.sql.functions import Function
+from sqlalchemy.sql.functions import Function as SAFunction
+
+from datachain.func.base import Function
 
 T = TypeVar("T", bound=ColumnElement)
-ColumnLike = Union[str, T]
 
 
-def serialize_column_element(expr: Union[str, ColumnElement]) -> dict:  # noqa: PLR0911
+def serialize_column_element(expr: str | Function | ColumnElement) -> dict:  # noqa: PLR0911
     """
     Recursively serialize a SQLAlchemy ColumnElement into a deterministic structure.
     """
@@ -107,10 +108,18 @@ def serialize_column_element(expr: Union[str, ColumnElement]) -> dict:  # noqa: 
             "element": serialize_column_element(expr.element),  # type: ignore[arg-type]
         }
 
-    # Function calls: func.lower(col), func.count(col), etc.
+    # Datachain functions: Function("my_func", col1, col2)
     if isinstance(expr, Function):
         return {
-            "type": "function",
+            "type": "dc-function",
+            "name": expr.name,
+            "clauses": [serialize_column_element(c) for c in [*expr.cols, *expr.args]],
+        }
+
+    # Function calls: func.lower(col), func.count(col), etc.
+    if isinstance(expr, SAFunction):
+        return {
+            "type": "sa-function",
             "name": expr.name,
             "clauses": [serialize_column_element(c) for c in expr.clauses],
         }
@@ -148,7 +157,7 @@ def serialize_column_element(expr: Union[str, ColumnElement]) -> dict:  # noqa: 
     return {"type": "other", "repr": str(expr)}
 
 
-def hash_column_elements(columns: Sequence[ColumnLike]) -> str:
+def hash_column_elements(columns: Sequence[str | Function | T]) -> str:
     """
     Hash a list of ColumnElements deterministically, dialect agnostic.
     Only accepts ordered iterables (like list or tuple).

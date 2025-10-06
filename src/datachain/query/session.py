@@ -5,7 +5,8 @@ import os
 import re
 import sys
 import traceback
-from typing import TYPE_CHECKING, Callable, ClassVar, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING, ClassVar
 from uuid import uuid4
 
 from datachain.catalog import get_catalog
@@ -43,16 +44,16 @@ class Session:
     catalog (Catalog): Catalog object.
     """
 
-    GLOBAL_SESSION_CTX: Optional["Session"] = None
+    GLOBAL_SESSION_CTX: "Session | None" = None
     SESSION_CONTEXTS: ClassVar[list["Session"]] = []
     ORIGINAL_EXCEPT_HOOK = None
 
     # Job management - class-level to ensure one job per process
-    _CURRENT_JOB: ClassVar[Optional["Job"]] = None
-    _JOB_STATUS: ClassVar[Optional[JobStatus]] = None
-    _OWNS_JOB: ClassVar[Optional[bool]] = None
+    _CURRENT_JOB: ClassVar["Job | None"] = None
+    _JOB_STATUS: ClassVar[JobStatus | None] = None
+    _OWNS_JOB: ClassVar[bool | None] = None
     _JOB_HOOKS_REGISTERED: ClassVar[bool] = False
-    _JOB_FINALIZE_HOOK: ClassVar[Optional[Callable[[], None]]] = None
+    _JOB_FINALIZE_HOOK: ClassVar[Callable[[], None] | None] = None
 
     DATASET_PREFIX = "session_"
     GLOBAL_SESSION_NAME = "global"
@@ -62,8 +63,8 @@ class Session:
     def __init__(
         self,
         name="",
-        catalog: Optional["Catalog"] = None,
-        client_config: Optional[dict] = None,
+        catalog: "Catalog | None" = None,
+        client_config: dict | None = None,
         in_memory: bool = False,
     ):
         if re.match(r"^[0-9a-zA-Z]*$", name) is None:
@@ -246,9 +247,9 @@ class Session:
     @classmethod
     def get(
         cls,
-        session: Optional["Session"] = None,
-        catalog: Optional["Catalog"] = None,
-        client_config: Optional[dict] = None,
+        session: "Session | None" = None,
+        catalog: "Catalog | None" = None,
+        client_config: dict | None = None,
         in_memory: bool = False,
     ) -> "Session":
         """Creates a Session() object from a catalog.
