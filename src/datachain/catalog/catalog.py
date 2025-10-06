@@ -1756,6 +1756,7 @@ class Catalog:
         output_hook: Callable[[str], None] = noop,
         params: dict[str, str] | None = None,
         job_id: str | None = None,
+        reset: bool | None = False,
         interrupt_timeout: int | None = None,
         terminate_timeout: int | None = None,
     ) -> None:
@@ -1765,6 +1766,7 @@ class Catalog:
             {
                 "DATACHAIN_QUERY_PARAMS": json.dumps(params or {}),
                 "DATACHAIN_JOB_ID": job_id or "",
+                "DATACHAIN_CHECKPOINTS_RESET": str(reset),
             },
         )
         popen_kwargs: dict[str, Any] = {}

@@ -23,21 +23,32 @@ def mock_popen(mocker):
 def test(catalog, mock_popen):
     catalog.query("pass")
 
-    expected_env = os.environ | {"DATACHAIN_QUERY_PARAMS": "{}", "DATACHAIN_JOB_ID": ""}
+    expected_env = os.environ | {
+        "DATACHAIN_QUERY_PARAMS": "{}",
+        "DATACHAIN_JOB_ID": "",
+        "DATACHAIN_CHECKPOINTS_RESET": "False",
+    }
     mock_popen.assert_called_once_with([sys.executable, "-c", "pass"], env=expected_env)
 
 
-def test_args(catalog, mock_popen):
+@pytest.mark.parametrize("reset", [True, False])
+def test_args(catalog, mock_popen, reset):
     params = {"param": "value"}
     job_id = str(uuid4())
     env = {"env1": "value1", "env2": "value2"}
     catalog.query(
-        "pass", env=env, python_executable="mypython", params=params, job_id=job_id
+        "pass",
+        env=env,
+        python_executable="mypython",
+        params=params,
+        job_id=job_id,
+        reset=reset,
     )
 
     expected_env = env | {
         "DATACHAIN_QUERY_PARAMS": json.dumps(params),
         "DATACHAIN_JOB_ID": job_id,
+        "DATACHAIN_CHECKPOINTS_RESET": str(reset),
     }
     mock_popen.assert_called_once_with(["mypython", "-c", "pass"], env=expected_env)
 
