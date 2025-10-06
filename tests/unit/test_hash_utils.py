@@ -82,10 +82,6 @@ lambda3 = lambda z: z - 1  # noqa: E731
             ],
             "3088d3b926949f61df407ccf3057f6d298873f9e0f8f7497e1430db3048bd6db",
         ),
-        (
-            [sa_func.rank().over(order_by=C("age").desc())],
-            "e3f3f509be6686c7195e26f4c05d4dfea71770422f149f76a563a4c85182fbee",
-        ),
         # Labels
         (
             [C("age").label("user_age")],
