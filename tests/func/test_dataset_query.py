@@ -1051,7 +1051,7 @@ def test_dataset_dependencies_one_dataset_as_dependency(
 
     catalog.remove_dataset(dogs_dataset.name, force=True)
     # None means dependency was there but was removed in the meantime
-    assert catalog.get_dataset_dependencies(ds_name, "1.0.0") == [None]
+    assert catalog.get_dataset_dependencies(ds_name, "1.0.0") == []
 
 
 @pytest.mark.parametrize("method", ["union", "join"])
@@ -1126,11 +1126,11 @@ def test_dataset_dependencies_multiple_direct_dataset_dependencies(
             for d in catalog.get_dataset_dependencies(ds_name, "1.0.0")
         ),
         key=lambda d: d["name"] if d else "",
-    ) == sorted(expected, key=lambda d: d["name"] if d else "")
+    ) == sorted([e for e in expected if e], key=lambda d: d["name"] if d else "")
 
     # check when removing the other dependency
     catalog.remove_dataset(cats_dataset.name, force=True)
-    assert catalog.get_dataset_dependencies(ds_name, "1.0.0") == [None, None]
+    assert catalog.get_dataset_dependencies(ds_name, "1.0.0") == []
 
 
 def test_dataset_dependencies_multiple_union(
