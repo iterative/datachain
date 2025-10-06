@@ -1,6 +1,6 @@
 import inspect
 import logging
-from typing import Any, ClassVar, Optional
+from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
@@ -39,7 +39,7 @@ class ModelStore:
                 cls.register(anno)
 
     @classmethod
-    def get(cls, name: str, version: Optional[int] = None) -> Optional[type]:
+    def get(cls, name: str, version: int | None = None) -> type | None:
         class_dict = cls.store.get(name, None)
         if class_dict is None:
             return None
@@ -77,7 +77,7 @@ class ModelStore:
         )
 
     @staticmethod
-    def to_pydantic(val) -> Optional[type[BaseModel]]:
+    def to_pydantic(val) -> type[BaseModel] | None:
         if val is None or not ModelStore.is_pydantic(val):
             return None
         return val

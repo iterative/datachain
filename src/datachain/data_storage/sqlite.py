@@ -1,18 +1,11 @@
 import logging
 import os
 import sqlite3
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from contextlib import contextmanager
 from functools import cached_property, wraps
 from time import sleep
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    ClassVar,
-    Optional,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, ClassVar, Union
 
 import sqlalchemy
 from sqlalchemy import (
@@ -105,8 +98,8 @@ def retry_sqlite_locks(func):
 
 
 def get_db_file_in_memory(
-    db_file: Optional[str] = None, in_memory: bool = False
-) -> Optional[str]:
+    db_file: str | None = None, in_memory: bool = False
+) -> str | None:
     """Get in-memory db_file and check that conflicting arguments are not provided."""
     if in_memory:
         if db_file and db_file != ":memory:":
@@ -119,7 +112,7 @@ class SQLiteDatabaseEngine(DatabaseEngine):
     dialect = sqlite_dialect
 
     db: sqlite3.Connection
-    db_file: Optional[str]
+    db_file: str | None
     is_closed: bool
 
     def __init__(
@@ -127,8 +120,8 @@ class SQLiteDatabaseEngine(DatabaseEngine):
         engine: "Engine",
         metadata: "MetaData",
         db: sqlite3.Connection,
-        db_file: Optional[str] = None,
-        max_variable_number: Optional[int] = 999,
+        db_file: str | None = None,
+        max_variable_number: int | None = 999,
     ):
         self.engine = engine
         self.metadata = metadata
@@ -138,12 +131,12 @@ class SQLiteDatabaseEngine(DatabaseEngine):
         self.max_variable_number = max_variable_number
 
     @classmethod
-    def from_db_file(cls, db_file: Optional[str] = None) -> "SQLiteDatabaseEngine":
+    def from_db_file(cls, db_file: str | None = None) -> "SQLiteDatabaseEngine":
         return cls(*cls._connect(db_file=db_file))
 
     @staticmethod
     def _connect(
-        db_file: Optional[str] = None,
+        db_file: str | None = None,
     ) -> tuple["Engine", "MetaData", sqlite3.Connection, str, int]:
         try:
             if db_file == ":memory:":
@@ -232,7 +225,7 @@ class SQLiteDatabaseEngine(DatabaseEngine):
     def execute(
         self,
         query,
-        cursor: Optional[sqlite3.Cursor] = None,
+        cursor: sqlite3.Cursor | None = None,
         conn=None,
     ) -> sqlite3.Cursor:
         if self.is_closed:
@@ -251,7 +244,7 @@ class SQLiteDatabaseEngine(DatabaseEngine):
 
     @retry_sqlite_locks
     def executemany(
-        self, query, params, cursor: Optional[sqlite3.Cursor] = None, conn=None
+        self, query, params, cursor: sqlite3.Cursor | None = None, conn=None
     ) -> sqlite3.Cursor:
         if cursor:
             return cursor.executemany(self.compile(query).string, params)
@@ -351,13 +344,13 @@ class SQLiteMetastore(AbstractDBMetastore):
 
     META_TABLE = "meta"
 
-    db: "SQLiteDatabaseEngine"
+    db: SQLiteDatabaseEngine
 
     def __init__(
         self,
-        uri: Optional[StorageURI] = None,
-        db: Optional["SQLiteDatabaseEngine"] = None,
-        db_file: Optional[str] = None,
+        uri: StorageURI | None = None,
+        db: SQLiteDatabaseEngine | None = None,
+        db_file: str | None = None,
         in_memory: bool = False,
     ):
         uri = uri or StorageURI("")
@@ -384,7 +377,7 @@ class SQLiteMetastore(AbstractDBMetastore):
 
     def clone(
         self,
-        uri: Optional[StorageURI] = None,
+        uri: StorageURI | None = None,
         use_new_connection: bool = False,
     ) -> "SQLiteMetastore":
         uri = uri or StorageURI("")
@@ -582,15 +575,15 @@ class SQLiteWarehouse(AbstractWarehouse):
     This is currently used for the local cli.
     """
 
-    db: "SQLiteDatabaseEngine"
+    db: SQLiteDatabaseEngine
 
     # Cache for our defined column types to dialect specific TypeEngine relations
     _col_python_type: ClassVar[dict[type, "TypeEngine"]] = {}
 
     def __init__(
         self,
-        db: Optional["SQLiteDatabaseEngine"] = None,
-        db_file: Optional[str] = None,
+        db: SQLiteDatabaseEngine | None = None,
+        db_file: str | None = None,
         in_memory: bool = False,
     ):
         self.schema: DefaultSchema = DefaultSchema()
@@ -645,7 +638,7 @@ class SQLiteWarehouse(AbstractWarehouse):
             only=filter_tables,
         )
 
-    def is_ready(self, timeout: Optional[int] = None) -> bool:
+    def is_ready(self, timeout: int | None = None) -> bool:
         return True
 
     def create_dataset_rows_table(
@@ -791,7 +784,7 @@ class SQLiteWarehouse(AbstractWarehouse):
         self,
         table: Table,
         query: Select,
-        progress_cb: Optional[Callable[[int], None]] = None,
+        progress_cb: Callable[[int], None] | None = None,
     ) -> None:
         col_id = (
             query.selected_columns.sys__id

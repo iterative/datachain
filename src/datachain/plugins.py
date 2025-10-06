@@ -17,13 +17,7 @@ def ensure_plugins_loaded() -> None:
 
     # Compatible across importlib.metadata versions
     eps_obj = importlib_metadata.entry_points()
-    if hasattr(eps_obj, "select"):
-        eps_list = eps_obj.select(group="datachain.callables")
-    else:
-        # Compatibility for older versions of importlib_metadata, Python 3.9
-        eps_list = eps_obj.get("datachain.callables", [])  # type: ignore[attr-defined]
-
-    for ep in eps_list:
+    for ep in eps_obj.select(group="datachain.callables"):
         func = ep.load()
         func()
 

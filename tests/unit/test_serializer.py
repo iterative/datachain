@@ -1,7 +1,7 @@
 import base64
 import json
 from collections.abc import Callable
-from typing import Any, Optional
+from typing import Any
 
 import pytest
 
@@ -166,7 +166,7 @@ def test_reject_unregistered_callable():
 
 
 class NestedSerializable(Serializable):
-    def __init__(self, value: int, child: Optional["NestedSerializable"] = None):
+    def __init__(self, value: int, child: "NestedSerializable | None" = None):
         self.value = value
         self.child = child
 
@@ -174,7 +174,7 @@ class NestedSerializable(Serializable):
     def factory(
         cls,
         value: int,
-        child: Optional[tuple[Callable, list, dict[str, Any]]] = None,
+        child: tuple[Callable, list, dict[str, Any]] | None = None,
     ) -> "NestedSerializable":
         if child is not None:
             f, a, kw = child

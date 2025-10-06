@@ -1,12 +1,6 @@
 from collections.abc import Sequence
 from functools import wraps
-from typing import (
-    TYPE_CHECKING,
-    Callable,
-    Optional,
-    TypeVar,
-    Union,
-)
+from typing import TYPE_CHECKING, TypeVar
 
 import sqlalchemy
 from sqlalchemy.sql.functions import GenericFunction
@@ -18,7 +12,10 @@ from datachain.query.schema import DEFAULT_DELIMITER
 from datachain.utils import getenv_bool
 
 if TYPE_CHECKING:
-    from typing_extensions import Concatenate, ParamSpec
+    from collections.abc import Callable
+    from typing import Concatenate
+
+    from typing_extensions import ParamSpec
 
     from .datachain import DataChain
 
@@ -70,11 +67,11 @@ class DatasetFromValuesError(DataChainParamsError):
         super().__init__(f"Dataset{name} from values error: {msg}")
 
 
-MergeColType = Union[str, Function, sqlalchemy.ColumnElement]
+MergeColType = str | Function | sqlalchemy.ColumnElement
 
 
 def _validate_merge_on(
-    on: Union[MergeColType, Sequence[MergeColType]],
+    on: MergeColType | Sequence[MergeColType],
     ds: "DataChain",
 ) -> Sequence[MergeColType]:
     if isinstance(on, (str, sqlalchemy.ColumnElement)):
@@ -103,12 +100,12 @@ def _get_merge_error_str(col: MergeColType) -> str:
 class DatasetMergeError(DataChainParamsError):
     def __init__(
         self,
-        on: Union[MergeColType, Sequence[MergeColType]],
-        right_on: Optional[Union[MergeColType, Sequence[MergeColType]]],
+        on: MergeColType | Sequence[MergeColType],
+        right_on: MergeColType | Sequence[MergeColType] | None,
         msg: str,
     ):
         def _get_str(
-            on: Union[MergeColType, Sequence[MergeColType]],
+            on: MergeColType | Sequence[MergeColType],
         ) -> str:
             if not isinstance(on, Sequence):
                 return str(on)  # type: ignore[unreachable]
@@ -123,7 +120,7 @@ class DatasetMergeError(DataChainParamsError):
         super().__init__(f"Merge error on='{on_str}'{right_on_str}: {msg}")
 
 
-OutputType = Union[None, DataType, Sequence[str], dict[str, DataType]]
+OutputType = DataType | Sequence[str] | dict[str, DataType] | None
 
 
 class Sys(DataModel):

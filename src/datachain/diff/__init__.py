@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 from enum import Enum
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 from datachain.func import case, ifelse, isnone, or_
 from datachain.lib.signal_schema import SignalSchema
@@ -27,22 +27,22 @@ class CompareStatus(str, Enum):
 def _compare(  # noqa: C901, PLR0912
     left: "DataChain",
     right: "DataChain",
-    on: Union[str, Sequence[str]],
-    right_on: Optional[Union[str, Sequence[str]]] = None,
-    compare: Optional[Union[str, Sequence[str]]] = None,
-    right_compare: Optional[Union[str, Sequence[str]]] = None,
+    on: str | Sequence[str],
+    right_on: str | Sequence[str] | None = None,
+    compare: str | Sequence[str] | None = None,
+    right_compare: str | Sequence[str] | None = None,
     added: bool = True,
     deleted: bool = True,
     modified: bool = True,
     same: bool = True,
-    status_col: Optional[str] = None,
+    status_col: str | None = None,
 ) -> "DataChain":
     """Comparing two chains by identifying rows that are added, deleted, modified
     or same"""
     rname = "right_"
     schema = left.signals_schema  # final chain must have schema from left chain
 
-    def _to_list(obj: Optional[Union[str, Sequence[str]]]) -> Optional[list[str]]:
+    def _to_list(obj: str | Sequence[str] | None) -> list[str] | None:
         if obj is None:
             return None
         return [obj] if isinstance(obj, str) else list(obj)
@@ -109,7 +109,7 @@ def _compare(  # noqa: C901, PLR0912
         modified_cond = or_(  # type: ignore[assignment]
             *[
                 C(c) != (C(f"{rname}{rc}") if c == rc else C(rc))
-                for c, rc in zip(compare, right_compare)  # type: ignore[arg-type]
+                for c, rc in zip(compare, right_compare, strict=False)  # type: ignore[arg-type]
             ]
         )
 
@@ -133,7 +133,7 @@ def _compare(  # noqa: C901, PLR0912
                     C(f"{rname + l_on if on == right_on else r_on}"),
                     C(l_on),
                 )
-                for l_on, r_on in zip(on, right_on)  # type: ignore[arg-type]
+                for l_on, r_on in zip(on, right_on, strict=False)  # type: ignore[arg-type]
             }
         )
         .select_except(ldiff_col, rdiff_col)
@@ -168,10 +168,10 @@ def _compare(  # noqa: C901, PLR0912
 def compare_and_split(
     left: "DataChain",
     right: "DataChain",
-    on: Union[str, Sequence[str]],
-    right_on: Optional[Union[str, Sequence[str]]] = None,
-    compare: Optional[Union[str, Sequence[str]]] = None,
-    right_compare: Optional[Union[str, Sequence[str]]] = None,
+    on: str | Sequence[str],
+    right_on: str | Sequence[str] | None = None,
+    compare: str | Sequence[str] | None = None,
+    right_compare: str | Sequence[str] | None = None,
     added: bool = True,
     deleted: bool = True,
     modified: bool = True,

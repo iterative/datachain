@@ -3,7 +3,7 @@ import gc
 import logging
 import re
 import sys
-from typing import TYPE_CHECKING, ClassVar, Optional
+from typing import TYPE_CHECKING, ClassVar
 from uuid import uuid4
 
 from datachain.catalog import get_catalog
@@ -39,7 +39,7 @@ class Session:
     catalog (Catalog): Catalog object.
     """
 
-    GLOBAL_SESSION_CTX: Optional["Session"] = None
+    GLOBAL_SESSION_CTX: "Session | None" = None
     SESSION_CONTEXTS: ClassVar[list["Session"]] = []
     ORIGINAL_EXCEPT_HOOK = None
 
@@ -51,8 +51,8 @@ class Session:
     def __init__(
         self,
         name="",
-        catalog: Optional["Catalog"] = None,
-        client_config: Optional[dict] = None,
+        catalog: "Catalog | None" = None,
+        client_config: dict | None = None,
         in_memory: bool = False,
     ):
         if re.match(r"^[0-9a-zA-Z]*$", name) is None:
@@ -126,9 +126,9 @@ class Session:
     @classmethod
     def get(
         cls,
-        session: Optional["Session"] = None,
-        catalog: Optional["Catalog"] = None,
-        client_config: Optional[dict] = None,
+        session: "Session | None" = None,
+        catalog: "Catalog | None" = None,
+        client_config: dict | None = None,
         in_memory: bool = False,
     ) -> "Session":
         """Creates a Session() object from a catalog.
