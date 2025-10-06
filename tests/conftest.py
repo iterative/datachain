@@ -224,6 +224,9 @@ def test_session(catalog):
     with Session("TestSession", catalog=catalog) as session:
         yield session
 
+    # Clean up job-related atexit hooks to prevent errors during pytest shutdown
+    Session.cleanup_for_tests()
+
 
 @pytest.fixture
 def metastore_tmpfile(tmp_path):
