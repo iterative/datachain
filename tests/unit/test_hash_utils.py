@@ -107,3 +107,30 @@ def test_lambda_different_hashes():
 
     # Ensure hashes are all different
     assert len({h1, h2, h3}) == 3
+
+
+def test_hash_callable_with_dependencies():
+    """Test that hash_callable includes dependencies from the same module."""
+
+    # Define helper and function that uses it
+    def helper(x):
+        return x + 1
+
+    def func_with_helper(x):
+        return helper(x) * 2
+
+    hash1 = hash_callable(func_with_helper)
+    assert hash1 == "5b2dbae7cca8695acd62ea2ee2226277962c1c59a098ab948ff1b2e73b3d822c"
+
+    # Redefine helper with different implementation (same name, different code)
+    def helper(x):  # noqa: F811
+        return x + 10
+
+    def func_with_helper(x):
+        return helper(x) * 2
+
+    hash2 = hash_callable(func_with_helper)
+    assert hash2 == "099b86b464fb5a901393b28f073b7701f22a31775b5ce8402b4ea1116a50064e"
+
+    # Hashes should be different because helper changed
+    assert hash1 != hash2
