@@ -2,12 +2,15 @@ import contextlib
 from collections.abc import Iterable, Sequence
 from itertools import chain
 from multiprocessing import cpu_count
+from queue import Empty
 from sys import stdin
+from time import sleep
 from typing import TYPE_CHECKING, Literal
 
+import multiprocess
 from cloudpickle import load, loads
 from fsspec.callbacks import DEFAULT_CALLBACK, Callback
-from multiprocess import get_context
+from multiprocess.queues import Queue as MultiprocessQueue
 
 from datachain.catalog import Catalog
 from datachain.catalog.catalog import clone_catalog_with_cache
@@ -26,7 +29,6 @@ from datachain.query.utils import get_query_id_column
 from datachain.utils import batched, flatten, safe_closing
 
 if TYPE_CHECKING:
-    import multiprocess
     from sqlalchemy import Select, Table
 
     from datachain.data_storage import AbstractMetastore, AbstractWarehouse
@@ -98,8 +100,8 @@ def udf_worker_entrypoint(fd: int | None = None) -> int:
 
 class UDFDispatcher:
     _catalog: Catalog | None = None
-    task_queue: "multiprocess.Queue | None" = None
-    done_queue: "multiprocess.Queue | None" = None
+    task_queue: MultiprocessQueue | None = None
+    done_queue: MultiprocessQueue | None = None
 
     def __init__(self, udf_info: UdfInfo, buffer_size: int = DEFAULT_BATCH_SIZE):
         self.udf_data = udf_info["udf_data"]
@@ -118,7 +120,7 @@ class UDFDispatcher:
         self.buffer_size = buffer_size
         self.task_queue = None
         self.done_queue = None
-        self.ctx = get_context("spawn")
+        self.ctx = multiprocess.get_context("spawn")
 
     @property
     def catalog(self) -> "Catalog":
@@ -134,6 +136,8 @@ class UDFDispatcher:
         udf: UDFAdapter = loads(self.udf_data)
         # Ensure all registered DataModels have rebuilt schemas in worker processes.
         ModelStore.rebuild_all()
+        assert self.task_queue is not None
+        assert self.done_queue is not None
         return UDFWorker(
             self.catalog,
             udf,
@@ -266,8 +270,6 @@ class UDFDispatcher:
         for p in pool:
             p.start()
 
-        # Will be set to True if all tasks complete normally
-        normal_completion = False
         try:
             # Will be set to True when the input is exhausted
             input_finished = False
@@ -290,10 +292,20 @@ class UDFDispatcher:
 
             # Process all tasks
             while n_workers > 0:
-                try:
-                    result = get_from_queue(self.done_queue)
-                except KeyboardInterrupt:
-                    break
+                while True:
+                    try:
+                        result = self.done_queue.get_nowait()
+                        break
+                    except Empty:
+                        for p in pool:
+                            exitcode = p.exitcode
+                            if exitcode not in (None, 0):
+                                message = (
+                                    f"Worker {p.name} exited unexpectedly with "
+                                    f"code {exitcode}"
+                                )
+                                raise RuntimeError(message) from None
+                        sleep(0.01)
 
                 if bytes_downloaded := result.get("bytes_downloaded"):
                     download_cb.relative_update(bytes_downloaded)
@@ -320,39 +332,23 @@ class UDFDispatcher:
                         put_into_queue(self.task_queue, next(input_data))
                     except StopIteration:
                         input_finished = True
-
-            # Finished with all tasks normally
-            normal_completion = True
         finally:
-            if not normal_completion:
-                # Stop all workers if there is an unexpected exception
-                for _ in pool:
-                    put_into_queue(self.task_queue, STOP_SIGNAL)
+            for p in pool:
+                if p.is_alive():
+                    p.terminate()
 
-                # This allows workers (and this process) to exit without
-                # consuming any remaining data in the queues.
-                # (If they exit due to an exception.)
-                self.task_queue.close()
-                self.task_queue.join_thread()
-
-                # Flush all items from the done queue.
-                # This is needed if any workers are still running.
-                while n_workers > 0:
-                    result = get_from_queue(self.done_queue)
-                    status = result["status"]
-                    if status != OK_STATUS:
-                        n_workers -= 1
-
-                self.done_queue.close()
-                self.done_queue.join_thread()
-
-            # Wait for workers to stop
             for p in pool:
                 p.join()
+            self.task_queue.cancel_join_thread()
+            self.done_queue.cancel_join_thread()
+            self.task_queue.close()
+            self.done_queue.close()
+            self.task_queue = None
+            self.done_queue = None
 
 
 class DownloadCallback(Callback):
-    def __init__(self, queue: "multiprocess.Queue") -> None:
+    def __init__(self, queue: MultiprocessQueue) -> None:
         self.queue = queue
         super().__init__()
 
@@ -367,7 +363,7 @@ class ProcessedCallback(Callback):
     def __init__(
         self,
         name: Literal["processed", "generated"],
-        queue: "multiprocess.Queue",
+        queue: MultiprocessQueue,
     ) -> None:
         self.name = name
         self.queue = queue
@@ -382,8 +378,8 @@ class UDFWorker:
         self,
         catalog: "Catalog",
         udf: "UDFAdapter",
-        task_queue: "multiprocess.Queue",
-        done_queue: "multiprocess.Queue",
+        task_queue: MultiprocessQueue,
+        done_queue: MultiprocessQueue,
         query: "Select",
         table: "Table",
         cache: bool,
