@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sqlalchemy import TableClause
@@ -19,8 +19,8 @@ class Function:
     @abstractmethod
     def get_column(
         self,
-        signals_schema: Optional["SignalSchema"] = None,
+        signals_schema: "SignalSchema | None" = None,
         label: str | None = None,
-        table: Optional["TableClause"] = None,
+        table: "TableClause | None" = None,
     ) -> "Column":
         pass

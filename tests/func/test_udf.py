@@ -151,7 +151,7 @@ def test_udf(cloud_test_catalog):
     assert len(result2) == 3
     assert count == 3
 
-    for r1, r2 in zip(result1, result2):
+    for r1, r2 in zip(result1, result2, strict=False):
         # Check that the UDF ran successfully
         assert len(posixpath.basename(r1[0])) == r1[1]
         assert len(posixpath.basename(r2[0])) == r2[1]

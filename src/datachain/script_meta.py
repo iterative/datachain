@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 try:
     import tomllib
@@ -119,7 +119,7 @@ class ScriptConfig:
         return None
 
     @staticmethod
-    def parse(script: str) -> Optional["ScriptConfig"]:
+    def parse(script: str) -> "ScriptConfig | None":
         """
         Method that is parsing inline script metadata from datachain script and
         instantiating ScriptConfig class with found data. If no inline metadata is

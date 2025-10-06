@@ -13,7 +13,7 @@ from datetime import datetime
 from functools import partial
 from io import BytesIO
 from pathlib import Path, PurePath, PurePosixPath
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
@@ -335,7 +335,7 @@ class File(DataModel):
         cls,
         data: bytes,
         path: str | os.PathLike[str],
-        catalog: Optional["Catalog"] = None,
+        catalog: "Catalog | None" = None,
     ) -> "Self":
         if catalog is None:
             from datachain.catalog.loader import get_catalog
@@ -357,7 +357,7 @@ class File(DataModel):
 
     @classmethod
     def at(
-        cls, uri: str | os.PathLike[str], session: Optional["Session"] = None
+        cls, uri: str | os.PathLike[str], session: "Session | None" = None
     ) -> "Self":
         """Construct a File from a full URI in one call.
 
@@ -537,7 +537,7 @@ class File(DataModel):
         client = self._catalog.get_client(self.source)
         client.download(self, callback=self._download_cb)
 
-    async def _prefetch(self, download_cb: Optional["Callback"] = None) -> bool:
+    async def _prefetch(self, download_cb: "Callback | None" = None) -> bool:
         if self._catalog is None:
             raise RuntimeError("cannot prefetch file because catalog is not setup")
 

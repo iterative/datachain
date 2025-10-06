@@ -16,7 +16,7 @@ import pytz
 from PIL import Image
 
 import datachain as dc
-from datachain import DataModel, func
+from datachain import DataChainError, DataModel, Mapper, func
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetDependencyType
 from datachain.lib.file import File, ImageFile
@@ -25,6 +25,7 @@ from datachain.lib.tar import process_tar
 from datachain.query.dataset import QueryStep
 from tests.utils import (
     ANY_VALUE,
+    LARGE_TREE,
     TARRED_TREE,
     df_equal,
     images_equal,

@@ -276,7 +276,7 @@ class DatasetRowsFetcher(NodesThreadPool):
 class NodeGroup:
     """Class for a group of nodes from the same source"""
 
-    listing: Listing | None
+    listing: "Listing | None"
     client: Client
     sources: list[DataSource]
 
@@ -579,7 +579,7 @@ class Catalog:
         client_config=None,
         column="file",
         skip_indexing=False,
-    ) -> tuple[Listing | None, Client, str]:
+    ) -> tuple["Listing | None", Client, str]:
         from datachain import read_storage
         from datachain.listing import Listing
 

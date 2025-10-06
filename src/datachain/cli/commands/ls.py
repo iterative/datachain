@@ -1,7 +1,7 @@
 import shlex
 from collections.abc import Iterable, Iterator
 from itertools import chain
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
@@ -32,7 +32,7 @@ def ls(
 def ls_local(
     sources,
     long: bool = False,
-    catalog: Optional["Catalog"] = None,
+    catalog: "Catalog | None" = None,
     client_config=None,
     **kwargs,
 ):

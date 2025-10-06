@@ -1,6 +1,6 @@
 import inspect
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any, Optional, Union, get_args, get_origin
+from typing import TYPE_CHECKING, Any, Union, get_args, get_origin
 
 from sqlalchemy import BindParameter, Case, ColumnElement, Integer, cast, desc
 from sqlalchemy.sql import func as sa_func
@@ -38,12 +38,12 @@ class Func(Function):  # noqa: PLW1641
         cols: Sequence[ColT] | None = None,
         args: Sequence[Any] | None = None,
         kwargs: dict[str, Any] | None = None,
-        result_type: Optional["DataType"] = None,
+        result_type: "DataType | None" = None,
         type_from_args: Callable[..., "DataType"] | None = None,
         is_array: bool = False,
         from_array: bool = False,
         is_window: bool = False,
-        window: Optional["Window"] = None,
+        window: "Window | None" = None,
         label: str | None = None,
     ) -> None:
         self.name = name
@@ -98,7 +98,7 @@ class Func(Function):  # noqa: PLW1641
             else []
         )
 
-    def _db_col_type(self, signals_schema: "SignalSchema") -> Optional["DataType"]:
+    def _db_col_type(self, signals_schema: "SignalSchema") -> "DataType | None":
         if not self._db_cols:
             return None
 
@@ -387,7 +387,7 @@ class Func(Function):  # noqa: PLW1641
         return self.name
 
     def get_result_type(
-        self, signals_schema: Optional["SignalSchema"] = None
+        self, signals_schema: "SignalSchema | None" = None
     ) -> "DataType":
         if self.result_type:
             return self.result_type
@@ -411,9 +411,9 @@ class Func(Function):  # noqa: PLW1641
 
     def get_column(
         self,
-        signals_schema: Optional["SignalSchema"] = None,
+        signals_schema: "SignalSchema | None" = None,
         label: str | None = None,
-        table: Optional["TableClause"] = None,
+        table: "TableClause | None" = None,
     ) -> Column:
         col_type = self.get_result_type(signals_schema)
         sql_type = python_to_sql(col_type)

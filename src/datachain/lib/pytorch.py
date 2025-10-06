@@ -3,7 +3,7 @@ import os
 import weakref
 from collections.abc import Callable, Generator, Iterable, Iterator
 from contextlib import closing
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from PIL import Image
 from torch import float32
@@ -45,7 +45,7 @@ class PytorchDataset(IterableDataset):
         name: str,
         version: str | None = None,
         catalog: Catalog | None = None,
-        transform: Optional["Transform"] = None,
+        transform: "Transform | None" = None,
         tokenizer: Callable | None = None,
         tokenizer_kwargs: dict[str, Any] | None = None,
         num_samples: int = 0,

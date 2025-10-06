@@ -664,12 +664,12 @@ class DataChain:
 
         return result
 
-    def _validate_version(self, version: Optional[str]) -> None:
+    def _validate_version(self, version: str | None) -> None:
         """Validate dataset version if provided."""
         if version is not None:
             semver.validate(version)
 
-    def _validate_update_version(self, update_version: Optional[str]) -> None:
+    def _validate_update_version(self, update_version: str | None) -> None:
         """Ensure update_version is one of: major, minor, patch."""
         allowed = ["major", "minor", "patch"]
         if update_version not in allowed:
@@ -691,7 +691,7 @@ class DataChain:
         name: str,
         project: Project,
         kwargs: dict,
-    ) -> tuple[Optional[Job], Optional[str], Optional["DataChain"]]:
+    ) -> tuple[Job | None, str | None, "DataChain | None"]:
         """Check if checkpoint exists and return cached dataset if possible."""
         from .datasets import read_dataset
 
@@ -725,11 +725,11 @@ class DataChain:
     def _handle_delta(
         self,
         name: str,
-        version: Optional[str],
+        version: str | None,
         project: Project,
         schema: dict,
         kwargs: dict,
-    ) -> Optional["DataChain"]:
+    ) -> "DataChain | None":
         """Try to save as a delta dataset.
         Returns:
             A DataChain if delta logic could handle it, otherwise None to fall back

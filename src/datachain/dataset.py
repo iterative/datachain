@@ -3,7 +3,7 @@ import json
 from dataclasses import dataclass, fields
 from datetime import datetime
 from functools import cached_property
-from typing import Any, NewType, Optional, TypeVar
+from typing import Any, NewType, TypeVar
 from urllib.parse import urlparse
 
 from packaging.specifiers import SpecifierSet
@@ -105,7 +105,7 @@ class DatasetDependency:
     name: str
     version: str
     created_at: datetime
-    dependencies: list[Optional["DatasetDependency"]]
+    dependencies: list["DatasetDependency | None"]
 
     @property
     def dataset_name(self) -> str:
@@ -130,7 +130,7 @@ class DatasetDependency:
         dataset_name: str | None,
         dataset_version: str | None,
         dataset_version_created_at: datetime | None,
-    ) -> Optional["DatasetDependency"]:
+    ) -> "DatasetDependency | None":
         from datachain.lib.listing import is_listing_dataset
 
         if not dataset_id:

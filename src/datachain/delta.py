@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from copy import copy
 from functools import wraps
-from typing import TYPE_CHECKING, Optional, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 import datachain
 from datachain.dataset import DatasetDependency, DatasetRecord
@@ -91,7 +91,7 @@ def _get_retry_chain(
     right_on: str | Sequence[str] | None,
     delta_retry: bool | str | None,
     diff_chain: "DataChain",
-) -> Optional["DataChain"]:
+) -> "DataChain | None":
     """Get retry chain for processing error records and missing records."""
     # Import here to avoid circular import
     from datachain.lib.dc import C
@@ -197,7 +197,7 @@ def delta_retry_update(
     right_on: str | Sequence[str] | None = None,
     compare: str | Sequence[str] | None = None,
     delta_retry: bool | str | None = None,
-) -> tuple[Optional["DataChain"], list[DatasetDependency] | None, bool]:
+) -> tuple["DataChain | None", list[DatasetDependency] | None, bool]:
     """
     Creates new chain that consists of the last version of current delta dataset
     plus diff from the source with all needed modifications.
