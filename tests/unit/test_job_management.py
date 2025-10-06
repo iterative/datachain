@@ -1,5 +1,6 @@
 import pytest
 
+import datachain as dc
 from datachain.data_storage import JobStatus
 from datachain.query.session import Session
 from tests.utils import reset_session_job_state
@@ -158,3 +159,16 @@ def test_except_hook_delegates_to_original(test_session, patch_argv):
     assert "bad stuff" in called["exc"][1]
     db_job = test_session.catalog.metastore.get_job(test_session.get_or_create_job().id)
     assert db_job.status == JobStatus.FAILED
+
+
+@pytest.mark.parametrize("use_datachain_job_id_env", [True, False])
+def test_job_is_created_after_save(test_session, monkeypatch, use_datachain_job_id_env):
+    if use_datachain_job_id_env:
+        job_id = test_session.catalog.metastore.create_job("my-job", "echo 1;")
+        monkeypatch.setenv("DATACHAIN_JOB_ID", job_id)
+
+    dc.read_values(value=["val1", "val2"], session=test_session).save("my-ds")
+
+    dataset = test_session.catalog.get_dataset("my-ds")
+    result_job_id = dataset.get_version(dataset.latest_version).job_id
+    assert result_job_id == test_session.get_or_create_job().id
