@@ -438,6 +438,9 @@ class UDFStep(Step, ABC):
         """
 
     def populate_udf_table(self, udf_table: "Table", query: Select) -> None:
+        if "sys__id" not in query.selected_columns:
+            raise RuntimeError("Query must have sys__id column to run UDF")
+
         if (rows_total := self.catalog.warehouse.query_count(query)) == 0:
             return
 
