@@ -114,7 +114,7 @@ def test_read_parquet(test_session, tmp_dir):
 
 def test_read_storage(mock_get_listing):
     assert dc.read_storage("s3://bucket").hash() == (
-        "c38b6f4ebd7f0160d9f900016aad1e6781acd463f042588cfe793e9d189a8a0e"
+        "811e7089ead93a572d75d242220f6b94fd30f21def1bbcf37f095f083883bc41"
     )
 
 
@@ -128,11 +128,11 @@ def test_read_dataset(test_session):
 def test_order_of_steps(mock_get_listing):
     assert (
         dc.read_storage("s3://bucket").mutate(new=10).filter(C("age") > 20).hash()
-    ) == "08a6c5657feaea55c734bc8e2b3eb0733ea692d4eab5fa78fa26409e6c2af098"
+    ) == "b07f11244f1f84e4ecde87976fc380b4b8b656b0202294179e30be2112df7d3a"
 
     assert (
         dc.read_storage("s3://bucket").filter(C("age") > 20).mutate(new=10).hash()
-    ) == "e91b84094233a2bf4d08d6a95e55529a65d900399be3a05dc3e2ca0401f8f25b"
+    ) == "82780df484ce63e499ceed6ef3418920fdf68461a6b5f24234d3c0628c311c02"
 
 
 def test_all_possible_steps(test_session):
@@ -195,7 +195,7 @@ def test_all_possible_steps(test_session):
             right_on=["player.name"],
         )
         .hash()
-    ) == "9fc9c7751e5146b7b3b8857232ab632d401c7243f25c8c1ef8ac52d0a6dceb9a"
+    ) == "1e2caf5d0bcda7ea75e33bb4db43cc7321191306b47a77ae541b61bbbfcea32b"
 
 
 def test_diff(test_session):
@@ -218,4 +218,4 @@ def test_diff(test_session):
             status_col="diff",
         )
         .hash()
-    ) == "313e842c46fa9f0f4f7b6aaec918472ab1fc313ee0ad6a36464f19c4f1880471"
+    ) == "dbaf2277a1af061e98df3090500d3c284280bcf7f44340a315a0e3f3be72eafd"
