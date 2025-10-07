@@ -1,5 +1,4 @@
 import os
-import os.path
 import re
 from typing import TYPE_CHECKING
 

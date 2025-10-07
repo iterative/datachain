@@ -116,16 +116,16 @@ def numbers_dataset(test_session):
     [
         (
             (C("name"), C("age") * 10, func.avg("id"), C("country").label("country")),
-            "03c2064ade6e44200eb0a8be896d7f29d91375e16f9160e5e002310656a89a2b",
+            "d53cd8431f00e29ae1b31df6ef39ca206d2918555fe26877a9c6bb058fb77097",
         ),
         ((), "3245ba76bc1e4b1b1d4d775b88448ff02df9473bd919929166c70e9e2b245345"),
         (
             (C("name"),),
-            "fe30656afd177ef32da191cc5ab3c68268282c382ef405d753e128b69767602f",
+            "5da26d0f27cba01ae3464da25d5ca0d66ff57deb71eaecc549ffdcf0dfe471a4",
         ),
         (
             (func.rand().label("random"),),
-            "fbc0220208fa36dfc70c788a4bfa86fc728aea33cc835117382c8ecc0c629fa4",
+            "f6706531fb15662eec9a28845e8a460f1c5a2d9898cac0adb68568f7a16764ba",
         ),
         (("name",), "46eeec88c5f842bd478d3ec87032c49b22adcdd46572463b0acde4b2bac0900a"),
     ],
@@ -139,12 +139,12 @@ def test_select_hash(inputs, _hash):
     [
         (
             (C("name"), C("age") * 10, func.avg("id"), C("country").label("country")),
-            "e28b9dbf27e763cbeca5633075cfadf84f14f6fc387e5c56852188838be9efb6",
+            "1c8d29ed3c4c0e0f3344257a655a6d82b8bb53f3c0fa322f89cca0b5fc13d498",
         ),
         ((), "0d27e4cfa3801628afc535190c64a426d9db66e5145c57129b9f5ca0935ef29e"),
         (
             (C("name"),),
-            "9515589e525bfa21cec0b68edf41c09e8df26e5c3023fd0775ba0ea02c9f6c8f",
+            "84a4280453505d3d7704b75a78a7a861b130c4d06dd6b351a821bf17b3647e33",
         ),
         (("name",), "e26923a0433e549e680a4bcbc5cb95bb9a523c4b47ae23b07b2a928a609fc498"),
     ],
@@ -158,16 +158,16 @@ def test_select_except_hash(inputs, _hash):
     [
         (
             (sa.and_(C("name") != "John", C("age") * 10 > 100)),
-            "ba98f1a292cc7e95402899a43e5392708bcf448332e060becb24956fb531bfd0",
+            "c23048c8b931078d0d2dfc81fbde32f663a81f96a9592e7e39d9e88866f6cf73",
         ),
         ((), "19e718af35ddc311aa892756fa4f95413ce17db7c8b27f68200d9c3ce0fc8dbf"),
         (
             (C("files.path").glob("*.jpg"),),
-            "c77898b24747f5106fd3793862d6c227e0423e096c6859ac95c27a9f7f7a824b",
+            "b85dfb62d62f7b1e142c13544919e2cf8d4d47fa1d9da90cc41197b1d03e3ac4",
         ),
         (
             sa.or_(C("age") > 50, C("country") == "US"),
-            "025880292c522fe7d3cf1163a11dc33b12c333e53d09efb12e40be08f31f95a2",
+            "69102e1955786abc8e985b3ca88047ea04b340d9e0b5cde17f84a0c91db91775",
         ),
     ],
 )
@@ -181,12 +181,12 @@ def test_filter_hash(inputs, _hash):
         (
             {"new_id": func.sum("id")},
             SignalSchema({"id": int}),
-            "f6a1264f6de7d9eb29702f0b47d329f80df4813d69a8161eb5e1b6a606d71adf",
+            "47f57e322e79be378d12cb8823273567f93e52b245c9c0736562826b54cd6f7e",
         ),
         (
             {"new_id": C("id") * 10, "old_id": C("id")},
             SignalSchema({"id": int}),
-            "beea21224d3e2fae077a6a38d663fbaea0549fd38508b48fac3454cd76eca0df",
+            "d124ce7453b399e15a65bec1887d734115f0c1af3987f26d1df782ec1a29e879",
         ),
         (
             {},
@@ -209,12 +209,12 @@ def test_mutate_hash(inputs, schema, _hash):
     [
         (
             (C("name"), C("age")),
-            "8368b3239fd66422c18d561d2b61dbbae9fd88f9c935f67719b0d12ada50ffb6",
+            "47646b4046685f7f988b93e40cf72c8ea43678bbb2b68cfbc017fdb574bc428f",
         ),
         (("name",), "b3562b4508052e5a57bc84ae862255939df294eb079e124c5af61fc21044343e"),
         (
             (sa.desc(C("name")),),
-            "fd91c8cfe480debf1cdcf2b3f91462393a75042d0752a813ecc65dfed1ac7a6c",
+            "8e64f7694349f0e7487f662d4e24edff2fc42007d9d19b0e08aa504160c1f689",
         ),
         ((), "c525013178ef24a807af6d4dd44d108c20a5224eb3ab88b84c55c635ec32ba04"),
     ],
@@ -276,7 +276,7 @@ def test_union_hash(test_session, numbers_dataset):
     chain2 = dc.read_dataset("dev.num.numbers").filter(C("num") < 50).limit(20)
 
     assert SQLUnion(chain1._query, chain2._query).hash() == (
-        "c13c83192846342814d693740085494d509247bb3512af5966e66e2ed10bc8ad"
+        "a8bf8e31e33af266201985ac5e75b3d5e05f1b3b058ed5f87c173f888e0f0154"
     )
 
 
@@ -288,21 +288,21 @@ def test_union_hash(test_session, numbers_dataset):
             True,
             False,
             "{name}_right",
-            "cd3504449c68fce0e6a687a7494b8a3ddb8e1b9b3452147c234c384fbbc201b2",
+            "8dd0ed4b89968a76e0f674f9ce00ae5a31192da828c7d1ecfdf1af55e2f215b0",
         ),
         (
             ("id", "name"),
             False,
             True,
             "{name}_r",
-            "f637c82a2a197823ec5dc6614623c860d682110ceec60821759534a9e24ec6cf",
+            "e0d5d0cd0ed8b45053edaf159390645baf44671b41bcb9662b19c9caed85b64e",
         ),
         (
             sa.column("id"),
             True,
             False,
             "{name}_right",
-            "fc55d6192d0859f0df3bfa7981540a8ec0640de707b23c18bc2e0059560be8f8",
+            "6c202f10e09a90ffd1edb2ae3a806cd7cd9aec391e00c7d3a0b970f7f7bba795",
         ),
     ],
 )
@@ -334,17 +334,17 @@ def test_join_hash(
             [
                 C("id"),
             ],
-            "e172be2291a84e2fbbe7a7d690eca4c18b1461f65936d9cafb759b0dc4c08b1a",
+            "27df6281d3e83a7012edcab01715b1a44225a128df9c9f59586178ecdba6b8e6",
         ),
         (
             {"cnt": func.count(), "sum": func.sum("id")},
             [C("id"), C("name")],
-            "d435b484d2ba634f0ed0e1779b05cb3c08b6f7c9f2dfa4dc1160fa78219b7c48",
+            "02ed6a8bee48bf53928cdd9d22d2f383749da48c376d6b9965b4beb89f194da3",
         ),
         (
             {"cnt": func.count()},
             [],
-            "346997cc03f46cc8003b4866b42b68041e77c2817a8389cf5837e3fb90abf426",
+            "021558fa58a0aef53df616927a8bc12dae0f86afdb8e6f1f8be593bac4708fc4",
         ),
     ],
 )
@@ -360,15 +360,15 @@ def test_group_by_hash(columns, partition_by, _hash):
     [
         (
             [("id", "id")],
-            "4efcdbe669ea1c073bb12339f7bba79a78d61959988b12be975bffbf5dab0efd",
+            "5f90fc7c0a5287c8665c0fd912b0d91fb2a8baca416e68dd7bb38f75ad8926a1",
         ),
         (
             [("id", "id"), ("name", "name")],
-            "35553413a5a988fc8d3b73694881603f50143b1e1846a6d8748a6274519c64db",
+            "f595869a8990a259023ec5cefa9d27868750931ebaaf91c13e2296a0d5ded990",
         ),
         (
             [],
-            "9e9089070d5cfa3895ac03a53fd586149b84df49d0b2adbbe970fb6066e4b663",
+            "0f1100306f3029d8897dc826ef1ebb2c950673682b2479582bf19e38c12a3f5d",
         ),
     ],
 )
@@ -477,14 +477,14 @@ def test_udf_generator_hash(
             ["x"],
             {"double": int},
             [C("x")],
-            "27f07777802865d1f78bba78edce4233cc1b155dbce1b0af3d1e93b290fba04e",
+            "9f0ffa47038bfea164b8b6aa87a9f7ee245a8a39506596cd132d9c0ec65a50ec",
         ),
         (
             custom_feature_gen,
             ["t1"],
             {"x": CustomFeature},
             [C.t1.my_name],
-            "f3d2861f9c080529fe1ab33106c59f157e48ed6422dfb84c3e62e12b62db7fa7",
+            "2f782a9ec575cb3a9042c7683184ec5d9d2c9db56488f1a66922341048e9d688",
         ),
     ],
 )
