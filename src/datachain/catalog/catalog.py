@@ -516,7 +516,10 @@ def clone_catalog_with_cache(catalog: "Catalog", cache: "Cache") -> "Catalog":
     return clone
 
 
-def get_all_ids(d):
+def get_all_ids(d: dict[str, Any]) -> list[int]:
+    """
+    Extracts all unique dataset IDs from a nested dictionary structure.
+    """
     ids = set()
     for key, value in d.items():
         ids.add(int(key))
@@ -525,7 +528,16 @@ def get_all_ids(d):
     return sorted(ids)
 
 
-def build_nested_dependencies(dataset_deps, dependency_structure, indirect=True):
+def build_nested_dependencies(
+    dataset_deps: dict[str, DatasetDependency],
+    dependency_structure: dict[str, dict],
+    indirect: bool = True,
+) -> list[DatasetDependency | None]:
+    """
+    Recursively constructs a tree of dataset dependencies based on their relationships,
+    with each dependency containing its own nested dependencies.
+    """
+
     def build_deps(dep_id, deps_dict):
         if dep_id not in dataset_deps:
             return []
@@ -541,15 +553,19 @@ def build_nested_dependencies(dataset_deps, dependency_structure, indirect=True)
                     child_dep = dataset_deps[child_id]
                     child_dep.dependencies = child_deps
                     deps.append(child_dep)
+                else:
+                    deps.append(None)
         return deps
 
-    result = []
+    result: list[DatasetDependency | None] = []
     for root_id in dependency_structure:
         if root_id in dataset_deps:
             deps = build_deps(root_id, dependency_structure)
             root_dep = dataset_deps[root_id]
             root_dep.dependencies = deps
             result.append(root_dep)
+        else:
+            result.append(None)
 
     return result
 
