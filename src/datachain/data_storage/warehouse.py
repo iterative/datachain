@@ -257,17 +257,30 @@ class AbstractWarehouse(ABC, Serializable):
         }
 
         result_columns = []
+        id_col_found = rand_col_found = False
         for col in base.c:
             if col.name == "sys__id":
                 expr = self._system_row_number_expr()
                 expr = sa.cast(expr, system_types["sys__id"])
                 result_columns.append(expr.label("sys__id"))
+                id_col_found = True
             elif col.name == "sys__rand":
                 expr = self._system_random_expr()
                 expr = sa.cast(expr, system_types["sys__rand"])
                 result_columns.append(expr.label("sys__rand"))
+                rand_col_found = True
             else:
                 result_columns.append(col)
+
+        # Add missing system columns if needed
+        if not id_col_found:
+            expr = self._system_row_number_expr()
+            expr = sa.cast(expr, system_types["sys__id"])
+            result_columns.append(expr.label("sys__id"))
+        if not rand_col_found:
+            expr = self._system_random_expr()
+            expr = sa.cast(expr, system_types["sys__rand"])
+            result_columns.append(expr.label("sys__rand"))
 
         # Wrap in subquery to materialize window functions, then wrap again in SELECT
         # This ensures window functions are computed before INSERT...FROM SELECT
