@@ -16,6 +16,7 @@ from sqlalchemy import (
     UniqueConstraint,
     exists,
     select,
+    text,
 )
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.schema import CreateColumn, CreateIndex, CreateTable, DropTable
@@ -339,7 +340,8 @@ class SQLiteDatabaseEngine(DatabaseEngine):
             if res.fetchone():
                 return
         column_str = str(CreateColumn(column))
-        self.execute_str(f"ALTER TABLE {quoted_table_name} ADD COLUMN {column_str}")
+        stmt = text(f"ALTER TABLE {quoted_table_name} ADD COLUMN {column_str}")
+        self.execute(stmt)
 
     def drop_table(self, table: "Table", if_exists: bool = False) -> None:
         self.execute(DropTable(table, if_exists=if_exists))
