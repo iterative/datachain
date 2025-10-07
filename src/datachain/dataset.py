@@ -112,15 +112,22 @@ class DatasetDependencyMinimal:
         source_dataset_version_id: int | None,
         dataset_id: int | None,
         dataset_version_id: int | None,
-        nested_dependencies: str | None,
+        nested_dependencies: dict | str | None,
     ) -> "DatasetDependencyMinimal | None":
+        if isinstance(nested_dependencies, str):
+            nested_dependencies_dict = json.loads(nested_dependencies)
+        elif nested_dependencies is None:
+            nested_dependencies_dict = None
+        else:
+            nested_dependencies_dict = nested_dependencies
+
         return cls(
             id,
             dataset_id,
             dataset_version_id,
             source_dataset_id,
             source_dataset_version_id,
-            json.loads(nested_dependencies) if nested_dependencies else None,
+            nested_dependencies_dict,
         )
 
 
