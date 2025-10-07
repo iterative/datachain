@@ -26,7 +26,7 @@ def tuples_almost_equal(t1, t2, path=""):
             f"  Right ({type(t2)}): {t2}"
         )
 
-    for i, (x, y) in enumerate(zip(t1, t2)):
+    for i, (x, y) in enumerate(zip(t1, t2, strict=False)):
         subpath = f"{path}[{i}]"
         if isinstance(x, tuple) and isinstance(y, tuple):
             tuples_almost_equal(x, y, path=subpath)

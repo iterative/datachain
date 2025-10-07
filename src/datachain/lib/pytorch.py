@@ -1,9 +1,9 @@
 import logging
 import os
 import weakref
-from collections.abc import Generator, Iterable, Iterator
+from collections.abc import Callable, Generator, Iterable, Iterator
 from contextlib import closing
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any
 
 from PIL import Image
 from torch import float32
@@ -43,13 +43,13 @@ class PytorchDataset(IterableDataset):
     def __init__(
         self,
         name: str,
-        version: Optional[str] = None,
-        catalog: Optional["Catalog"] = None,
-        transform: Optional["Transform"] = None,
-        tokenizer: Optional[Callable] = None,
-        tokenizer_kwargs: Optional[dict[str, Any]] = None,
+        version: str | None = None,
+        catalog: Catalog | None = None,
+        transform: "Transform | None" = None,
+        tokenizer: Callable | None = None,
+        tokenizer_kwargs: dict[str, Any] | None = None,
         num_samples: int = 0,
-        dc_settings: Optional[Settings] = None,
+        dc_settings: Settings | None = None,
         remove_prefetched: bool = False,
     ):
         """
@@ -84,7 +84,7 @@ class PytorchDataset(IterableDataset):
             self.prefetch = prefetch
 
         self._cache = catalog.cache
-        self._prefetch_cache: Optional[Cache] = None
+        self._prefetch_cache: Cache | None = None
         self._remove_prefetched = remove_prefetched
         if prefetch and not self.cache:
             tmp_dir = catalog.cache.tmp_dir
@@ -104,7 +104,7 @@ class PytorchDataset(IterableDataset):
         self._ms_params = catalog.metastore.clone_params()
         self._wh_params = catalog.warehouse.clone_params()
         self._catalog_params = catalog.get_init_params()
-        self.catalog: Optional[Catalog] = None
+        self.catalog: Catalog | None = None
 
     def _get_catalog(self) -> "Catalog":
         ms_cls, ms_args, ms_kwargs = self._ms_params

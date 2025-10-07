@@ -8,19 +8,11 @@ import string
 import subprocess
 import sys
 from abc import ABC, abstractmethod
-from collections.abc import Generator, Iterable, Iterator, Sequence
+from collections.abc import Callable, Generator, Iterable, Iterator, Sequence
 from copy import copy
 from functools import wraps
 from types import GeneratorType
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Optional,
-    Protocol,
-    TypeVar,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
 import attrs
 import sqlalchemy
@@ -67,11 +59,12 @@ from datachain.utils import (
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from typing import Concatenate
 
     from sqlalchemy.sql.elements import ClauseElement
     from sqlalchemy.sql.schema import Table
     from sqlalchemy.sql.selectable import GenerativeSelect
-    from typing_extensions import Concatenate, ParamSpec, Self
+    from typing_extensions import ParamSpec, Self
 
     from datachain.catalog import Catalog
     from datachain.data_storage import AbstractWarehouse
@@ -83,13 +76,10 @@ if TYPE_CHECKING:
 
 INSERT_BATCH_SIZE = 10000
 
-PartitionByType = Union[
-    str,
-    Function,
-    ColumnElement,
-    Sequence[Union[str, Function, ColumnElement]],
-]
-JoinPredicateType = Union[str, ColumnClause, ColumnElement]
+PartitionByType = (
+    str | Function | ColumnElement | Sequence[str | Function | ColumnElement]
+)
+JoinPredicateType = str | ColumnClause | ColumnElement
 DatasetDependencyType = tuple["DatasetRecord", str]
 
 logger = logging.getLogger("datachain")
@@ -411,14 +401,14 @@ def get_generated_callback(is_generator: bool = False) -> Callback:
 class UDFStep(Step, ABC):
     udf: "UDFAdapter"
     catalog: "Catalog"
-    partition_by: Optional[PartitionByType] = None
+    partition_by: PartitionByType | None = None
     is_generator = False
     # Parameters from Settings
     cache: bool = False
-    parallel: Optional[int] = None
-    workers: Union[bool, int] = False
-    min_task_size: Optional[int] = None
-    batch_size: Optional[int] = None
+    parallel: int | None = None
+    workers: bool | int = False
+    min_task_size: int | None = None
+    batch_size: int | None = None
 
     def hash_inputs(self) -> str:
         partition_by = ensure_sequence(self.partition_by or [])
@@ -624,7 +614,7 @@ class UDFStep(Step, ABC):
 
         return tbl
 
-    def clone(self, partition_by: Optional[PartitionByType] = None) -> "Self":
+    def clone(self, partition_by: PartitionByType | None = None) -> "Self":
         if partition_by is not None:
             return self.__class__(
                 self.udf,
@@ -681,14 +671,14 @@ class UDFStep(Step, ABC):
 class UDFSignal(UDFStep):
     udf: "UDFAdapter"
     catalog: "Catalog"
-    partition_by: Optional[PartitionByType] = None
+    partition_by: PartitionByType | None = None
     is_generator = False
     # Parameters from Settings
     cache: bool = False
-    parallel: Optional[int] = None
-    workers: Union[bool, int] = False
-    min_task_size: Optional[int] = None
-    batch_size: Optional[int] = None
+    parallel: int | None = None
+    workers: bool | int = False
+    min_task_size: int | None = None
+    batch_size: int | None = None
 
     def create_udf_table(self, query: Select) -> "Table":
         udf_output_columns: list[sqlalchemy.Column[Any]] = [
@@ -760,14 +750,14 @@ class RowGenerator(UDFStep):
 
     udf: "UDFAdapter"
     catalog: "Catalog"
-    partition_by: Optional[PartitionByType] = None
+    partition_by: PartitionByType | None = None
     is_generator = True
     # Parameters from Settings
     cache: bool = False
-    parallel: Optional[int] = None
-    workers: Union[bool, int] = False
-    min_task_size: Optional[int] = None
-    batch_size: Optional[int] = None
+    parallel: int | None = None
+    workers: bool | int = False
+    min_task_size: int | None = None
+    batch_size: int | None = None
 
     def create_udf_table(self, query: Select) -> "Table":
         warehouse = self.catalog.warehouse
@@ -814,7 +804,7 @@ class SQLClause(Step, ABC):
 
     def parse_cols(
         self,
-        cols: Sequence[Union[Function, ColumnElement]],
+        cols: Sequence[Function | ColumnElement],
     ) -> tuple[ColumnElement, ...]:
         return tuple(c.get_column() if isinstance(c, Function) else c for c in cols)
 
@@ -825,7 +815,7 @@ class SQLClause(Step, ABC):
 
 @frozen
 class SQLSelect(SQLClause):
-    args: tuple[Union[Function, ColumnElement], ...]
+    args: tuple[Function | ColumnElement, ...]
 
     def hash_inputs(self) -> str:
         return hash_column_elements(self.args)
@@ -844,7 +834,7 @@ class SQLSelect(SQLClause):
 
 @frozen
 class SQLSelectExcept(SQLClause):
-    args: tuple[Union[Function, ColumnElement], ...]
+    args: tuple[Function | ColumnElement, ...]
 
     def hash_inputs(self) -> str:
         return hash_column_elements(self.args)
@@ -890,7 +880,7 @@ class SQLMutate(SQLClause):
 
 @frozen
 class SQLFilter(SQLClause):
-    expressions: tuple[Union[Function, ColumnElement], ...]
+    expressions: tuple[Function | ColumnElement, ...]
 
     def hash_inputs(self) -> str:
         return hash_column_elements(self.expressions)
@@ -906,7 +896,7 @@ class SQLFilter(SQLClause):
 
 @frozen
 class SQLOrderBy(SQLClause):
-    args: tuple[Union[Function, ColumnElement], ...]
+    args: tuple[Function | ColumnElement, ...]
 
     def hash_inputs(self) -> str:
         return hash_column_elements(self.args)
@@ -982,18 +972,26 @@ class SQLUnion(Step):
 
         columns1, columns2 = _order_columns(q1.columns, q2.columns)
 
-        def q(*columns):
-            names = {c.name for c in columns}
-            col1 = [c for c in columns1 if c.name in names]
-            col2 = [c for c in columns2 if c.name in names]
-            res = sqlalchemy.select(*col1).union_all(sqlalchemy.select(*col2))
+        union_select = sqlalchemy.select(*columns1).union_all(
+            sqlalchemy.select(*columns2)
+        )
+        union_cte = union_select.cte()
+        regenerated = self.query1.catalog.warehouse._regenerate_system_columns(
+            union_cte
+        )
+        result_columns = tuple(regenerated.selected_columns)
 
-            subquery = res.subquery()
-            return sqlalchemy.select(*subquery.c).select_from(subquery)
+        def q(*columns):
+            if not columns:
+                return regenerated
+
+            names = {c.name for c in columns}
+            selected = [c for c in result_columns if c.name in names]
+            return regenerated.with_only_columns(*selected)
 
         return step_result(
             q,
-            columns1,
+            result_columns,
             dependencies=self.query1.dependencies | self.query2.dependencies,
         )
 
@@ -1003,13 +1001,15 @@ class SQLJoin(Step):
     catalog: "Catalog"
     query1: "DatasetQuery"
     query2: "DatasetQuery"
-    predicates: Union[JoinPredicateType, tuple[JoinPredicateType, ...]]
+    predicates: JoinPredicateType | tuple[JoinPredicateType, ...]
     inner: bool
     full: bool
     rname: str
 
     def hash_inputs(self) -> str:
-        predicates = ensure_sequence(self.predicates or [])
+        predicates = (
+            ensure_sequence(self.predicates) if self.predicates is not None else []
+        )
 
         parts = [
             bytes.fromhex(self.query1.hash()),
@@ -1140,8 +1140,8 @@ class SQLJoin(Step):
 
 @frozen
 class SQLGroupBy(SQLClause):
-    cols: Sequence[Union[str, Function, ColumnElement]]
-    group_by: Sequence[Union[str, Function, ColumnElement]]
+    cols: Sequence[str | Function | ColumnElement]
+    group_by: Sequence[str | Function | ColumnElement]
 
     def hash_inputs(self) -> str:
         return hashlib.sha256(
@@ -1201,6 +1201,7 @@ def _validate_columns(
                 missing_left,
             ],
             ["left", "right"],
+            strict=False,
         )
         if missing_columns
     ]
@@ -1233,32 +1234,32 @@ class DatasetQuery:
     def __init__(
         self,
         name: str,
-        version: Optional[str] = None,
-        project_name: Optional[str] = None,
-        namespace_name: Optional[str] = None,
-        catalog: Optional["Catalog"] = None,
-        session: Optional[Session] = None,
+        version: str | None = None,
+        project_name: str | None = None,
+        namespace_name: str | None = None,
+        catalog: "Catalog | None" = None,
+        session: Session | None = None,
         in_memory: bool = False,
         update: bool = False,
     ) -> None:
         self.session = Session.get(session, catalog=catalog, in_memory=in_memory)
         self.catalog = catalog or self.session.catalog
         self.steps: list[Step] = []
-        self._chunk_index: Optional[int] = None
-        self._chunk_total: Optional[int] = None
+        self._chunk_index: int | None = None
+        self._chunk_total: int | None = None
         self.temp_table_names: list[str] = []
         self.dependencies: set[DatasetDependencyType] = set()
         self.table = self.get_table()
-        self.starting_step: Optional[QueryStep] = None
-        self.name: Optional[str] = None
-        self.version: Optional[str] = None
-        self.feature_schema: Optional[dict] = None
-        self.column_types: Optional[dict[str, Any]] = None
+        self.starting_step: QueryStep | None = None
+        self.name: str | None = None
+        self.version: str | None = None
+        self.feature_schema: dict | None = None
+        self.column_types: dict[str, Any] | None = None
         self.before_steps: list[Callable] = []
-        self.listing_fn: Optional[Callable] = None
+        self.listing_fn: Callable | None = None
         self.update = update
 
-        self.list_ds_name: Optional[str] = None
+        self.list_ds_name: str | None = None
 
         self.name = name
         self.dialect = self.catalog.warehouse.db.dialect
@@ -1342,7 +1343,7 @@ class DatasetQuery:
         """
         return self.name is not None and self.version is not None
 
-    def c(self, column: Union[C, str]) -> "ColumnClause[Any]":
+    def c(self, column: C | str) -> "ColumnClause[Any]":
         col: sqlalchemy.ColumnClause = (
             sqlalchemy.column(column)
             if isinstance(column, str)
@@ -1451,7 +1452,7 @@ class DatasetQuery:
             return list(result)
 
     def to_db_records(self) -> list[dict[str, Any]]:
-        return self.db_results(lambda cols, row: dict(zip(cols, row)))
+        return self.db_results(lambda cols, row: dict(zip(cols, row, strict=False)))
 
     @contextlib.contextmanager
     def as_iterable(self, **kwargs) -> Iterator[ResultIter]:
@@ -1490,7 +1491,7 @@ class DatasetQuery:
                         yield from rows
 
             async def get_params(row: Sequence) -> tuple:
-                row_dict = RowDict(zip(query_fields, row))
+                row_dict = RowDict(zip(query_fields, row, strict=False))
                 return tuple(  # noqa: C409
                     [
                         await p.get_value_async(
@@ -1710,7 +1711,7 @@ class DatasetQuery:
     def join(
         self,
         dataset_query: "DatasetQuery",
-        predicates: Union[JoinPredicateType, Sequence[JoinPredicateType]],
+        predicates: JoinPredicateType | Sequence[JoinPredicateType],
         inner=False,
         full=False,
         rname="{name}_right",
@@ -1752,17 +1753,17 @@ class DatasetQuery:
     def add_signals(
         self,
         udf: "UDFAdapter",
-        partition_by: Optional[PartitionByType] = None,
+        partition_by: PartitionByType | None = None,
         # Parameters from Settings
         cache: bool = False,
-        parallel: Optional[int] = None,
-        workers: Union[bool, int] = False,
-        min_task_size: Optional[int] = None,
-        batch_size: Optional[int] = None,
+        parallel: int | None = None,
+        workers: bool | int = False,
+        min_task_size: int | None = None,
+        batch_size: int | None = None,
         # Parameters are unused, kept only to match the signature of Settings.to_dict
-        prefetch: Optional[int] = None,
-        namespace: Optional[str] = None,
-        project: Optional[str] = None,
+        prefetch: int | None = None,
+        namespace: str | None = None,
+        project: str | None = None,
     ) -> "Self":
         """
         Adds one or more signals based on the results from the provided UDF.
@@ -1803,17 +1804,17 @@ class DatasetQuery:
     def generate(
         self,
         udf: "UDFAdapter",
-        partition_by: Optional[PartitionByType] = None,
+        partition_by: PartitionByType | None = None,
         # Parameters from Settings
         cache: bool = False,
-        parallel: Optional[int] = None,
-        workers: Union[bool, int] = False,
-        min_task_size: Optional[int] = None,
-        batch_size: Optional[int] = None,
+        parallel: int | None = None,
+        workers: bool | int = False,
+        min_task_size: int | None = None,
+        batch_size: int | None = None,
         # Parameters are unused, kept only to match the signature of Settings.to_dict:
-        prefetch: Optional[int] = None,
-        namespace: Optional[str] = None,
-        project: Optional[str] = None,
+        prefetch: int | None = None,
+        namespace: str | None = None,
+        project: str | None = None,
     ) -> "Self":
         query = self.clone()
         steps = query.steps
@@ -1878,14 +1879,14 @@ class DatasetQuery:
 
     def save(
         self,
-        name: Optional[str] = None,
-        version: Optional[str] = None,
-        project: Optional[Project] = None,
-        feature_schema: Optional[dict] = None,
-        dependencies: Optional[list[DatasetDependency]] = None,
-        description: Optional[str] = None,
-        attrs: Optional[list[str]] = None,
-        update_version: Optional[str] = "patch",
+        name: str | None = None,
+        version: str | None = None,
+        project: Project | None = None,
+        feature_schema: dict | None = None,
+        dependencies: list[DatasetDependency] | None = None,
+        description: str | None = None,
+        attrs: list[str] | None = None,
+        update_version: str | None = "patch",
         **kwargs,
     ) -> "Self":
         """Save the query as a dataset."""
@@ -1979,5 +1980,5 @@ class DatasetQuery:
         return isinstance(self.last_step, SQLOrderBy)
 
     @property
-    def last_step(self) -> Optional[Step]:
+    def last_step(self) -> Step | None:
         return self.steps[-1] if self.steps else None

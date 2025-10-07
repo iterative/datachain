@@ -4,18 +4,15 @@ import os
 import os.path
 import sys
 import warnings
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from typing import (
     IO,
     TYPE_CHECKING,
     Any,
     BinaryIO,
-    Callable,
     ClassVar,
     Literal,
-    Optional,
     TypeVar,
-    Union,
     cast,
     overload,
 )
@@ -85,19 +82,20 @@ if TYPE_CHECKING:
     import sqlite3
 
     import pandas as pd
+    from sqlalchemy.orm import Session as OrmSession
     from typing_extensions import ParamSpec, Self
 
     P = ParamSpec("P")
 
-    ConnectionType = Union[
-        str,
-        sqlalchemy.engine.URL,
-        sqlalchemy.engine.interfaces.Connectable,
-        sqlalchemy.engine.Engine,
-        sqlalchemy.engine.Connection,
-        "sqlalchemy.orm.Session",
-        sqlite3.Connection,
-    ]
+    ConnectionType = (
+        str
+        | sqlalchemy.engine.URL
+        | sqlalchemy.engine.interfaces.Connectable
+        | sqlalchemy.engine.Engine
+        | sqlalchemy.engine.Connection
+        | OrmSession
+        | sqlite3.Connection
+    )
 
 
 T = TypeVar("T", bound="DataChain")
@@ -186,7 +184,7 @@ class DataChain:
         query: DatasetQuery,
         settings: Settings,
         signal_schema: SignalSchema,
-        setup: Optional[dict] = None,
+        setup: dict | None = None,
         _sys: bool = False,
     ) -> None:
         """Don't instantiate this directly, use one of the from_XXX constructors."""
@@ -197,10 +195,10 @@ class DataChain:
         self._sys = _sys
         self._delta = False
         self._delta_unsafe = False
-        self._delta_on: Optional[Union[str, Sequence[str]]] = None
-        self._delta_result_on: Optional[Union[str, Sequence[str]]] = None
-        self._delta_compare: Optional[Union[str, Sequence[str]]] = None
-        self._delta_retry: Optional[Union[bool, str]] = None
+        self._delta_on: str | Sequence[str] | None = None
+        self._delta_result_on: str | Sequence[str] | None = None
+        self._delta_compare: str | Sequence[str] | None = None
+        self._delta_retry: bool | str | None = None
 
     def __repr__(self) -> str:
         """Return a string representation of the chain."""
@@ -224,10 +222,10 @@ class DataChain:
 
     def _as_delta(
         self,
-        on: Optional[Union[str, Sequence[str]]] = None,
-        right_on: Optional[Union[str, Sequence[str]]] = None,
-        compare: Optional[Union[str, Sequence[str]]] = None,
-        delta_retry: Optional[Union[bool, str]] = None,
+        on: str | Sequence[str] | None = None,
+        right_on: str | Sequence[str] | None = None,
+        compare: str | Sequence[str] | None = None,
+        delta_retry: bool | str | None = None,
         delta_unsafe: bool = False,
     ) -> "Self":
         """Marks this chain as delta, which means special delta process will be
@@ -277,7 +275,7 @@ class DataChain:
 
         raise ValueError(f"Column with name {name} not found in the schema")
 
-    def c(self, column: Union[str, Column]) -> Column:
+    def c(self, column: str | Column) -> Column:
         """Returns Column instance attached to the current chain."""
         c = self.column(column) if isinstance(column, str) else self.column(column.name)
         c.table = self._query.table
@@ -289,17 +287,17 @@ class DataChain:
         return self._query.session
 
     @property
-    def name(self) -> Optional[str]:
+    def name(self) -> str | None:
         """Name of the underlying dataset, if there is one."""
         return self._query.name
 
     @property
-    def version(self) -> Optional[str]:
+    def version(self) -> str | None:
         """Version of the underlying dataset, if there is one."""
         return self._query.version
 
     @property
-    def dataset(self) -> Optional[DatasetRecord]:
+    def dataset(self) -> DatasetRecord | None:
         """Underlying dataset, if there is one."""
         if not self.name:
             return None
@@ -313,7 +311,7 @@ class DataChain:
         """Return `self.union(other)`."""
         return self.union(other)
 
-    def print_schema(self, file: Optional[IO] = None) -> None:
+    def print_schema(self, file: IO | None = None) -> None:
         """Print schema of the chain."""
         self._effective_signals_schema.print_tree(file=file)
 
@@ -324,8 +322,8 @@ class DataChain:
     def _evolve(
         self,
         *,
-        query: Optional[DatasetQuery] = None,
-        settings: Optional[Settings] = None,
+        query: DatasetQuery | None = None,
+        settings: Settings | None = None,
         signal_schema=None,
         _sys=None,
     ) -> "Self":
@@ -353,15 +351,15 @@ class DataChain:
 
     def settings(
         self,
-        cache: Optional[bool] = None,
-        prefetch: Optional[Union[bool, int]] = None,
-        parallel: Optional[Union[bool, int]] = None,
-        workers: Optional[int] = None,
-        namespace: Optional[str] = None,
-        project: Optional[str] = None,
-        min_task_size: Optional[int] = None,
-        batch_size: Optional[int] = None,
-        sys: Optional[bool] = None,
+        cache: bool | None = None,
+        prefetch: bool | int | None = None,
+        parallel: bool | int | None = None,
+        workers: int | None = None,
+        namespace: str | None = None,
+        project: str | None = None,
+        min_task_size: int | None = None,
+        batch_size: int | None = None,
+        sys: bool | None = None,
     ) -> "Self":
         """
         Set chain execution parameters. Returns the chain itself, allowing method
@@ -412,7 +410,7 @@ class DataChain:
         )
         return self._evolve(settings=settings, _sys=sys)
 
-    def reset_settings(self, settings: Optional[Settings] = None) -> "Self":
+    def reset_settings(self, settings: Settings | None = None) -> "Self":
         """Reset all chain settings to default values."""
         self._settings = settings if settings else Settings()
         return self
@@ -464,8 +462,8 @@ class DataChain:
     def explode(
         self,
         col: str,
-        model_name: Optional[str] = None,
-        column: Optional[str] = None,
+        model_name: str | None = None,
+        column: str | None = None,
         schema_sample_size: int = 1,
     ) -> "DataChain":
         """Explodes a column containing JSON objects (dict or str DataChain type) into
@@ -506,7 +504,7 @@ class DataChain:
 
         model = dict_to_data_model(model_name, output, original_names)
 
-        def json_to_model(json_value: Union[str, dict]):
+        def json_to_model(json_value: str | dict):
             json_dict = (
                 json.loads(json_value) if isinstance(json_value, str) else json_value
             )
@@ -599,10 +597,10 @@ class DataChain:
     def save(  # type: ignore[override]
         self,
         name: str,
-        version: Optional[str] = None,
-        description: Optional[str] = None,
-        attrs: Optional[list[str]] = None,
-        update_version: Optional[str] = "patch",
+        version: str | None = None,
+        description: str | None = None,
+        attrs: list[str] | None = None,
+        update_version: str | None = "patch",
         **kwargs,
     ) -> "DataChain":
         """Save to a Dataset. It returns the chain itself.
@@ -666,12 +664,12 @@ class DataChain:
 
         return result
 
-    def _validate_version(self, version: Optional[str]) -> None:
+    def _validate_version(self, version: str | None) -> None:
         """Validate dataset version if provided."""
         if version is not None:
             semver.validate(version)
 
-    def _validate_update_version(self, update_version: Optional[str]) -> None:
+    def _validate_update_version(self, update_version: str | None) -> None:
         """Ensure update_version is one of: major, minor, patch."""
         allowed = ["major", "minor", "patch"]
         if update_version not in allowed:
@@ -693,7 +691,7 @@ class DataChain:
         name: str,
         project: Project,
         kwargs: dict,
-    ) -> tuple[Optional[Job], Optional[str], Optional["DataChain"]]:
+    ) -> tuple[Job | None, str | None, "DataChain | None"]:
         """Check if checkpoint exists and return cached dataset if possible."""
         from .datasets import read_dataset
 
@@ -727,11 +725,11 @@ class DataChain:
     def _handle_delta(
         self,
         name: str,
-        version: Optional[str],
+        version: str | None,
         project: Project,
         schema: dict,
         kwargs: dict,
-    ) -> Optional["DataChain"]:
+    ) -> "DataChain | None":
         """Try to save as a delta dataset.
         Returns:
             A DataChain if delta logic could handle it, otherwise None to fall back
@@ -811,8 +809,8 @@ class DataChain:
 
     def map(
         self,
-        func: Optional[Callable] = None,
-        params: Union[None, str, Sequence[str]] = None,
+        func: Callable | None = None,
+        params: str | Sequence[str] | None = None,
         output: OutputType = None,
         **signal_map: Any,
     ) -> "Self":
@@ -863,8 +861,8 @@ class DataChain:
 
     def gen(
         self,
-        func: Optional[Union[Callable, Generator]] = None,
-        params: Union[None, str, Sequence[str]] = None,
+        func: Callable | Generator | None = None,
+        params: str | Sequence[str] | None = None,
         output: OutputType = None,
         **signal_map,
     ) -> "Self":
@@ -903,9 +901,9 @@ class DataChain:
     def agg(
         self,
         /,
-        func: Optional[Callable] = None,
-        partition_by: Optional[PartitionByType] = None,
-        params: Union[None, str, Sequence[str]] = None,
+        func: Callable | None = None,
+        partition_by: PartitionByType | None = None,
+        params: str | Sequence[str] | None = None,
         output: OutputType = None,
         **signal_map: Callable,
     ) -> "Self":
@@ -1038,8 +1036,8 @@ class DataChain:
 
     def batch_map(
         self,
-        func: Optional[Callable] = None,
-        params: Union[None, str, Sequence[str]] = None,
+        func: Callable | None = None,
+        params: str | Sequence[str] | None = None,
         output: OutputType = None,
         batch: int = 1000,
         **signal_map,
@@ -1087,8 +1085,8 @@ class DataChain:
     def _udf_to_obj(
         self,
         target_class: type[UDFObjT],
-        func: Optional[Union[Callable, UDFObjT]],
-        params: Union[None, str, Sequence[str]],
+        func: Callable | UDFObjT | None,
+        params: str | Sequence[str] | None,
         output: OutputType,
         signal_map: dict[str, Callable],
     ) -> UDFObjT:
@@ -1180,7 +1178,7 @@ class DataChain:
     def group_by(  # noqa: C901, PLR0912
         self,
         *,
-        partition_by: Optional[Union[str, Func, Sequence[Union[str, Func]]]] = None,
+        partition_by: str | Func | Sequence[str | Func] | None = None,
         **kwargs: Func,
     ) -> "Self":
         """Group rows by specified set of signals and return new signals
@@ -1486,7 +1484,7 @@ class DataChain:
         """Convert every row to a dictionary."""
 
         def to_dict(cols: list[str], row: tuple[Any, ...]) -> dict[str, Any]:
-            return dict(zip(cols, row))
+            return dict(zip(cols, row, strict=False))
 
         return self.results(row_factory=to_dict)
 
@@ -1544,7 +1542,7 @@ class DataChain:
     @overload
     def collect(self, *cols: str) -> Iterator[tuple[DataValue, ...]]: ...
 
-    def collect(self, *cols: str) -> Iterator[Union[DataValue, tuple[DataValue, ...]]]:  # type: ignore[overload-overlap,misc]
+    def collect(self, *cols: str) -> Iterator[DataValue | tuple[DataValue, ...]]:  # type: ignore[overload-overlap,misc]
         """
         Deprecated. Use `to_iter` method instead.
         """
@@ -1609,8 +1607,8 @@ class DataChain:
     def merge(
         self,
         right_ds: "DataChain",
-        on: Union[MergeColType, Sequence[MergeColType]],
-        right_on: Optional[Union[MergeColType, Sequence[MergeColType]]] = None,
+        on: MergeColType | Sequence[MergeColType],
+        right_on: MergeColType | Sequence[MergeColType] | None = None,
         inner=False,
         full=False,
         rname="right_",
@@ -1678,8 +1676,8 @@ class DataChain:
 
         def _resolve(
             ds: DataChain,
-            col: Union[str, Function, sqlalchemy.ColumnElement],
-            side: Union[str, None],
+            col: str | Function | sqlalchemy.ColumnElement,
+            side: str | None,
         ):
             try:
                 if isinstance(col, Function):
@@ -1692,7 +1690,7 @@ class DataChain:
         ops = [
             _resolve(self, left, "left")
             == _resolve(right_ds, right, "right" if right_on else None)
-            for left, right in zip(on, right_on or on)
+            for left, right in zip(on, right_on or on, strict=False)
         ]
 
         if errors:
@@ -1701,7 +1699,11 @@ class DataChain:
             )
 
         query = self._query.join(
-            right_ds._query, sqlalchemy.and_(*ops), inner, full, rname + "{name}"
+            right_ds._query,
+            sqlalchemy.and_(*ops),
+            inner,
+            full,
+            rname + "{name}",
         )
         query.feature_schema = None
         ds = self._evolve(query=query)
@@ -1726,8 +1728,8 @@ class DataChain:
     def subtract(  # type: ignore[override]
         self,
         other: "DataChain",
-        on: Optional[Union[str, Sequence[str]]] = None,
-        right_on: Optional[Union[str, Sequence[str]]] = None,
+        on: str | Sequence[str] | None = None,
+        right_on: str | Sequence[str] | None = None,
     ) -> "Self":
         """Remove rows that appear in another chain.
 
@@ -1784,6 +1786,7 @@ class DataChain:
                 zip(
                     self.signals_schema.resolve(*on).db_signals(),
                     other.signals_schema.resolve(*right_on).db_signals(),
+                    strict=False,
                 )  # type: ignore[arg-type]
             )
         return self._evolve(query=self._query.subtract(other._query, signals))  # type: ignore[arg-type]
@@ -1791,15 +1794,15 @@ class DataChain:
     def diff(
         self,
         other: "DataChain",
-        on: Union[str, Sequence[str]],
-        right_on: Optional[Union[str, Sequence[str]]] = None,
-        compare: Optional[Union[str, Sequence[str]]] = None,
-        right_compare: Optional[Union[str, Sequence[str]]] = None,
+        on: str | Sequence[str],
+        right_on: str | Sequence[str] | None = None,
+        compare: str | Sequence[str] | None = None,
+        right_compare: str | Sequence[str] | None = None,
         added: bool = True,
         deleted: bool = True,
         modified: bool = True,
         same: bool = False,
-        status_col: Optional[str] = None,
+        status_col: str | None = None,
     ) -> "DataChain":
         """Calculate differences between two chains.
 
@@ -1860,12 +1863,12 @@ class DataChain:
         self,
         other: "DataChain",
         on: str = "file",
-        right_on: Optional[str] = None,
+        right_on: str | None = None,
         added: bool = True,
         modified: bool = True,
         deleted: bool = False,
         same: bool = False,
-        status_col: Optional[str] = None,
+        status_col: str | None = None,
     ) -> "DataChain":
         """Calculate differences between two chains containing files.
 
@@ -1981,6 +1984,8 @@ class DataChain:
         headers, max_length = self._effective_signals_schema.get_headers_with_length(
             include_hidden=include_hidden
         )
+
+        columns: list[str] | pd.MultiIndex
         if flatten or max_length < 2:
             columns = [".".join(filter(None, header)) for header in headers]
         else:
@@ -1989,7 +1994,8 @@ class DataChain:
         results = self.results(include_hidden=include_hidden)
         if as_object:
             df = pd.DataFrame(results, columns=columns, dtype=object)
-            return df.where(pd.notna(df), None)
+            df.where(pd.notna(df), None, inplace=True)
+            return df
         return pd.DataFrame.from_records(results, columns=columns)
 
     def show(
@@ -2075,7 +2081,7 @@ class DataChain:
         column: str = "",
         model_name: str = "",
         source: bool = True,
-        nrows: Optional[int] = None,
+        nrows: int | None = None,
         **kwargs: Any,
     ) -> "Self":
         """Generate chain from list of tabular files.
@@ -2209,10 +2215,10 @@ class DataChain:
 
     def to_parquet(
         self,
-        path: Union[str, os.PathLike[str], BinaryIO],
-        partition_cols: Optional[Sequence[str]] = None,
+        path: str | os.PathLike[str] | BinaryIO,
+        partition_cols: Sequence[str] | None = None,
         chunk_size: int = DEFAULT_PARQUET_CHUNK_SIZE,
-        fs_kwargs: Optional[dict[str, Any]] = None,
+        fs_kwargs: dict[str, Any] | None = None,
         **kwargs,
     ) -> None:
         """Save chain to parquet file with SignalSchema metadata.
@@ -2269,7 +2275,7 @@ class DataChain:
             # pyarrow infers the best parquet schema from the python types of
             # the input data.
             table = pa.Table.from_pydict(
-                dict(zip(column_names, chunk)),
+                dict(zip(column_names, chunk, strict=False)),
                 schema=parquet_schema,
             )
 
@@ -2307,9 +2313,9 @@ class DataChain:
 
     def to_csv(
         self,
-        path: Union[str, os.PathLike[str]],
+        path: str | os.PathLike[str],
         delimiter: str = ",",
-        fs_kwargs: Optional[dict[str, Any]] = None,
+        fs_kwargs: dict[str, Any] | None = None,
         **kwargs,
     ) -> None:
         """Save chain to a csv (comma-separated values) file.
@@ -2354,8 +2360,8 @@ class DataChain:
 
     def to_json(
         self,
-        path: Union[str, os.PathLike[str]],
-        fs_kwargs: Optional[dict[str, Any]] = None,
+        path: str | os.PathLike[str],
+        fs_kwargs: dict[str, Any] | None = None,
         include_outer_list: bool = True,
     ) -> None:
         """Save chain to a JSON file.
@@ -2415,8 +2421,8 @@ class DataChain:
 
     def to_jsonl(
         self,
-        path: Union[str, os.PathLike[str]],
-        fs_kwargs: Optional[dict[str, Any]] = None,
+        path: str | os.PathLike[str],
+        fs_kwargs: dict[str, Any] | None = None,
     ) -> None:
         """Save chain to a JSON lines file.
 
@@ -2435,9 +2441,9 @@ class DataChain:
         connection: "ConnectionType",
         *,
         batch_size: int = DEFAULT_DATABASE_BATCH_SIZE,
-        on_conflict: Optional[str] = None,
-        conflict_columns: Optional[list[str]] = None,
-        column_mapping: Optional[dict[str, Optional[str]]] = None,
+        on_conflict: str | None = None,
+        conflict_columns: list[str] | None = None,
+        column_mapping: dict[str, str | None] | None = None,
     ) -> int:
         """Save chain to a database table using a given database connection.
 
@@ -2673,13 +2679,13 @@ class DataChain:
 
     def to_storage(
         self,
-        output: Union[str, os.PathLike[str]],
+        output: str | os.PathLike[str],
         signal: str = "file",
         placement: FileExportPlacement = "fullpath",
         link_type: Literal["copy", "symlink"] = "copy",
-        num_threads: Optional[int] = EXPORT_FILES_MAX_THREADS,
-        anon: Optional[bool] = None,
-        client_config: Optional[dict] = None,
+        num_threads: int | None = EXPORT_FILES_MAX_THREADS,
+        anon: bool | None = None,
+        client_config: dict | None = None,
     ) -> None:
         """Export files from a specified signal to a directory. Files can be
         exported to a local or cloud directory.

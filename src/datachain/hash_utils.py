@@ -3,101 +3,74 @@ import inspect
 import json
 import textwrap
 from collections.abc import Sequence
-from typing import TypeVar, Union
+from typing import TypeAlias, TypeVar
 
-from sqlalchemy.sql.elements import (
-    BinaryExpression,
-    BindParameter,
-    ColumnElement,
-    Label,
-    Over,
-    UnaryExpression,
-)
-from sqlalchemy.sql.functions import Function
+from sqlalchemy.sql.elements import ClauseElement, ColumnElement
 
 T = TypeVar("T", bound=ColumnElement)
-ColumnLike = Union[str, T]
+ColumnLike: TypeAlias = str | T
 
 
-def serialize_column_element(expr: Union[str, ColumnElement]) -> dict:  # noqa: PLR0911
+def _serialize_value(val):  # noqa: PLR0911
+    """Helper to serialize arbitrary values recursively."""
+    if val is None:
+        return None
+    if isinstance(val, (str, int, float, bool)):
+        return val
+    if isinstance(val, ClauseElement):
+        return serialize_column_element(val)
+    if isinstance(val, dict):
+        # Sort dict keys for deterministic serialization
+        return {k: _serialize_value(v) for k, v in sorted(val.items())}
+    if isinstance(val, (list, tuple)):
+        return [_serialize_value(v) for v in val]
+    if callable(val):
+        return val.__name__ if hasattr(val, "__name__") else str(val)
+    return str(val)
+
+
+def serialize_column_element(expr: str | ColumnElement) -> dict:
     """
     Recursively serialize a SQLAlchemy ColumnElement into a deterministic structure.
+    Uses SQLAlchemy's _traverse_internals to automatically handle all expression types.
     """
+    from sqlalchemy.sql.elements import BindParameter
 
-    # Binary operations: col > 5, col1 + col2, etc.
-    if isinstance(expr, BinaryExpression):
-        op = (
-            expr.operator.__name__
-            if hasattr(expr.operator, "__name__")
-            else str(expr.operator)
-        )
-        return {
-            "type": "binary",
-            "op": op,
-            "left": serialize_column_element(expr.left),
-            "right": serialize_column_element(expr.right),
-        }
-
-    # Unary operations: -col, NOT col, etc.
-    if isinstance(expr, UnaryExpression):
-        op = (
-            expr.operator.__name__
-            if expr.operator is not None and hasattr(expr.operator, "__name__")
-            else str(expr.operator)
-        )
-
-        return {
-            "type": "unary",
-            "op": op,
-            "element": serialize_column_element(expr.element),  # type: ignore[arg-type]
-        }
-
-    # Function calls: func.lower(col), func.count(col), etc.
-    if isinstance(expr, Function):
-        return {
-            "type": "function",
-            "name": expr.name,
-            "clauses": [serialize_column_element(c) for c in expr.clauses],
-        }
-
-    # Window functions: func.row_number().over(partition_by=..., order_by=...)
-    if isinstance(expr, Over):
-        return {
-            "type": "window",
-            "function": serialize_column_element(expr.element),
-            "partition_by": [
-                serialize_column_element(p) for p in getattr(expr, "partition_by", [])
-            ],
-            "order_by": [
-                serialize_column_element(o) for o in getattr(expr, "order_by", [])
-            ],
-        }
-
-    # Labeled expressions: col.label("alias")
-    if isinstance(expr, Label):
-        return {
-            "type": "label",
-            "name": expr.name,
-            "element": serialize_column_element(expr.element),
-        }
-
-    # Bound values (constants)
+    # Special case: BindParameter has non-deterministic 'key' attribute, only use value
     if isinstance(expr, BindParameter):
-        return {"type": "bind", "value": expr.value}
+        return {"type": "bind", "value": _serialize_value(expr.value)}
 
-    # Plain columns
-    if hasattr(expr, "name"):
-        return {"type": "column", "name": expr.name}
+    # Generic handling for all ClauseElement types using SQLAlchemy's internals
+    if isinstance(expr, ClauseElement):
+        # All standard SQLAlchemy types have _traverse_internals
+        if hasattr(expr, "_traverse_internals"):
+            result = {"type": expr.__class__.__name__}
+            for attr_name, _ in expr._traverse_internals:
+                # Skip 'table' attribute - table names can be auto-generated/random
+                # and are not semantically important for hashing
+                if attr_name == "table":
+                    continue
+                if hasattr(expr, attr_name):
+                    val = getattr(expr, attr_name)
+                    result[attr_name] = _serialize_value(val)
+            return result
+        # Rare case: custom user-defined ClauseElement without _traverse_internals
+        # We don't know its structure, so just stringify it
+        return {"type": expr.__class__.__name__, "repr": str(expr)}
 
-    # Fallback: stringify unknown nodes
+    # Absolute fallback: stringify completely unknown types
     return {"type": "other", "repr": str(expr)}
 
 
-def hash_column_elements(columns: Sequence[ColumnLike]) -> str:
+def hash_column_elements(columns: ColumnLike | Sequence[ColumnLike]) -> str:
     """
     Hash a list of ColumnElements deterministically, dialect agnostic.
     Only accepts ordered iterables (like list or tuple).
     """
+    # Handle case where a single ColumnElement is passed instead of a sequence
+    if isinstance(columns, (ColumnElement, str)):
+        columns = (columns,)
+
     serialized = [serialize_column_element(c) for c in columns]
     json_str = json.dumps(serialized, sort_keys=True)  # stable JSON
     return hashlib.sha256(json_str.encode("utf-8")).hexdigest()

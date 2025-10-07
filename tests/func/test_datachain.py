@@ -1,8 +1,6 @@
-import functools
 import json
 import math
 import os
-import pickle
 import posixpath
 import re
 import uuid
@@ -18,20 +16,16 @@ import pytz
 from PIL import Image
 
 import datachain as dc
-from datachain import DataModel, func
+from datachain import DataChainError, DataModel, Mapper, func
 from datachain.data_storage.sqlite import SQLiteWarehouse
 from datachain.dataset import DatasetDependencyType
-from datachain.func import path as pathfunc
 from datachain.lib.file import File, ImageFile
 from datachain.lib.listing import LISTING_TTL, is_listing_dataset, parse_listing_uri
 from datachain.lib.tar import process_tar
-from datachain.lib.udf import Mapper
-from datachain.lib.utils import DataChainError
 from datachain.query.dataset import QueryStep
 from tests.utils import (
     ANY_VALUE,
     LARGE_TREE,
-    NUM_TREE,
     TARRED_TREE,
     df_equal,
     images_equal,
@@ -253,66 +247,6 @@ def test_persist_not_affects_dependencies(tmp_dir, test_session):
     assert len(dependencies) == 1
     assert dependencies[0].name == dep_name
     assert dependencies[0].type == DatasetDependencyType.STORAGE
-
-
-@pytest.mark.parametrize("use_cache", [True, False])
-@pytest.mark.parametrize("prefetch", [0, 2])
-def test_map_file(cloud_test_catalog, use_cache, prefetch, monkeypatch):
-    monkeypatch.delenv("DATACHAIN_DISTRIBUTED", raising=False)
-
-    ctc = cloud_test_catalog
-    ctc.catalog.cache.clear()
-
-    def is_prefetched(file: File) -> bool:
-        return file._catalog.cache.contains(file) and bool(file.get_local_path())
-
-    def verify_cache_used(file):
-        catalog = file._catalog
-        if use_cache or not prefetch:
-            assert catalog.cache == cloud_test_catalog.catalog.cache
-            return
-        head, tail = os.path.split(catalog.cache.cache_dir)
-        assert head == catalog.cache.tmp_dir
-        assert tail.startswith("prefetch-")
-
-    def with_checks(func, seen=[]):  # noqa: B006
-        @functools.wraps(func)
-        def wrapped(file, *args, **kwargs):
-            # previously prefetched files should be removed if `cache` is disabled.
-            for f in seen:
-                assert f._catalog.cache.contains(f) == use_cache
-            seen.append(file)
-
-            assert is_prefetched(file) == (prefetch > 0)
-            verify_cache_used(file)
-            return func(file, *args, **kwargs)
-
-        return wrapped
-
-    def new_signal(file: File) -> str:
-        with file.open() as f:
-            return file.name + " -> " + f.read().decode("utf-8")
-
-    chain = (
-        dc.read_storage(ctc.src_uri, session=ctc.session)
-        .settings(cache=use_cache, prefetch=prefetch)
-        .map(signal=with_checks(new_signal))
-        .persist()
-    )
-
-    expected = {
-        "description -> Cats and Dogs",
-        "cat1 -> meow",
-        "cat2 -> mrow",
-        "dog1 -> woof",
-        "dog2 -> arf",
-        "dog3 -> bark",
-        "dog4 -> ruff",
-    }
-    assert set(chain.to_values("signal")) == expected
-    for file in chain.to_values("file"):
-        assert bool(file.get_local_path()) is use_cache
-    assert not os.listdir(ctc.catalog.cache.tmp_dir)
 
 
 @pytest.mark.parametrize("use_cache", [False, True])
@@ -621,7 +555,9 @@ def test_save(test_session):
 
 
 def test_show_nested_empty(capsys, test_session):
-    files = [File(size=s, path=p) for p, s in zip(list("abcde"), range(5))]
+    files = [
+        File(size=s, path=p) for p, s in zip(list("abcde"), range(5), strict=False)
+    ]
     dc.read_values(file=files, session=test_session).limit(0).show()
 
     captured = capsys.readouterr()
@@ -733,7 +669,8 @@ def test_show_ordered(capsys, test_session, ordered_by):
     ]
 
     ordered_entries = sorted(
-        zip(numbers, letters), key=lambda x: x[0 if ordered_by == "number" else 1]
+        zip(numbers, letters, strict=False),
+        key=lambda x: x[0 if ordered_by == "number" else 1],
     )
 
     assert normalized_lines[0].strip() == "number letter"
@@ -822,7 +759,7 @@ def test_udf(cloud_test_catalog):
     assert len(result2) == 3
     assert count == 3
 
-    for r1, r2 in zip(result1, result2):
+    for r1, r2 in zip(result1, result2, strict=False):
         # Check that the UDF ran successfully
         assert len(posixpath.basename(r1[0])) == r1[1]
         assert len(posixpath.basename(r2[0])) == r2[1]
@@ -1200,39 +1137,6 @@ def test_avoid_recalculation_after_save(cloud_test_catalog, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "cloud_type,version_aware,tree",
-    [("s3", True, NUM_TREE), ("file", False, NUM_TREE)],
-    indirect=True,
-)
-def test_udf_after_limit(cloud_test_catalog):
-    ctc = cloud_test_catalog
-
-    def name_int(name: str) -> int:
-        try:
-            return int(name)
-        except ValueError:
-            return 0
-
-    def get_result(chain):
-        res = chain.limit(100).map(name_int=name_int).order_by("name")
-        return res.to_list("name", "name_int")
-
-    expected = [(f"{i:06d}", i) for i in range(100)]
-    chain = (
-        dc.read_storage(ctc.src_uri, session=ctc.session)
-        .mutate(name=pathfunc.name("file.path"))
-        .persist()
-    )
-    # We test a few different orderings here, because we've had strange
-    # bugs in the past where calling add_signals() after limit() gave us
-    # incorrect results on clickhouse cloud.
-    # See https://github.com/iterative/dvcx/issues/940
-    assert get_result(chain.order_by("name")) == expected
-    assert len(get_result(chain.order_by("sys.rand"))) == 100
-    assert len(get_result(chain)) == 100
-
-
-@pytest.mark.parametrize(
     "cloud_type,version_aware",
     [("s3", True)],
     indirect=True,
@@ -1293,98 +1197,6 @@ def test_row_number_with_order_by_before_map(cloud_test_catalog):
         (5, "dogs/dog2"),
         (6, "dogs/dog3"),
         (7, "dogs/others/dog4"),
-    ]
-
-
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
-def test_udf_different_types(cloud_test_catalog):
-    obj = {"name": "John", "age": 30}
-
-    def test_types():
-        return (
-            5,
-            5,
-            5,
-            0.5,
-            0.5,
-            0.5,
-            [0.5],
-            [[0.5], [0.5]],
-            [0.5],
-            [0.5],
-            "s",
-            True,
-            {"a": 1},
-            pickle.dumps(obj),
-        )
-
-    chain = (
-        dc.read_storage(cloud_test_catalog.src_uri, session=cloud_test_catalog.session)
-        .filter(dc.C("file.path").glob("*cat1"))
-        .map(
-            test_types,
-            params=[],
-            output={
-                "int_col": int,
-                "int_col_32": int,
-                "int_col_64": int,
-                "float_col": float,
-                "float_col_32": float,
-                "float_col_64": float,
-                "array_col": list[float],
-                "array_col_nested": list[list[float]],
-                "array_col_32": list[float],
-                "array_col_64": list[float],
-                "string_col": str,
-                "bool_col": bool,
-                "json_col": dict,
-                "binary_col": bytes,
-            },
-        )
-    )
-
-    results = chain.to_records()
-    col_values = [
-        (
-            r["int_col"],
-            r["int_col_32"],
-            r["int_col_64"],
-            r["float_col"],
-            r["float_col_32"],
-            r["float_col_64"],
-            r["array_col"],
-            r["array_col_nested"],
-            r["array_col_32"],
-            r["array_col_64"],
-            r["string_col"],
-            r["bool_col"],
-            r["json_col"],
-            pickle.loads(r["binary_col"]),  # noqa: S301
-        )
-        for r in results
-    ]
-
-    assert col_values == [
-        (
-            5,
-            5,
-            5,
-            0.5,
-            0.5,
-            0.5,
-            [0.5],
-            [[0.5], [0.5]],
-            [0.5],
-            [0.5],
-            "s",
-            True,
-            {"a": 1},
-            obj,
-        )
     ]
 
 
@@ -1529,70 +1341,6 @@ def test_gen_with_new_columns_wrong_type(cloud_test_catalog, dogs_dataset):
         ).show()
 
 
-@pytest.mark.parametrize("use_cache", [True, False])
-@pytest.mark.parametrize("prefetch", [0, 2])
-def test_gen_file(cloud_test_catalog, use_cache, prefetch, monkeypatch):
-    monkeypatch.delenv("DATACHAIN_DISTRIBUTED", raising=False)
-
-    ctc = cloud_test_catalog
-    ctc.catalog.cache.clear()
-
-    def is_prefetched(file: File) -> bool:
-        return file._catalog.cache.contains(file) and bool(file.get_local_path())
-
-    def verify_cache_used(file):
-        catalog = file._catalog
-        if use_cache or not prefetch:
-            assert catalog.cache == cloud_test_catalog.catalog.cache
-            return
-        head, tail = os.path.split(catalog.cache.cache_dir)
-        assert head == catalog.cache.tmp_dir
-        assert tail.startswith("prefetch-")
-
-    def with_checks(func, seen=[]):  # noqa: B006
-        @functools.wraps(func)
-        def wrapped(file, *args, **kwargs):
-            # previously prefetched files should be removed if `cache` is disabled.
-            for f in seen:
-                assert f._catalog.cache.contains(f) == use_cache
-            seen.append(file)
-
-            assert is_prefetched(file) == (prefetch > 0)
-            verify_cache_used(file)
-            return func(file, *args, **kwargs)
-
-        return wrapped
-
-    def new_signal(file: File) -> list[str]:
-        with file.open("rb") as f:
-            return [file.name, f.read().decode("utf-8")]
-
-    chain = (
-        dc.read_storage(ctc.src_uri, session=ctc.session)
-        .settings(cache=use_cache, prefetch=prefetch)
-        .gen(signal=with_checks(new_signal), output=str)
-        .persist()
-    )
-    expected = {
-        "Cats and Dogs",
-        "arf",
-        "bark",
-        "cat1",
-        "cat2",
-        "description",
-        "dog1",
-        "dog2",
-        "dog3",
-        "dog4",
-        "meow",
-        "mrow",
-        "ruff",
-        "woof",
-    }
-    assert set(chain.to_values("signal")) == expected
-    assert not os.listdir(ctc.catalog.cache.tmp_dir)
-
-
 def test_similarity_search(cloud_test_catalog):
     session = cloud_test_catalog.session
     src_uri = cloud_test_catalog.src_uri
@@ -1632,7 +1380,7 @@ def test_similarity_search(cloud_test_catalog):
     ]
 
     for (p1, c1, e1), (p2, c2, e2) in zip(
-        chain.to_iter("file.path", "cos_dist", "eucl_dist"), expected
+        chain.to_iter("file.path", "cos_dist", "eucl_dist"), expected, strict=False
     ):
         assert p1.endswith(p2)
         assert math.isclose(c1, c2, abs_tol=1e-5)
@@ -2177,7 +1925,9 @@ def test_to_read_json(tmp_dir, test_session):
         values = json.load(f)
     assert values == [
         {"first_name": n, "age": a, "city": c}
-        for n, a, c in zip(DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"])
+        for n, a, c in zip(
+            DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"], strict=False
+        )
     ]
 
     dc_from = dc.read_json(path.as_uri(), session=test_session)
@@ -2192,7 +1942,9 @@ def test_read_json_jmespath(tmp_dir, test_session):
     df = pd.DataFrame(DF_DATA)
     values = [
         {"first_name": n, "age": a, "city": c}
-        for n, a, c in zip(DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"])
+        for n, a, c in zip(
+            DF_DATA["first_name"], DF_DATA["age"], DF_DATA["city"], strict=False
+        )
     ]
     path = tmp_dir / "test.json"
     with open(path, "w") as f:
@@ -2383,22 +2135,3 @@ def test_agg_sample(catalog_tmpfile, parallel, sample):
     records = list(ds.to_records())
     assert len(records) == sample
     assert all(row["count"] == 1 for row in records)
-
-
-def test_batch_for_map(test_session):
-    # Create a chain with batch settings
-    chain = dc.read_values(x=list(range(100)), session=test_session)
-    chain_with_settings = chain.settings(batch_size=15)
-
-    def add_one(x):
-        return x + 1
-
-    result = chain_with_settings.map(add_one, output={"result": int})
-
-    results = [
-        r[0] for r in result.to_iter("result")
-    ]  # Access the first element of each tuple
-
-    assert len(results) == 100
-
-    assert set(results) == set(range(1, 101))

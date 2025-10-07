@@ -1,6 +1,5 @@
 import logging
 from argparse import SUPPRESS, Action, ArgumentError, Namespace, _AppendAction
-from typing import Optional
 
 from datachain.error import DataChainError
 
@@ -84,7 +83,7 @@ def get_logging_level(args: Namespace) -> int:
     return logging.INFO
 
 
-def determine_flavors(studio: bool, local: bool, all: bool, token: Optional[str]):
+def determine_flavors(studio: bool, local: bool, all: bool, token: str | None):
     if studio and not token:
         raise DataChainError(
             "Not logged in to Studio. Log in with 'datachain auth login'."

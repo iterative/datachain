@@ -1,11 +1,17 @@
 from unittest.mock import patch
 
+import pandas as pd
 import pytest
 from pydantic import BaseModel
 
 import datachain as dc
 from datachain import func
 from datachain.lib.dc import C
+
+DF_DATA = {
+    "first_name": ["Alice", "Bob", "Charlie", "David", "Eva"],
+    "age": [25, 30, 35, 40, 45],
+}
 
 
 class Person(BaseModel):
@@ -55,18 +61,60 @@ def mock_get_listing():
 
 
 def test_read_values():
-    pytest.skip(
-        "Hash of the chain started with read_values is currently inconsistent,"
-        " meaning it produces different hash every time. This happens because we"
-        " create random name dataset in the process. Correct solution would be"
-        " to calculate hash of all those input values."
+    """
+    Hash of the chain started with read_values is currently inconsistent.
+    Goal of this test is just to check it doesn't break.
+    """
+    assert dc.read_values(num=[1, 2, 3]).hash() is not None
+
+
+def test_read_csv(test_session, tmp_dir):
+    """
+    Hash of the chain started with read_csv is currently inconsistent.
+    Goal of this test is just to check it doesn't break.
+    """
+    path = tmp_dir / "test.csv"
+    pd.DataFrame(DF_DATA).to_csv(path, index=False)
+    assert dc.read_csv(path.as_uri(), session=test_session).hash() is not None
+
+
+@pytest.mark.filterwarnings("ignore::pydantic.warnings.PydanticDeprecatedSince20")
+def test_read_json(test_session, tmp_dir):
+    """
+    Hash of the chain started with read_json is currently inconsistent.
+    Goal of this test is just to check it doesn't break.
+    """
+    path = tmp_dir / "test.jsonl"
+    dc.read_pandas(pd.DataFrame(DF_DATA), session=test_session).to_jsonl(path)
+    assert (
+        dc.read_json(path.as_uri(), format="jsonl", session=test_session).hash()
+        is not None
     )
-    assert dc.read_values(num=[1, 2, 3]).hash() == ""
+
+
+def test_read_pandas(test_session, tmp_dir):
+    """
+    Hash of the chain started with read_pandas is currently inconsistent.
+    Goal of this test is just to check it doesn't break.
+    """
+    df = pd.DataFrame(DF_DATA)
+    assert dc.read_pandas(df, session=test_session).hash() is not None
+
+
+def test_read_parquet(test_session, tmp_dir):
+    """
+    Hash of the chain started with read_parquet is currently inconsistent.
+    Goal of this test is just to check it doesn't break.
+    """
+    df = pd.DataFrame(DF_DATA)
+    path = tmp_dir / "test.parquet"
+    dc.read_pandas(df, session=test_session).to_parquet(path)
+    assert dc.read_parquet(path.as_uri(), session=test_session).hash() is not None
 
 
 def test_read_storage(mock_get_listing):
     assert dc.read_storage("s3://bucket").hash() == (
-        "c38b6f4ebd7f0160d9f900016aad1e6781acd463f042588cfe793e9d189a8a0e"
+        "811e7089ead93a572d75d242220f6b94fd30f21def1bbcf37f095f083883bc41"
     )
 
 
@@ -80,11 +128,11 @@ def test_read_dataset(test_session):
 def test_order_of_steps(mock_get_listing):
     assert (
         dc.read_storage("s3://bucket").mutate(new=10).filter(C("age") > 20).hash()
-    ) == "08a6c5657feaea55c734bc8e2b3eb0733ea692d4eab5fa78fa26409e6c2af098"
+    ) == "b07f11244f1f84e4ecde87976fc380b4b8b656b0202294179e30be2112df7d3a"
 
     assert (
         dc.read_storage("s3://bucket").filter(C("age") > 20).mutate(new=10).hash()
-    ) == "e91b84094233a2bf4d08d6a95e55529a65d900399be3a05dc3e2ca0401f8f25b"
+    ) == "82780df484ce63e499ceed6ef3418920fdf68461a6b5f24234d3c0628c311c02"
 
 
 def test_all_possible_steps(test_session):
@@ -147,7 +195,7 @@ def test_all_possible_steps(test_session):
             right_on=["player.name"],
         )
         .hash()
-    ) == "44b231652aee9712444ee26d5ecc77e6b87f768d17e6b8333303764d3706413b"
+    ) == "1e2caf5d0bcda7ea75e33bb4db43cc7321191306b47a77ae541b61bbbfcea32b"
 
 
 def test_diff(test_session):
@@ -170,4 +218,4 @@ def test_diff(test_session):
             status_col="diff",
         )
         .hash()
-    ) == "aef929f3bf247966703534aa3daffb76fa8802d64660293deb95155ffacd8b77"
+    ) == "dbaf2277a1af061e98df3090500d3c284280bcf7f44340a315a0e3f3be72eafd"

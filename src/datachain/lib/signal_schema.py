@@ -1,29 +1,30 @@
 import copy
 import hashlib
 import json
+import logging
+import math
+import types
 import warnings
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from inspect import isclass
-from typing import (  # noqa: UP035
+from typing import (
     IO,
     TYPE_CHECKING,
     Annotated,
     Any,
-    Callable,
-    Dict,
+    Dict,  # type: ignore[UP035]
     Final,
-    List,
+    List,  # type: ignore[UP035]
     Literal,
-    Mapping,
     Optional,
     Union,
     get_args,
     get_origin,
 )
 
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, Field, ValidationError, create_model
 from sqlalchemy import ColumnElement
 from typing_extensions import Literal as LiteralEx
 
@@ -42,6 +43,8 @@ from datachain.sql.types import SQLType
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
 
+
+logger = logging.getLogger(__name__)
 
 NAMES_TO_TYPES = {
     "int": int,
@@ -71,7 +74,7 @@ class SignalSchemaWarning(RuntimeWarning):
 
 
 class SignalResolvingError(SignalSchemaError):
-    def __init__(self, path: Optional[list[str]], msg: str):
+    def __init__(self, path: list[str] | None, msg: str):
         name = " '" + ".".join(path) + "'" if path else ""
         super().__init__(f"cannot resolve signal name{name}: {msg}")
 
@@ -91,7 +94,7 @@ class SignalResolvingTypeError(SignalResolvingError):
 
 
 class SignalRemoveError(SignalSchemaError):
-    def __init__(self, path: Optional[list[str]], msg: str):
+    def __init__(self, path: list[str] | None, msg: str):
         name = " '" + ".".join(path) + "'" if path else ""
         super().__init__(f"cannot remove signal name{name}: {msg}")
 
@@ -100,8 +103,8 @@ class CustomType(BaseModel):
     schema_version: int = Field(ge=1, le=2, strict=True)
     name: str
     fields: dict[str, str]
-    bases: list[tuple[str, str, Optional[str]]]
-    hidden_fields: Optional[list[str]] = None
+    bases: list[tuple[str, str, str | None]]
+    hidden_fields: list[str] | None = None
 
     @classmethod
     def deserialize(cls, data: dict[str, Any], type_name: str) -> "CustomType":
@@ -121,8 +124,8 @@ class CustomType(BaseModel):
 
 def create_feature_model(
     name: str,
-    fields: Mapping[str, Union[type, None, tuple[type, Any]]],
-    base: Optional[type] = None,
+    fields: Mapping[str, type | tuple[type, Any] | None],
+    base: type | None = None,
 ) -> type[BaseModel]:
     """
     This gets or returns a dynamic feature model for use in restoring a model
@@ -148,12 +151,12 @@ class SignalSchema:
     values: dict[str, DataType]
     tree: dict[str, Any]
     setup_func: dict[str, Callable]
-    setup_values: Optional[dict[str, Any]]
+    setup_values: dict[str, Any] | None
 
     def __init__(
         self,
         values: dict[str, DataType],
-        setup: Optional[dict[str, Callable]] = None,
+        setup: dict[str, Callable] | None = None,
     ):
         self.values = values
         self.tree = self._build_tree(values)
@@ -192,8 +195,8 @@ class SignalSchema:
         return SignalSchema(signals)
 
     @staticmethod
-    def _get_bases(fr: type) -> list[tuple[str, str, Optional[str]]]:
-        bases: list[tuple[str, str, Optional[str]]] = []
+    def _get_bases(fr: type) -> list[tuple[str, str, str | None]]:
+        bases: list[tuple[str, str, str | None]] = []
         for base in fr.__mro__:
             model_store_name = (
                 ModelStore.get_name(base) if issubclass(base, DataModel) else None
@@ -290,7 +293,7 @@ class SignalSchema:
     @staticmethod
     def _deserialize_custom_type(
         type_name: str, custom_types: dict[str, Any]
-    ) -> Optional[type]:
+    ) -> type | None:
         """Given a type name like MyType@v1 gets a type from ModelStore or recreates
         it based on the information from the custom types dict that includes fields and
         bases."""
@@ -323,7 +326,7 @@ class SignalSchema:
         return None
 
     @staticmethod
-    def _resolve_type(type_name: str, custom_types: dict[str, Any]) -> Optional[type]:
+    def _resolve_type(type_name: str, custom_types: dict[str, Any]) -> type | None:
         """Convert a string-based type back into a python type."""
         type_name = type_name.strip()
         if not type_name:
@@ -332,7 +335,7 @@ class SignalSchema:
             return None
 
         bracket_idx = type_name.find("[")
-        subtypes: Optional[tuple[Optional[type], ...]] = None
+        subtypes: tuple[type | None, ...] | None = None
         if bracket_idx > -1:
             if bracket_idx == 0:
                 raise ValueError("Type cannot start with '['")
@@ -463,13 +466,33 @@ class SignalSchema:
                 objs.append(self.setup_values.get(name))
             elif (fr := ModelStore.to_pydantic(fr_type)) is not None:
                 j, pos = unflatten_to_json_pos(fr, row, pos)
-                objs.append(fr(**j))
+                try:
+                    obj = fr(**j)
+                except ValidationError as e:
+                    if self._all_values_none(j):
+                        logger.debug("Failed to create input for %s: %s", name, e)
+                        obj = None
+                    else:
+                        raise
+                objs.append(obj)
             else:
                 objs.append(row[pos])
                 pos += 1
         return objs
 
-    def get_file_signal(self) -> Optional[str]:
+    @staticmethod
+    def _all_values_none(value: Any) -> bool:
+        if isinstance(value, dict):
+            return all(SignalSchema._all_values_none(v) for v in value.values())
+        if isinstance(value, (list, tuple, set)):
+            return all(SignalSchema._all_values_none(v) for v in value)
+        if isinstance(value, float):
+            # NaN is used to represent NULL and NaN float values in datachain
+            # Since SQLite does not have a separate NULL type, we need to check for NaN
+            return math.isnan(value) or value is None
+        return value is None
+
+    def get_file_signal(self) -> str | None:
         for signal_name, signal_type in self.values.items():
             if (fr := ModelStore.to_pydantic(signal_type)) is not None and issubclass(
                 fr, File
@@ -479,8 +502,8 @@ class SignalSchema:
 
     def slice(
         self,
-        params: dict[str, Union[DataType, Any]],
-        setup: Optional[dict[str, Callable]] = None,
+        params: dict[str, DataType | Any],
+        setup: dict[str, Callable] | None = None,
         is_batch: bool = False,
     ) -> "SignalSchema":
         """
@@ -504,9 +527,13 @@ class SignalSchema:
             schema_origin = get_origin(schema_type)
             param_origin = get_origin(param_type)
 
-            if schema_origin is Union and type(None) in get_args(schema_type):
+            if schema_origin in (Union, types.UnionType) and type(None) in get_args(
+                schema_type
+            ):
                 schema_type = get_args(schema_type)[0]
-                if param_origin is Union and type(None) in get_args(param_type):
+                if param_origin in (Union, types.UnionType) and type(None) in get_args(
+                    param_type
+                ):
                     param_type = get_args(param_type)[0]
 
             if is_batch:
@@ -546,8 +573,15 @@ class SignalSchema:
                 pos += 1
             else:
                 json, pos = unflatten_to_json_pos(fr, row, pos)  # type: ignore[union-attr]
-                obj = fr(**json)
-                SignalSchema._set_file_stream(obj, catalog, cache)
+                try:
+                    obj = fr(**json)
+                    SignalSchema._set_file_stream(obj, catalog, cache)
+                except ValidationError as e:
+                    if self._all_values_none(json):
+                        logger.debug("Failed to create feature for %s: %s", fr_cls, e)
+                        obj = None
+                    else:
+                        raise
                 res.append(obj)
         return res
 
@@ -579,8 +613,8 @@ class SignalSchema:
         raise SignalResolvingError([col_name], "is not found")
 
     def db_signals(
-        self, name: Optional[str] = None, as_columns=False, include_hidden: bool = True
-    ) -> Union[list[str], list[Column]]:
+        self, name: str | None = None, as_columns=False, include_hidden: bool = True
+    ) -> list[str] | list[Column]:
         """
         Returns DB columns as strings or Column objects with proper types
         Optionally, it can filter results by specific object, returning only his signals
@@ -771,7 +805,7 @@ class SignalSchema:
     @staticmethod
     def _build_tree(
         values: dict[str, DataType],
-    ) -> dict[str, tuple[DataType, Optional[dict]]]:
+    ) -> dict[str, tuple[DataType, dict | None]]:
         return {
             name: (val, SignalSchema._build_tree_for_type(val))
             for name, val in values.items()
@@ -803,7 +837,7 @@ class SignalSchema:
                     substree, new_prefix, depth + 1, include_hidden
                 )
 
-    def print_tree(self, indent: int = 2, start_at: int = 0, file: Optional[IO] = None):
+    def print_tree(self, indent: int = 2, start_at: int = 0, file: IO | None = None):
         for path, type_, _, depth in self.get_flat_tree():
             total_indent = start_at + depth * indent
             col_name = " " * total_indent + path[-1]
@@ -842,15 +876,20 @@ class SignalSchema:
         return self.values.pop(name)
 
     @staticmethod
-    def _type_to_str(type_: Optional[type], subtypes: Optional[list] = None) -> str:  # noqa: PLR0911
+    def _type_to_str(type_: type | None, subtypes: list | None = None) -> str:  # noqa: C901, PLR0911
         """Convert a type to a string-based representation."""
         if type_ is None:
             return "NoneType"
 
         origin = get_origin(type_)
 
-        if origin == Union:
+        if origin in (Union, types.UnionType):
             args = get_args(type_)
+            if len(args) == 2 and type(None) in args:
+                # This is an Optional type.
+                non_none_type = args[0] if args[1] is type(None) else args[1]
+                type_str = SignalSchema._type_to_str(non_none_type, subtypes)
+                return f"Optional[{type_str}]"
             formatted_types = ", ".join(
                 SignalSchema._type_to_str(arg, subtypes) for arg in args
             )
@@ -861,19 +900,19 @@ class SignalSchema:
             return f"Optional[{type_str}]"
         if origin in (list, List):  # noqa: UP006
             args = get_args(type_)
+            if len(args) == 0:
+                return "list"
             type_str = SignalSchema._type_to_str(args[0], subtypes)
             return f"list[{type_str}]"
         if origin in (dict, Dict):  # noqa: UP006
             args = get_args(type_)
-            type_str = (
-                SignalSchema._type_to_str(args[0], subtypes) if len(args) > 0 else ""
-            )
-            vals = (
-                f", {SignalSchema._type_to_str(args[1], subtypes)}"
-                if len(args) > 1
-                else ""
-            )
-            return f"dict[{type_str}{vals}]"
+            if len(args) == 0:
+                return "dict"
+            key_type = SignalSchema._type_to_str(args[0], subtypes)
+            if len(args) == 1:
+                return f"dict[{key_type}, Any]"
+            val_type = SignalSchema._type_to_str(args[1], subtypes)
+            return f"dict[{key_type}, {val_type}]"
         if origin == Annotated:
             args = get_args(type_)
             return SignalSchema._type_to_str(args[0], subtypes)
@@ -887,7 +926,7 @@ class SignalSchema:
             # Include this type in the list of all subtypes, if requested.
             subtypes.append(type_)
         if not hasattr(type_, "__name__"):
-            # This can happen for some third-party or custom types, mostly on Python 3.9
+            # This can happen for some third-party or custom types
             warnings.warn(
                 f"Unable to determine name of type '{type_}'.",
                 SignalSchemaWarning,
@@ -902,7 +941,7 @@ class SignalSchema:
     @staticmethod
     def _build_tree_for_type(
         model: DataType,
-    ) -> Optional[dict[str, tuple[DataType, Optional[dict]]]]:
+    ) -> dict[str, tuple[DataType, dict | None]] | None:
         if (fr := ModelStore.to_pydantic(model)) is not None:
             return SignalSchema._build_tree_for_model(fr)
         return None
@@ -910,8 +949,8 @@ class SignalSchema:
     @staticmethod
     def _build_tree_for_model(
         model: type[BaseModel],
-    ) -> Optional[dict[str, tuple[DataType, Optional[dict]]]]:
-        res: dict[str, tuple[DataType, Optional[dict]]] = {}
+    ) -> dict[str, tuple[DataType, dict | None]] | None:
+        res: dict[str, tuple[DataType, dict | None]] = {}
 
         for name, f_info in model.model_fields.items():
             anno = f_info.annotation
@@ -960,7 +999,7 @@ class SignalSchema:
         schema: dict[str, Any] = {}
         schema_custom_types: dict[str, CustomType] = {}
 
-        data_model_bases: Optional[list[tuple[str, str, Optional[str]]]] = None
+        data_model_bases: list[tuple[str, str, str | None]] | None = None
 
         signal_partials: dict[str, str] = {}
         partial_versions: dict[str, int] = {}
