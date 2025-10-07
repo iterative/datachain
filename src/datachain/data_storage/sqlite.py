@@ -333,8 +333,8 @@ class SQLiteDatabaseEngine(DatabaseEngine):
         quoted_table_name = quote_schema(table.name)
         if if_not_exists:
             res = self.execute_str(
-                f"SELECT 1 FROM pragma_table_info('{table.name}') "  # noqa: S608
-                f" WHERE name = '{column.name}';"
+                "SELECT 1 FROM pragma_table_info(?) WHERE name = ?",
+                (table.name, column.name),
             )
             if res.fetchone():
                 return
