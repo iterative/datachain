@@ -42,7 +42,7 @@ class Laion(WDSReadableSubclass):
 
 class WDSLaion(WDSBasic):
     txt: str | None = Field(default=None)
-    json: Laion  # type: ignore[assignment]
+    json: Laion = Field(default_factory=Laion)  # type: ignore[assignment]
 
 
 class LaionMeta(BaseModel):
