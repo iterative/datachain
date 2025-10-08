@@ -146,15 +146,11 @@ jobs:
         run: nox -s e2e-${{ matrix.pyv }}
         shell: bash
 
-      - name: Generate coverage report
-        run: nox -s coverage_combine
-
-      - name: Upload coverage report
-        uses: codecov/codecov-action@v5
+      - name: Save coverage data
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage.xml
-          flags: datachain,py${{ matrix.pyv }}
+          name: coverage-${{ matrix.pyv }}
+          path: ".coverage.*"
 
       - name: Build package
         run: nox -s build
@@ -222,6 +218,27 @@ jobs:
 
       - name: Run examples
         run: nox -s examples -p ${{ matrix.pyv }} -- -m "${{ matrix.group }}"
+
+  coverage:
+    if: always()
+    needs: [datachain, examples]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download coverage data
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          merge-multiple: true
+
+      - name: Generate coverage report
+        run: nox -s coverage_combine
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          flags: datachain,py${{ matrix.pyv }}
 
   check:
     if: always()
