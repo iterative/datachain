@@ -154,7 +154,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
-          flags: datachain
+          flags: datachain,py${{ matrix.pyv }}
 
       - name: Build package
         run: nox -s build
