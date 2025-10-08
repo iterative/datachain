@@ -149,7 +149,7 @@ jobs:
       - name: Save coverage data
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-${{ matrix.pyv }}
+          name: coverage-${{ matrix.pyv }}-${{ matrix.os }}
           path: ".coverage.*"
 
       - name: Build package
@@ -219,6 +219,13 @@ jobs:
       - name: Run examples
         run: nox -s examples -p ${{ matrix.pyv }} -- -m "${{ matrix.group }}"
 
+      - name: Save examples coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: examples-coverage-${{ matrix.pyv }}-${{ matrix.os }}
+          path: ".coverage.*"
+
   coverage:
     if: always()
     needs: [datachain, examples]
@@ -230,15 +237,37 @@ jobs:
           pattern: coverage-*
           merge-multiple: true
 
+      - name: Download examples coverage data
+        uses: actions/download-artifact@v4
+        with:
+          pattern: examples-coverage-*
+          merge-multiple: true
+
+      - name: List downloaded coverage files
+        run: |
+          echo "Downloaded coverage files:"
+          find . -name ".coverage*" -type f | head -20
+          echo "Total coverage files:"
+          find . -name ".coverage*" -type f | wc -l
+
       - name: Generate coverage report
         run: nox -s coverage_combine
+
+      - name: Show coverage summary
+        run: |
+          echo "Coverage summary:"
+          coverage report --show-missing
+          echo "Coverage XML file contents:"
+          head -20 coverage.xml
 
       - name: Upload coverage report
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
-          flags: datachain,py${{ matrix.pyv }}
+          flags: datachain
+          fail_ci_if_error: false
+          verbose: true
 
   check:
     if: always()

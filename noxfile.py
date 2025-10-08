@@ -62,8 +62,12 @@ def tests(session: nox.Session) -> None:
 @nox.session
 def coverage_combine(session: nox.Session) -> None:
     session.install("coverage[toml]")
-    session.run("coverage", "combine")
+    # Combine all coverage files from different Python versions and test runs
+    session.run("coverage", "combine", "--keep")
+    # Generate XML report for Codecov
     session.run("coverage", "xml", "-o", "coverage.xml")
+    # Also generate HTML report for debugging
+    session.run("coverage", "html", "-d", "htmlcov")
 
 
 @nox.session(python=python_versions)
@@ -101,13 +105,26 @@ def build(session: nox.Session) -> None:
 def examples(session: nox.Session) -> None:
     session.install(".[examples]")
     session.run("uv", "pip", "list")
+    env = {
+        "COVERAGE_FILE": f".coverage.{session.python}",
+        "COVERAGE_PROCESS_START": "pyproject.toml",
+    }
+    if session.python in ("3.12", "3.13"):
+        # improve performance of tests in Python>=3.12 when used with coverage
+        # https://github.com/nedbat/coveragepy/issues/1665
+        # https://github.com/python/cpython/issues/107674
+        env["COVERAGE_CORE"] = "sysmon"
     session.run(
         "pytest",
+        "--cov",
+        "--cov-config=pyproject.toml",
+        "--cov-report=xml",
         "--durations=0",
         "tests/examples",
         "-m",
         "examples",
         *session.posargs,
+        env=env,
     )
 
 
