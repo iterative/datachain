@@ -48,7 +48,7 @@ def test_args(catalog, mock_popen, reset):
     expected_env = env | {
         "DATACHAIN_QUERY_PARAMS": json.dumps(params),
         "DATACHAIN_JOB_ID": job_id,
-        "DATACHAIN_CHECKPOINTS_RESET": str(reset),
+        "DATACHAIN_CHECKPOINTS_RESET": str(reset) if reset is not None else str(False),
     }
     mock_popen.assert_called_once_with(["mypython", "-c", "pass"], env=expected_env)
 
