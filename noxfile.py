@@ -37,7 +37,10 @@ def bench(session: nox.Session) -> None:
 @nox.session(python=python_versions)
 def tests(session: nox.Session) -> None:
     session.install(".[tests]")
-    env = {"COVERAGE_FILE": f".coverage.{session.python}"}
+    env = {
+        "COVERAGE_FILE": f".coverage.{session.python}",
+        "COVERAGE_PROCESS_START": "pyproject.toml",
+    }
     if session.python in ("3.12", "3.13"):
         # improve performance of tests in Python>=3.12 when used with coverage
         # https://github.com/nedbat/coveragepy/issues/1665
@@ -54,6 +57,13 @@ def tests(session: nox.Session) -> None:
         *session.posargs,
         env=env,
     )
+
+
+@nox.session
+def coverage_combine(session: nox.Session) -> None:
+    session.install("coverage[toml]")
+    session.run("coverage", "combine")
+    session.run("coverage", "xml", "-o", "coverage.xml")
 
 
 @nox.session(python=python_versions)

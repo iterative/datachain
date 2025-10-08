@@ -146,6 +146,9 @@ jobs:
         run: nox -s e2e-${{ matrix.pyv }}
         shell: bash
 
+      - name: Generate coverage report
+        run: nox -s coverage_combine
+
       - name: Upload coverage report
         uses: codecov/codecov-action@v5
         with:
