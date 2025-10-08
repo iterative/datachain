@@ -21,6 +21,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger("datachain")
 
 
+def is_script_run() -> bool:
+    """
+    Returns True if this was ran as python script, e.g python my_script.py.
+    Otherwise (if interactive or module run) returns False.
+    """
+    try:
+        argv0 = sys.argv[0]
+    except Exception:  # noqa: BLE001
+        return False
+    return bool(argv0) and argv0 not in ("-c", "-m", "ipython")
+
+
 class Session:
     """
     Session is a context that keeps track of temporary DataChain datasets for a proper
@@ -139,12 +151,12 @@ class Session:
             Session._OWNS_JOB = False
         else:
             # Local run: create new job
-            if sys.argv:
+            if is_script_run():
                 script = os.path.abspath(sys.argv[0])
             else:
-                # Interactive session - use unique name to avoid linking unrelated
-                # sessions
-                script = f"interactive_{uuid4().hex[:8]}"
+                # Interactive session or module run - use unique name to avoid
+                # linking unrelated sessions
+                script = str(uuid4())
             python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
 
             # try to find the parent job

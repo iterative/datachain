@@ -10,6 +10,12 @@ def mapper_fail(num) -> int:
     raise Exception("Error")
 
 
+@pytest.fixture(autouse=True)
+def mock_is_script_run(monkeypatch):
+    """Mock is_script_run to return True for stable job names in tests."""
+    monkeypatch.setattr("datachain.query.session.is_script_run", lambda: True)
+
+
 @pytest.fixture
 def nums_dataset(test_session):
     return dc.read_values(num=[1, 2, 3], session=test_session).save("nums")
