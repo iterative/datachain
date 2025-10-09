@@ -83,6 +83,53 @@ def test_checkpoints(
     assert len(list(catalog.metastore.list_checkpoints(second_job_id))) == 3
 
 
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("s3", True)],
+    indirect=True,
+)
+@pytest.mark.xdist_group(name="tmpfile")
+def test_checkpoints_parallel(cloud_test_catalog_tmpfile, monkeypatch):
+    def mapper_fail(num) -> int:
+        raise Exception("Error")
+
+    test_session = cloud_test_catalog_tmpfile.session
+    catalog = test_session.catalog
+
+    dc.read_values(num=[1, 2, 3], session=test_session).save("nums")
+
+    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
+
+    chain = dc.read_dataset("nums", session=test_session).settings(parallel=True)
+
+    # -------------- FIRST RUN -------------------
+    reset_session_job_state()
+    chain.save("nums1")
+    chain.save("nums2")
+    with pytest.raises(RuntimeError):
+        chain.map(new=mapper_fail).save("nums3")
+    first_job_id = test_session.get_or_create_job().id
+
+    catalog.get_dataset("nums1")
+    catalog.get_dataset("nums2")
+    with pytest.raises(DatasetNotFoundError):
+        catalog.get_dataset("nums3")
+
+    # -------------- SECOND RUN -------------------
+    reset_session_job_state()
+    chain.save("nums1")
+    chain.save("nums2")
+    chain.save("nums3")
+    second_job_id = test_session.get_or_create_job().id
+
+    assert len(catalog.get_dataset("nums1").versions) == 1
+    assert len(catalog.get_dataset("nums2").versions) == 1
+    assert len(catalog.get_dataset("nums3").versions) == 1
+
+    assert len(list(catalog.metastore.list_checkpoints(first_job_id))) == 2
+    assert len(list(catalog.metastore.list_checkpoints(second_job_id))) == 3
+
+
 @pytest.mark.parametrize("reset_checkpoints", [True, False])
 def test_checkpoints_modified_chains(
     test_session, monkeypatch, nums_dataset, reset_checkpoints

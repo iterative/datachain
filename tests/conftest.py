@@ -539,12 +539,18 @@ def cloud_test_catalog_tmpfile(
     metastore_tmpfile,
     warehouse_tmpfile,
 ):
-    return get_cloud_test_catalog(
+    catalog = get_cloud_test_catalog(
         cloud_server,
         tmp_path,
         metastore_tmpfile,
         warehouse_tmpfile,
     )
+    yield catalog
+
+    # Clean up job-related atexit hooks to prevent errors during pytest shutdown
+    from tests.utils import reset_session_job_state
+
+    reset_session_job_state()
 
 
 @pytest.fixture
