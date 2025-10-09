@@ -1758,15 +1758,20 @@ class Catalog:
         output_hook: Callable[[str], None] = noop,
         params: dict[str, str] | None = None,
         job_id: str | None = None,
+        reset: bool = False,
         interrupt_timeout: int | None = None,
         terminate_timeout: int | None = None,
     ) -> None:
+        if not isinstance(reset, bool):
+            raise TypeError(f"reset must be a bool, got {type(reset).__name__}")
+
         cmd = [python_executable, "-c", query_script]
         env = dict(env or os.environ)
         env.update(
             {
                 "DATACHAIN_QUERY_PARAMS": json.dumps(params or {}),
                 "DATACHAIN_JOB_ID": job_id or "",
+                "DATACHAIN_CHECKPOINTS_RESET": str(reset),
             },
         )
         popen_kwargs: dict[str, Any] = {}
