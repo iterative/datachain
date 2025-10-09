@@ -29,7 +29,7 @@ jobs:
           python-version: '3.10'
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v7.0.0
+        uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
           cache-suffix: lint
@@ -102,7 +102,7 @@ jobs:
           python-version: ${{ matrix.pyv }}
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v7.0.0
+        uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
           cache-suffix: tests-${{ matrix.pyv }}
@@ -146,11 +146,12 @@ jobs:
         run: nox -s e2e-${{ matrix.pyv }}
         shell: bash
 
-      - name: Save coverage data
-        uses: actions/upload-artifact@v4
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v5
         with:
-          name: coverage-${{ matrix.pyv }}-${{ matrix.os }}
-          path: ".coverage.*"
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          flags: datachain
 
       - name: Build package
         run: nox -s build
@@ -187,7 +188,7 @@ jobs:
           python-version: ${{ matrix.pyv }}
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v7.0.0
+        uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
           cache-suffix: examples-${{ matrix.pyv }}
@@ -218,75 +219,6 @@ jobs:
 
       - name: Run examples
         run: nox -s examples -p ${{ matrix.pyv }} -- -m "${{ matrix.group }}"
-
-      - name: Save examples coverage data
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: examples-coverage-${{ matrix.pyv }}-${{ matrix.os }}
-          path: ".coverage.*"
-
-  coverage:
-    if: always()
-    needs: [datachain, examples]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out the repository
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.ref }}
-
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.13'
-
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v7.0.0
-        with:
-          enable-cache: true
-          cache-suffix: coverage
-          cache-dependency-glob: pyproject.toml
-
-      - name: Install nox
-        run: uv pip install nox --system
-
-      - name: Download coverage data
-        uses: actions/download-artifact@v4
-        with:
-          pattern: coverage-*
-          merge-multiple: true
-
-      - name: Download examples coverage data
-        uses: actions/download-artifact@v4
-        with:
-          pattern: examples-coverage-*
-          merge-multiple: true
-
-      - name: List downloaded coverage files
-        run: |
-          echo "Downloaded coverage files:"
-          find . -name ".coverage*" -type f
-
-      - name: Generate coverage report
-        run: nox -s coverage_combine
-
-      - name: Show coverage summary
-        run: |
-          echo "Coverage summary:"
-          coverage report --show-missing
-          echo "Coverage XML file contents:"
-          head -20 coverage.xml
-
-      - name: Upload coverage report
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage.xml
-          flags: datachain
-          fail_ci_if_error: false
-          verbose: true
 
   check:
     if: always()

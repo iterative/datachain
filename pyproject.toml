@@ -180,8 +180,6 @@ filterwarnings = [
 
 [tool.coverage.run]
 branch = true
-parallel = true
-concurrency = ["multiprocessing"]
 source = ["datachain", "tests"]
 
 [tool.coverage.paths]
