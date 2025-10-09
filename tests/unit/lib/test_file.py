@@ -322,6 +322,23 @@ def test_file_resolve_no_catalog():
         file.resolve()
 
 
+def test_file_resolve_sets_catalog(tmp_path, catalog):
+    # https://github.com/iterative/datachain/pull/1393
+    file_name = "myfile"
+    file_path = tmp_path / file_name
+    file_path.write_text("this is a TexT data...")
+
+    file = File(path=file_name, source=f"file://{tmp_path}")
+    file._set_stream(catalog, True)
+
+    file_path.write_text("new data")
+    new_file = file.resolve()
+
+    assert new_file._catalog is catalog
+    new_file.ensure_cached()
+    assert new_file.read_text() == "new data"
+
+
 def test_resolve_function():
     mock_file = Mock(spec=File)
     mock_file.resolve.return_value = "resolved_file"
