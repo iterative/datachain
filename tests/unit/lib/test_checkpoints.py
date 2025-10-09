@@ -45,7 +45,7 @@ def test_checkpoints(
         chain = dc.read_dataset("nums", session=test_session)
 
     # -------------- FIRST RUN -------------------
-    reset_session_job_state(test_session)
+    reset_session_job_state()
     if use_datachain_job_id_env:
         monkeypatch.setenv(
             "DATACHAIN_JOB_ID", metastore.create_job("my-job", "echo 1;")
@@ -63,7 +63,7 @@ def test_checkpoints(
         catalog.get_dataset("nums3")
 
     # -------------- SECOND RUN -------------------
-    reset_session_job_state(test_session)
+    reset_session_job_state()
     if use_datachain_job_id_env:
         monkeypatch.setenv(
             "DATACHAIN_JOB_ID",
@@ -93,14 +93,14 @@ def test_checkpoints_modified_chains(
     chain = dc.read_dataset("nums", session=test_session)
 
     # -------------- FIRST RUN -------------------
-    reset_session_job_state(test_session)
+    reset_session_job_state()
     chain.save("nums1")
     chain.save("nums2")
     chain.save("nums3")
     first_job_id = test_session.get_or_create_job().id
 
     # -------------- SECOND RUN -------------------
-    reset_session_job_state(test_session)
+    reset_session_job_state()
     chain.save("nums1")
     chain.filter(dc.C("num") > 1).save("nums2")  # added change from first run
     chain.save("nums3")
@@ -125,7 +125,7 @@ def test_checkpoints_multiple_runs(
     chain = dc.read_dataset("nums", session=test_session)
 
     # -------------- FIRST RUN -------------------
-    reset_session_job_state(test_session)
+    reset_session_job_state()
     chain.save("nums1")
     chain.save("nums2")
     with pytest.raises(DataChainError):
@@ -138,14 +138,14 @@ def test_checkpoints_multiple_runs(
         catalog.get_dataset("nums3")
 
     # -------------- SECOND RUN -------------------
-    reset_session_job_state(test_session)
+    reset_session_job_state()
     chain.save("nums1")
     chain.save("nums2")
     chain.save("nums3")
     second_job_id = test_session.get_or_create_job().id
 
     # -------------- THIRD RUN -------------------
-    reset_session_job_state(test_session)
+    reset_session_job_state()
     chain.save("nums1")
     chain.filter(dc.C("num") > 1).save("nums2")
     with pytest.raises(DataChainError):
@@ -153,7 +153,7 @@ def test_checkpoints_multiple_runs(
     third_job_id = test_session.get_or_create_job().id
 
     # -------------- FOURTH RUN -------------------
-    reset_session_job_state(test_session)
+    reset_session_job_state()
     chain.save("nums1")
     chain.filter(dc.C("num") > 1).save("nums2")
     chain.save("nums3")
@@ -188,11 +188,11 @@ def test_checkpoints_check_valid_chain_is_returned(
     chain = dc.read_dataset("nums", session=test_session)
 
     # -------------- FIRST RUN -------------------
-    reset_session_job_state(test_session)
+    reset_session_job_state()
     chain.save("nums1")
 
     # -------------- SECOND RUN -------------------
-    reset_session_job_state(test_session)
+    reset_session_job_state()
     ds = chain.save("nums1")
 
     # checking that we return expected DataChain even though we skipped chain creation
@@ -204,7 +204,7 @@ def test_checkpoints_check_valid_chain_is_returned(
 
 def test_checkpoints_invalid_parent_job_id(test_session, monkeypatch, nums_dataset):
     # setting wrong job id
-    reset_session_job_state(test_session)
+    reset_session_job_state()
     monkeypatch.setenv("DATACHAIN_JOB_ID", "caee6c54-6328-4bcd-8ca6-2b31cb4fff94")
     with pytest.raises(JobNotFoundError):
         dc.read_dataset("nums", session=test_session).save("nums1")

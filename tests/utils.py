@@ -230,7 +230,7 @@ def table_row_count(db, table_name) -> int | None:
     return next(db.execute(query), (None,))[0]
 
 
-def reset_session_job_state(session=None):
+def reset_session_job_state():
     """
     Reset job state for testing purposes.
     Useful for simulating multiple script runs.
