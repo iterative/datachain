@@ -37,7 +37,7 @@ from datachain.utils import (
     DataChainDir,
 )
 
-from .utils import DEFAULT_TREE, instantiate_tree
+from .utils import DEFAULT_TREE, instantiate_tree, reset_session_job_state
 
 DEFAULT_DATACHAIN_BIN = "datachain"
 DEFAULT_DATACHAIN_GIT_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -225,7 +225,7 @@ def test_session(catalog):
         yield session
 
     # Clean up job-related atexit hooks to prevent errors during pytest shutdown
-    Session.cleanup_for_tests()
+    reset_session_job_state()
 
 
 @pytest.fixture
