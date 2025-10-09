@@ -66,21 +66,34 @@ def coverage_combine(session: nox.Session) -> None:
     session.run("coverage", "combine", "--keep")
     # Generate XML report for Codecov
     session.run("coverage", "xml", "-o", "coverage.xml")
-    # Also generate HTML report for debugging
-    session.run("coverage", "html", "-d", "htmlcov")
+    # Also print report for debugging
+    session.run("coverage", "report", "-m")
 
 
 @nox.session(python=python_versions)
 def e2e(session: nox.Session) -> None:
     session.install(".[tests]")
+    env = {
+        "COVERAGE_FILE": f".coverage.{session.python}",
+        "COVERAGE_PROCESS_START": "pyproject.toml",
+    }
+    if session.python in ("3.12", "3.13"):
+        # improve performance of tests in Python>=3.12 when used with coverage
+        # https://github.com/nedbat/coveragepy/issues/1665
+        # https://github.com/python/cpython/issues/107674
+        env["COVERAGE_CORE"] = "sysmon"
     session.run(
         "pytest",
+        "--cov",
+        "--cov-config=pyproject.toml",
+        "--cov-report=xml",
         "--durations=0",
         "--numprocesses=logical",
         "--dist=loadgroup",
         "-m",
         "e2e",
         *session.posargs,
+        env=env,
     )
 
 

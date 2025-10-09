@@ -231,6 +231,15 @@ jobs:
     needs: [datachain, examples]
     runs-on: ubuntu-latest
     steps:
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-suffix: coverage
+
+      - name: Install nox
+        run: uv pip install nox --system
+
       - name: Download coverage data
         uses: actions/download-artifact@v4
         with:
@@ -246,9 +255,7 @@ jobs:
       - name: List downloaded coverage files
         run: |
           echo "Downloaded coverage files:"
-          find . -name ".coverage*" -type f | head -20
-          echo "Total coverage files:"
-          find . -name ".coverage*" -type f | wc -l
+          find . -name ".coverage*" -type f
 
       - name: Generate coverage report
         run: nox -s coverage_combine
