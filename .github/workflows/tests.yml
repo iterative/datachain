@@ -231,11 +231,23 @@ jobs:
     needs: [datachain, examples]
     runs-on: ubuntu-latest
     steps:
+      - name: Check out the repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
       - name: Setup uv
         uses: astral-sh/setup-uv@v7.0.0
         with:
           enable-cache: true
           cache-suffix: coverage
+          cache-dependency-glob: pyproject.toml
 
       - name: Install nox
         run: uv pip install nox --system
