@@ -2,7 +2,7 @@ import datetime
 
 import pytest
 
-from datachain.catalog.catalog import build_nested_dependencies, get_all_ids
+from datachain.catalog.catalog import build_nested_dependencies, extract_flat_ids
 from datachain.dataset import DatasetDependency
 
 
@@ -126,5 +126,5 @@ def test_build_nested_dependencies(dataset_deps, dependency_structure):
 
 
 def test_get_all_ids(dataset_deps):
-    result = get_all_ids(dataset_deps)
+    result = extract_flat_ids(dataset_deps)
     assert sorted(result) == sorted([249, 250, 251, 252, 255, 256, 297, 306])
