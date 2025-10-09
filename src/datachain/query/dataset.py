@@ -1864,7 +1864,7 @@ class DatasetQuery:
         for dep_dataset, dep_dataset_version in dependencies:
             dataset_version = dep_dataset.get_version(dep_dataset_version)
 
-            nested_deps_values = self.catalog.get_dataset_dependency_ids(
+            nested_deps_values = self.catalog._get_dataset_dependency_ids_tree(
                 dep_dataset.id,
                 dataset_version.id,
                 indirect=True,

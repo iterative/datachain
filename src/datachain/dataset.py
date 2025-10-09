@@ -20,7 +20,7 @@ LT = TypeVar("LT", bound="DatasetListRecord")
 V = TypeVar("V", bound="DatasetVersion")
 LV = TypeVar("LV", bound="DatasetListVersion")
 DD = TypeVar("DD", bound="DatasetDependency")
-DDM = TypeVar("DDM", bound="DatasetDependencyMinimal")
+DDN = TypeVar("DDN", bound="DatasetDependencyNode")
 
 DATASET_PREFIX = "ds://"
 QUERY_DATASET_PREFIX = "ds_query_"
@@ -96,7 +96,7 @@ class DatasetDependencyType:
 
 
 @dataclass
-class DatasetDependencyMinimal:
+class DatasetDependencyNode:
     id: int
     dataset_id: int | None
     dataset_version_id: int | None
@@ -106,14 +106,14 @@ class DatasetDependencyMinimal:
 
     @classmethod
     def parse(
-        cls: builtins.type[DDM],
+        cls: builtins.type[DDN],
         id: int,
         source_dataset_id: int,
         source_dataset_version_id: int | None,
         dataset_id: int | None,
         dataset_version_id: int | None,
         nested_dependencies: dict | str | None,
-    ) -> "DatasetDependencyMinimal | None":
+    ) -> "DatasetDependencyNode | None":
         if isinstance(nested_dependencies, str):
             nested_dependencies_dict = json.loads(nested_dependencies)
         elif nested_dependencies is None:

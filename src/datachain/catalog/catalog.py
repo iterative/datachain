@@ -22,6 +22,7 @@ from sqlalchemy import Column
 from tqdm.auto import tqdm
 
 from datachain.cache import Cache
+from datachain.catalog.dependency import build_nested_dependencies, extract_flat_ids
 from datachain.client import Client
 from datachain.dataset import (
     DATASET_PREFIX,
@@ -507,60 +508,6 @@ def clone_catalog_with_cache(catalog: "Catalog", cache: "Cache") -> "Catalog":
     clone = catalog.copy()
     clone.cache = cache
     return clone
-
-
-def get_all_ids(d: dict[str, Any]) -> list[int]:
-    """
-    Extracts all unique dataset IDs from a nested dictionary structure.
-    """
-    ids = set()
-    for key, value in d.items():
-        ids.add(int(key))
-        if isinstance(value, dict):
-            ids.update(get_all_ids(value))
-    return sorted(ids)
-
-
-def build_nested_dependencies(
-    dataset_deps: dict[str, DatasetDependency],
-    dependency_structure: dict[str, dict],
-    indirect: bool = True,
-) -> list[DatasetDependency | None]:
-    """
-    Recursively constructs a tree of dataset dependencies based on their relationships,
-    with each dependency containing its own nested dependencies.
-    """
-
-    def build_deps(dep_id, deps_dict):
-        if dep_id not in dataset_deps:
-            return []
-
-        deps = []
-        if dep_id in deps_dict:
-            for child_id in deps_dict[dep_id]:
-                if child_id in dataset_deps:
-                    # Recursively build child dependencies if indirect=True
-                    child_deps = (
-                        build_deps(child_id, deps_dict[dep_id]) if indirect else []
-                    )
-                    child_dep = dataset_deps[child_id]
-                    child_dep.dependencies = child_deps
-                    deps.append(child_dep)
-                else:
-                    deps.append(None)
-        return deps
-
-    result: list[DatasetDependency | None] = []
-    for root_id in dependency_structure:
-        if root_id in dataset_deps:
-            deps = build_deps(root_id, dependency_structure)
-            root_dep = dataset_deps[root_id]
-            root_dep.dependencies = deps
-            result.append(root_dep)
-        else:
-            result.append(None)
-
-    return result
 
 
 class Catalog:
@@ -1250,47 +1197,18 @@ class Catalog:
         assert isinstance(dataset_info, dict)
         return DatasetRecord.from_dict(dataset_info)
 
-    def get_dataset_dependencies(
+    def get_dataset_dependencies_by_ids(
         self,
-        name: str | None = None,
-        version: str | None = None,
-        namespace_name: str | None = None,
-        project_name: str | None = None,
+        dataset_id: int,
+        dataset_version_id: int,
         indirect=False,
-        dataset_id: int | None = None,
-        dataset_version_id: int | None = None,
     ) -> list[DatasetDependency | None]:
-        if (name and dataset_id) or (version and dataset_version_id):
-            raise ValueError(
-                "Invalid arguments: only one set of identifiers should be supplied. "
-                "Provide either (name and version),(dataset_id and dataset_version_id)"
-            )
-
-        if not dataset_id:
-            if not name or not version:
-                raise ValueError(
-                    "name and version must be provided when dataset_id is not provided"
-                )
-            dataset = self.get_dataset(
-                name,
-                namespace_name=namespace_name,
-                project_name=project_name,
-            )
-            dataset_version = dataset.get_version(version)
-            dataset_id = dataset.id
-            dataset_version_id = dataset_version.id
-
-        if dataset_version_id is None:
-            raise ValueError(
-                "dataset_version_id must be provided when dataset_id is provided"
-            )
-
-        dependency_ids = self.get_dataset_dependency_ids(
+        dependency_ids = self._get_dataset_dependency_ids_tree(
             dataset_id,
             dataset_version_id,
             indirect=indirect,
         )
-        all_ids = get_all_ids(dependency_ids)
+        all_ids = extract_flat_ids(dependency_ids)
 
         dependencies = {
             str(d.id): d
@@ -1298,14 +1216,37 @@ class Catalog:
         }
         return build_nested_dependencies(dependencies, dependency_ids, indirect)
 
-    def get_dataset_dependency_ids(
+    def get_dataset_dependencies(
+        self,
+        name: str,
+        version: str,
+        namespace_name: str | None = None,
+        project_name: str | None = None,
+        indirect=False,
+    ) -> list[DatasetDependency | None]:
+        dataset = self.get_dataset(
+            name,
+            namespace_name=namespace_name,
+            project_name=project_name,
+        )
+        dataset_version = dataset.get_version(version)
+        dataset_id = dataset.id
+        dataset_version_id = dataset_version.id
+
+        return self.get_dataset_dependencies_by_ids(
+            dataset_id,
+            dataset_version_id,
+            indirect,
+        )
+
+    def _get_dataset_dependency_ids_tree(
         self,
         dataset_id: int,
         version_id: int,
         indirect=False,
     ) -> dict[str, dict]:
         dependency_tree: dict[str, dict] = {}
-        direct_dependencies = self.metastore.get_dataset_dependency_minimal(
+        direct_dependencies = self.metastore.get_dataset_dependency_node(
             dataset_id=dataset_id,
             version_id=version_id,
         )
@@ -1316,7 +1257,7 @@ class Catalog:
 
             nested_dependencies = d.nested_dependencies
             if nested_dependencies is None and d.dataset_id and d.dataset_version_id:
-                nested_dependencies = self.get_dataset_dependency_ids(
+                nested_dependencies = self._get_dataset_dependency_ids_tree(
                     d.dataset_id,
                     d.dataset_version_id,
                     indirect=True,

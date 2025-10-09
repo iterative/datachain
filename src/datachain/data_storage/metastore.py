@@ -31,7 +31,7 @@ from datachain.data_storage import JobQueryType, JobStatus
 from datachain.data_storage.serializer import Serializable
 from datachain.dataset import (
     DatasetDependency,
-    DatasetDependencyMinimal,
+    DatasetDependencyNode,
     DatasetListRecord,
     DatasetListVersion,
     DatasetRecord,
@@ -79,7 +79,7 @@ class AbstractMetastore(ABC, Serializable):
     dataset_list_class: type[DatasetListRecord] = DatasetListRecord
     dataset_list_version_class: type[DatasetListVersion] = DatasetListVersion
     dependency_class: type[DatasetDependency] = DatasetDependency
-    dependency_minimal_class: type[DatasetDependencyMinimal] = DatasetDependencyMinimal
+    dependency_minimal_class: type[DatasetDependencyNode] = DatasetDependencyNode
     job_class: type[Job] = Job
     checkpoint_class: type[Checkpoint] = Checkpoint
 
@@ -370,16 +370,16 @@ class AbstractMetastore(ABC, Serializable):
         """Gets direct dataset dependencies."""
 
     @abstractmethod
-    def get_dataset_dependency_minimal(
+    def get_dataset_dependency_node(
         self, dataset_id: int, version_id: int
-    ) -> list[DatasetDependencyMinimal]:
-        """Gets dataset dependency minimal."""
+    ) -> list[DatasetDependencyNode]:
+        """Gets dataset dependency node from database."""
 
     @abstractmethod
     def get_direct_dataset_dependencies_by_ids(
         self, ids: list[int]
     ) -> list[DatasetDependency]:
-        """Gets dataset dependency minimal by ids."""
+        """Gets dataset dependency by ids."""
 
     @abstractmethod
     def remove_dataset_dependencies(
@@ -1537,9 +1537,9 @@ class AbstractDBMetastore(AbstractMetastore):
             if dep is not None
         ]
 
-    def get_dataset_dependency_minimal(
+    def get_dataset_dependency_node(
         self, dataset_id: int, version_id: int
-    ) -> list[DatasetDependencyMinimal]:
+    ) -> list[DatasetDependencyNode]:
         dd = self._datasets_dependencies
 
         select_cols = self._datasets_dependencies_columns()
