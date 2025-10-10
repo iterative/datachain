@@ -22,6 +22,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     desc,
+    literal,
     select,
 )
 from sqlalchemy.sql import func as f
@@ -79,7 +80,7 @@ class AbstractMetastore(ABC, Serializable):
     dataset_list_class: type[DatasetListRecord] = DatasetListRecord
     dataset_list_version_class: type[DatasetListVersion] = DatasetListVersion
     dependency_class: type[DatasetDependency] = DatasetDependency
-    dependency_minimal_class: type[DatasetDependencyNode] = DatasetDependencyNode
+    dependency_node_class: type[DatasetDependencyNode] = DatasetDependencyNode
     job_class: type[Job] = Job
     checkpoint_class: type[Checkpoint] = Checkpoint
 
@@ -349,7 +350,6 @@ class AbstractMetastore(ABC, Serializable):
         source_dataset_version: str,
         dep_dataset: "DatasetRecord",
         dep_dataset_version: str,
-        nested_dependencies: dict | None = None,
     ) -> None:
         """Adds dataset dependency to dataset."""
 
@@ -372,14 +372,8 @@ class AbstractMetastore(ABC, Serializable):
     @abstractmethod
     def get_dataset_dependency_node(
         self, dataset_id: int, version_id: int
-    ) -> list[DatasetDependencyNode]:
+    ) -> list[DatasetDependencyNode | None]:
         """Gets dataset dependency node from database."""
-
-    @abstractmethod
-    def get_direct_dataset_dependencies_by_ids(
-        self, ids: list[int]
-    ) -> list[DatasetDependency]:
-        """Gets dataset dependency by ids."""
 
     @abstractmethod
     def remove_dataset_dependencies(
@@ -654,14 +648,6 @@ class AbstractDBMetastore(AbstractMetastore):
         ]
 
     @classmethod
-    def _datasets_dependency_nested(cls) -> Column:
-        return Column(
-            "nested_dependencies",
-            JSON,
-            nullable=True,
-        )
-
-    @classmethod
     def _datasets_dependencies_columns(cls) -> list["SchemaItem"]:
         """Datasets dependencies table columns."""
         return [
@@ -692,7 +678,6 @@ class AbstractDBMetastore(AbstractMetastore):
                 ForeignKey(f"{cls.DATASET_VERSION_TABLE}.id"),
                 nullable=True,
             ),
-            cls._datasets_dependency_nested(),
         ]
 
     #
@@ -1430,7 +1415,6 @@ class AbstractDBMetastore(AbstractMetastore):
         source_dataset_version: str,
         dep_dataset: "DatasetRecord",
         dep_dataset_version: str,
-        nested_dependencies: dict | None = None,
     ) -> None:
         """Adds dataset dependency to dataset."""
         self.db.execute(
@@ -1441,7 +1425,6 @@ class AbstractDBMetastore(AbstractMetastore):
                 ),
                 dataset_id=dep_dataset.id,
                 dataset_version_id=dep_dataset.get_version(dep_dataset_version).id,
-                nested_dependencies=nested_dependencies,
             )
         )
 
@@ -1509,52 +1492,76 @@ class AbstractDBMetastore(AbstractMetastore):
 
         return [self.dependency_class.parse(*r) for r in self.db.execute(query)]
 
-    def get_direct_dataset_dependencies_by_ids(
-        self, ids: list[int]
-    ) -> list[DatasetDependency]:
+    def get_dataset_dependency_node(
+        self, dataset_id: int, version_id: int
+    ) -> list[DatasetDependencyNode | None]:
         n = self._namespaces
         p = self._projects
         d = self._datasets
         dd = self._datasets_dependencies
         dv = self._datasets_versions
 
-        select_cols = self._dataset_dependencies_select_columns()
-
-        query = (
-            self._datasets_dependencies_select(*select_cols)
-            .select_from(
-                dd.join(d, dd.c.dataset_id == d.c.id, isouter=True)
-                .join(dv, dd.c.dataset_version_id == dv.c.id, isouter=True)
-                .join(p, d.c.project_id == p.c.id, isouter=True)
-                .join(n, p.c.namespace_id == n.c.id, isouter=True)
-            )
-            .where(dd.c.id.in_(ids))
-        )
-
-        return [
-            dep
-            for dep in [self.dependency_class.parse(*r) for r in self.db.execute(query)]
-            if dep is not None
+        # Common dependency fields for CTE
+        dep_fields = [
+            dd.c.id,
+            dd.c.source_dataset_id,
+            dd.c.source_dataset_version_id,
+            dd.c.dataset_id,
+            dd.c.dataset_version_id,
         ]
 
-    def get_dataset_dependency_node(
-        self, dataset_id: int, version_id: int
-    ) -> list[DatasetDependencyNode]:
-        dd = self._datasets_dependencies
-
-        select_cols = self._datasets_dependencies_columns()
-
-        query = self._datasets_dependencies_select(*select_cols).where(
+        # Base case: direct dependencies
+        base_query = select(
+            *dep_fields,
+            literal(0).label("depth"),
+        ).where(
             (dd.c.source_dataset_id == dataset_id)
             & (dd.c.source_dataset_version_id == version_id)
         )
 
+        # Recursive CTE
+        cte = base_query.cte(name="dependency_tree", recursive=True)
+
+        # Recursive case: dependencies of dependencies
+        recursive_query = select(
+            *dep_fields,
+            (cte.c.depth + 1).label("depth"),
+        ).select_from(
+            cte.join(
+                dd,
+                (cte.c.dataset_id == dd.c.source_dataset_id)
+                & (cte.c.dataset_version_id == dd.c.source_dataset_version_id),
+            )
+        )
+
+        cte = cte.union(recursive_query)
+
+        # Fetch all with full details
+        final_query = (
+            select(
+                n.c.name,
+                p.c.name,
+                cte.c.id,
+                cte.c.dataset_id,
+                cte.c.dataset_version_id,
+                d.c.name,
+                dv.c.version,
+                dv.c.created_at,
+                cte.c.source_dataset_id,
+                cte.c.source_dataset_version_id,
+                cte.c.depth,
+            )
+            .select_from(
+                cte.join(d, cte.c.dataset_id == d.c.id, isouter=True)
+                .join(dv, cte.c.dataset_version_id == dv.c.id, isouter=True)
+                .join(p, d.c.project_id == p.c.id, isouter=True)
+                .join(n, p.c.namespace_id == n.c.id, isouter=True)
+            )
+            .order_by(cte.c.depth, cte.c.id)
+        )
+
         return [
-            dep
-            for dep in [
-                self.dependency_minimal_class.parse(*r) for r in self.db.execute(query)
-            ]
-            if dep is not None
+            self.dependency_node_class.parse(*r) for r in self.db.execute(final_query)
         ]
 
     def remove_dataset_dependencies(

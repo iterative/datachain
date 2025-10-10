@@ -1,91 +1,104 @@
-from typing import Any
-
-from datachain.dataset import DatasetDependency
+from datachain.dataset import DatasetDependency, DatasetDependencyNode
 
 
-def extract_flat_ids(d: dict[str, Any]) -> list[int]:
+def build_dependency_hierarchy(
+    dependency_nodes: list[DatasetDependencyNode | None],
+) -> tuple[
+    dict[int, DatasetDependency | None], dict[tuple[int, int | None], list[int]]
+]:
     """
-    Extracts all unique dataset IDs from a nested dictionary structure.
-    """
-    ids = set()
-    for key, value in d.items():
-        ids.add(int(key))
-        if isinstance(value, dict):
-            ids.update(extract_flat_ids(value))
-    return sorted(ids)
-
-
-def build_nested_dependencies(
-    dataset_deps: dict[str, DatasetDependency],
-    dependency_structure: dict[str, dict],
-    indirect: bool = True,
-    max_depth: int = 100,
-) -> list[DatasetDependency | None]:
-    """
-    Recursively constructs a tree of dataset dependencies based on their relationships,
-    with each dependency containing its own nested dependencies.
+    Build dependency hierarchy from dependency nodes.
 
     Args:
-        dataset_deps: Dictionary mapping dependency ids to DatasetDependency objects.
-        dependency_structure: Dependency tree with nested dependencies.
-        indirect: Whether to build nested dependencies indirectly.
-        max_depth: Maximum recursion depth to prevent infinite loops.
+        dependency_nodes: List of DatasetDependencyNode objects from the database
 
     Returns:
-        List of DatasetDependency objects with their nested dependencies.
+        Tuple of (dependency_map, children_map) where:
+        - dependency_map: Maps dependency_id -> DatasetDependency
+        - children_map: Maps (source_dataset_id, source_version_id) ->
+          list of dependency_ids
     """
+    dependency_map: dict[int, DatasetDependency | None] = {}
+    children_map: dict[tuple[int, int | None], list[int]] = {}
 
-    def build_deps(dep_id, deps_dict, visited=None, depth=0):
-        if visited is None:
-            visited = set()
+    for node in dependency_nodes:
+        if node is None:
+            continue
+        dependency = node.to_dependency()
 
-        # Prevent infinite recursion
-        if depth > max_depth:
-            return []
-
-        # Prevent circular dependencies
-        if dep_id in visited:
-            return []
-
-        if dep_id not in dataset_deps:
-            return []
-
-        deps = []
-        if dep_id in deps_dict:
-            # Add current node to visited set
-            visited.add(dep_id)
-
-            for child_id in deps_dict[dep_id]:
-                if child_id in dataset_deps:
-                    # Recursively build child dependencies if indirect=True
-                    child_deps = (
-                        build_deps(
-                            child_id,
-                            deps_dict[dep_id],
-                            visited.copy(),
-                            depth + 1,
-                        )
-                        if indirect
-                        else []
-                    )
-                    child_dep = dataset_deps[child_id]
-                    child_dep.dependencies = child_deps
-                    deps.append(child_dep)
-                else:
-                    deps.append(None)
-
-            # Remove current node from visited set after processing
-            visited.discard(dep_id)
-        return deps
-
-    result: list[DatasetDependency | None] = []
-    for root_id in dependency_structure:
-        if root_id in dataset_deps:
-            deps = build_deps(root_id, dependency_structure)
-            root_dep = dataset_deps[root_id]
-            root_dep.dependencies = deps
-            result.append(root_dep)
+        if dependency is not None:
+            dependency_map[dependency.id] = dependency
+            parent_key = (node.source_dataset_id, node.source_dataset_version_id)
+            children_map.setdefault(parent_key, []).append(dependency.id)
         else:
-            result.append(None)
+            # Handle case where dependency creation failed
+            dependency_map[node.id] = None
 
-    return result
+    return dependency_map, children_map
+
+
+def populate_nested_dependencies(
+    dependency: DatasetDependency,
+    dependency_nodes: list[DatasetDependencyNode | None],
+    dependency_map: dict[int, DatasetDependency | None],
+    children_map: dict[tuple[int, int | None], list[int]],
+) -> None:
+    """
+    Recursively populate nested dependencies for a given dependency.
+
+    Args:
+        dependency: The dependency to populate nested dependencies for
+        dependency_nodes: All dependency nodes from the database
+        dependency_map: Maps dependency_id -> DatasetDependency
+        children_map: Maps (source_dataset_id, source_version_id) ->
+        list of dependency_ids
+    """
+    # Find the target dataset and version for this dependency
+    target_dataset_id, target_version_id = find_target_dataset_version(
+        dependency, dependency_nodes
+    )
+
+    if target_dataset_id is None or target_version_id is None:
+        return
+
+    # Get children for this target
+    target_key = (target_dataset_id, target_version_id)
+    if target_key not in children_map:
+        dependency.dependencies = []
+        return
+
+    child_dependency_ids = children_map[target_key]
+    child_dependencies = [
+        dependency_map[child_id]
+        for child_id in child_dependency_ids
+        if dependency_map[child_id] is not None
+    ]
+
+    dependency.dependencies = child_dependencies
+
+    # Recursively populate children
+    for child_dependency in child_dependencies:
+        if child_dependency is not None:
+            populate_nested_dependencies(
+                child_dependency, dependency_nodes, dependency_map, children_map
+            )
+
+
+def find_target_dataset_version(
+    dependency: DatasetDependency,
+    dependency_nodes: list[DatasetDependencyNode | None],
+) -> tuple[int | None, int | None]:
+    """
+    Find the target dataset ID and version ID for a given dependency.
+
+    Args:
+        dependency: The dependency to find target for
+        dependency_nodes: All dependency nodes from the database
+
+    Returns:
+        Tuple of (target_dataset_id, target_version_id) or (None, None) if not found
+    """
+    for node in dependency_nodes:
+        if node is not None and node.id == dependency.id:
+            return node.dataset_id, node.dataset_version_id
+    return None, None
