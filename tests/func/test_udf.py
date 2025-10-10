@@ -2,6 +2,7 @@ import functools
 import os
 import pickle
 import posixpath
+import time
 
 import pytest
 
@@ -548,6 +549,101 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
         # while in local mode we expect RuntimeError with the error message
         with pytest.raises(RuntimeError, match="UDF Execution Failed!"):
             chain.show()
+
+
+@pytest.mark.parametrize(
+    "failure_mode,expected_exit_code,error_marker",
+    [
+        ("exception", 1, "Worker 1 failure!"),
+        ("keyboard_interrupt", -2, "KeyboardInterrupt"),
+        ("sys_exit", 1, None),
+        ("os_exit", 1, None),  # os._exit - immediate termination
+    ],
+)
+def test_udf_parallel_worker_failure_exits_peers(
+    test_session_tmpfile, capfd, failure_mode, expected_exit_code, error_marker
+):
+    """
+    Test that when one worker fails, all other workers exit immediately.
+
+    Tests different failure modes:
+    - exception: Worker raises RuntimeError (normal exception)
+    - keyboard_interrupt: Worker raises KeyboardInterrupt (simulates Ctrl+C)
+    - sys_exit: Worker calls sys.exit() (clean Python exit)
+    - os_exit: Worker calls os._exit() (immediate process termination)
+    """
+    vals = list(range(100))
+
+    def slow_process(val: int) -> int:
+        import os
+        import sys
+
+        import multiprocess as mp
+
+        # Track which workers are processing (print to stderr for verification)
+        proc_name = mp.current_process().name
+        print(f"WORKER_STARTED:{proc_name}", file=sys.stderr, flush=True)
+
+        # Small delay to ensure all workers start before first failure
+        # This guarantees we're testing immediate exit with multiple workers running
+        time.sleep(0.1)
+
+        # Fail in worker 1 (not 0) to ensure multiple workers are running
+        if proc_name == "Worker-UDF-1":
+            if failure_mode == "exception":
+                raise RuntimeError("Worker 1 failure!")
+            if failure_mode == "keyboard_interrupt":
+                raise KeyboardInterrupt("Worker interrupted")
+            if failure_mode == "sys_exit":
+                sys.exit(1)
+            if failure_mode == "os_exit":
+                os._exit(1)  # Immediate exit, bypass cleanup
+        time.sleep(5)
+        return val * 2
+
+    chain = (
+        dc.read_values(val=vals, session=test_session_tmpfile)
+        .settings(parallel=3)
+        .map(slow_process, output={"result": int})
+    )
+
+    start = time.time()
+    with pytest.raises(RuntimeError, match="UDF Execution Failed!") as exc_info:
+        list(chain.to_iter("result"))
+    elapsed = time.time() - start
+
+    # Verify timing: should exit immediately when worker fails
+    assert elapsed < 2, f"took {elapsed:.1f}s, should exit immediately"
+
+    captured = capfd.readouterr()
+
+    # Verify multiple workers were started (proves parallel execution)
+    worker_starts = [
+        line for line in captured.err.split("\n") if "WORKER_STARTED:" in line
+    ]
+    unique_workers = {
+        line.split("WORKER_STARTED:")[1].strip()
+        for line in worker_starts
+        if "WORKER_STARTED:" in line
+    }
+
+    assert len(unique_workers) == 3, (
+        f"Expected all 3 workers to start, but only saw: {unique_workers}. "
+        f"Worker starts: {worker_starts}"
+    )
+
+    # Verify the RuntimeError has a meaningful message with exit code
+    error_message = str(exc_info.value)
+    assert f"UDF Execution Failed! Exit code: {expected_exit_code}" in error_message, (
+        f"Expected exit code {expected_exit_code}, got: {error_message}"
+    )
+
+    # Verify error marker appears in stderr (if applicable)
+    if error_marker:
+        assert error_marker in captured.err, (
+            f"Expected '{error_marker}' in stderr for {failure_mode} mode. "
+            f"stderr output: {captured.err[:500]}"
+        )
 
 
 @pytest.mark.parametrize(
