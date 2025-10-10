@@ -77,7 +77,7 @@ def main():
         .map(lambda file: {"size": file.size, "name": file.name})
         .save("processed_files")
     )
-    
+
     print(f"Processed {len(dc)} files")
 
 if __name__ == "__main__":
@@ -97,7 +97,7 @@ def main():
     parser.add_argument("--output-path", required=True)
     parser.add_argument("--batch-size", type=int, default=100)
     args = parser.parse_args()
-    
+
     # Process data with parameters
     dc = (
         DataChain.from_storage(args.input_path)

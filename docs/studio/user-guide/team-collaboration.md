@@ -31,7 +31,7 @@ DataChain Studio supports three main roles:
 - **Billing**: Access to billing and subscription management
 - **Configuration**: Configure team-wide settings and integrations
 
-#### Member  
+#### Member
 - **Project Access**: Create and manage datasets and jobs
 - **Resource Usage**: Use team computational resources
 - **Collaboration**: Share and collaborate on projects
@@ -92,7 +92,7 @@ team_resources:
   memory_quota: "400GB"    # Total memory
   gpu_quota: 8            # Total GPU count
   storage_quota: "1TB"    # Total storage
-  
+
   job_limits:
     max_concurrent_jobs: 20
     max_job_duration: "24h"
@@ -116,11 +116,11 @@ shared_storage:
   datasets_bucket: "s3://team-datasets/"
   artifacts_bucket: "s3://team-artifacts/"
   logs_bucket: "s3://team-logs/"
-  
+
   access_policies:
     - role: "admin"
       permissions: ["read", "write", "delete"]
-    - role: "member"  
+    - role: "member"
       permissions: ["read", "write"]
     - role: "viewer"
       permissions: ["read"]
@@ -208,12 +208,12 @@ notifications:
     - type: "email"
       recipients: ["team-leads@company.com"]
       events: ["job_failed", "resource_limit"]
-    
-    - type: "slack"  
+
+    - type: "slack"
       webhook: "https://hooks.slack.com/services/..."
       channel: "#data-team"
       events: ["job_complete", "dataset_updated"]
-    
+
     - type: "webhook"
       url: "https://internal-system.company.com/notifications"
       events: ["all"]
@@ -263,7 +263,7 @@ Ensure team collaboration meets compliance requirements:
 
 ### Collaboration
 1. **Communication**: Establish clear communication channels
-2. **Code Reviews**: Implement mandatory code review processes  
+2. **Code Reviews**: Implement mandatory code review processes
 3. **Testing**: Maintain comprehensive testing practices
 4. **Version Control**: Use proper version control workflows
 

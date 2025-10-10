@@ -84,6 +84,6 @@ Before installing DataChain Studio:
 ## Next Steps
 
 - Review [installation options](installation/index.md)
-- Plan your [configuration settings](configuration/index.md)  
+- Plan your [configuration settings](configuration/index.md)
 - Set up [monitoring and alerting](troubleshooting/index.md)
 - Configure [authentication and access control](configuration/index.md)

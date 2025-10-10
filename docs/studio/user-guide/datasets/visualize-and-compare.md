@@ -146,12 +146,12 @@ dashboard:
     - type: "metric"
       title: "Total Customers"
       query: "SELECT COUNT(*) FROM customers"
-    
+
     - type: "chart"
       title: "Customer Distribution by Region"
       chart_type: "bar"
       query: "SELECT region, COUNT(*) FROM customers GROUP BY region"
-    
+
     - type: "table"
       title: "Recent Customers"
       query: "SELECT * FROM customers ORDER BY created_at DESC LIMIT 100"
@@ -176,13 +176,13 @@ Create custom visualizations for specific use cases:
 # Custom visualization function
 def custom_scatter_plot(dc, x_col, y_col, color_col):
     import matplotlib.pyplot as plt
-    
+
     data = dc.to_pandas()
     plt.figure(figsize=(10, 6))
     scatter = plt.scatter(
-        data[x_col], 
-        data[y_col], 
-        c=data[color_col], 
+        data[x_col],
+        data[y_col],
+        c=data[color_col],
         alpha=0.6
     )
     plt.colorbar(scatter)
@@ -210,7 +210,7 @@ For complex multidimensional data:
 # 3D scatter plot
 dc.visualize_3d(
     x="feature1",
-    y="feature2", 
+    y="feature2",
     z="feature3",
     color="cluster",
     size="importance"

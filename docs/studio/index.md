@@ -3,7 +3,7 @@
 DataChain Studio is a web application that enables Machine Learning and Data teams to seamlessly
 
 - [Run and track jobs](user-guide/jobs/index.md)
-- [Manage datasets](user-guide/datasets/index.md) 
+- [Manage datasets](user-guide/datasets/index.md)
 - [Collaborate on data projects](user-guide/team-collaboration.md)
 
 It works on top of [DataChain](https://datachain.ai/) and [Git](https://git-scm.com/), maintaining Git as the single-source-of-truth for your data, jobs and datasets.
@@ -23,7 +23,7 @@ Sign in to DataChain Studio using your GitHub.com, GitLab.com, or Bitbucket.org 
 New to DataChain Studio? Start with these guides:
 
 - **[User Guide](user-guide/index.md)** - Learn how to use DataChain Studio features
-- **[API Reference](api/index.md)** - Integrate with Studio programmatically 
+- **[API Reference](api/index.md)** - Integrate with Studio programmatically
 - **[Webhooks](webhooks.md)** - Set up event notifications
 - **[Self-hosting](self-hosting/index.md)** - Deploy your own Studio instance
 

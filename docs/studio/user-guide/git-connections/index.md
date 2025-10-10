@@ -96,7 +96,7 @@ datasets:
   customer_data:
     source: "s3://company-data/customers/"
     description: "Customer transaction data"
-    
+
 jobs:
   feature_extraction:
     script: "scripts/feature_extraction.py"
@@ -175,20 +175,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.9'
-    
+
     - name: Install dependencies
       run: |
         pip install -r requirements.txt
-    
+
     - name: Run tests
       run: |
         python -m pytest tests/
-    
+
     - name: Submit DataChain job
       if: github.ref == 'refs/heads/main'
       run: |
@@ -208,13 +208,13 @@ branches:
     resources:
       cpu: 4
       memory: "16GB"
-    
+
   develop:
     auto_test: true
     resources:
       cpu: 2
       memory: "8GB"
-    
+
   feature/*:
     validation_only: true
     resources:
@@ -266,11 +266,11 @@ webhooks:
     branch: "main"
     action: "run_job"
     job: "data_processing"
-    
+
   - event: "pull_request"
     action: "validate"
     job: "data_validation"
-    
+
   - event: "release"
     action: "deploy"
     environment: "production"

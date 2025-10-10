@@ -133,7 +133,7 @@ datachain job logs <job-id> > job_logs.txt
 # Test S3 access
 aws s3 ls s3://your-bucket-name/
 
-# Test GCS access  
+# Test GCS access
 gsutil ls gs://your-bucket-name/
 ```
 
@@ -324,7 +324,7 @@ aws s3 ls s3://your-bucket/ --region your-region
 When reporting bugs, please include:
 
 1. **Clear description**: What you expected vs. what happened
-2. **Steps to reproduce**: Detailed steps to reproduce the issue  
+2. **Steps to reproduce**: Detailed steps to reproduce the issue
 3. **Environment details**: Versions, OS, browser, etc.
 4. **Error messages**: Complete error messages and stack traces
 5. **Screenshots**: Screenshots for UI issues
@@ -339,7 +339,7 @@ Brief description of the issue
 **Expected Behavior:**
 What should have happened
 
-**Actual Behavior:**  
+**Actual Behavior:**
 What actually happened
 
 **Steps to Reproduce:**

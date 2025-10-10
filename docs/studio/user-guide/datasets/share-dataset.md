@@ -31,7 +31,7 @@ Sharing datasets enables collaboration by allowing team members to access, proce
 - **Download**: Download data files (if enabled)
 - **No Modifications**: Cannot modify or delete data
 
-#### Contributor  
+#### Contributor
 - **Read/Write**: Full access to dataset contents
 - **Job Submission**: Submit processing jobs
 - **Metadata Updates**: Update dataset descriptions and tags
