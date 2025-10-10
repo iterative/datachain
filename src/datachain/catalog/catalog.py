@@ -22,7 +22,6 @@ from sqlalchemy import Column
 from tqdm.auto import tqdm
 
 from datachain.cache import Cache
-from datachain.catalog.dependency import build_nested_dependencies, extract_flat_ids
 from datachain.client import Client
 from datachain.dataset import (
     DATASET_PREFIX,
@@ -55,6 +54,7 @@ from datachain.sql.types import DateTime, SQLType
 from datachain.utils import DataChainDir
 
 from .datasource import DataSource
+from .dependency import build_dependency_hierarchy, populate_nested_dependencies
 
 if TYPE_CHECKING:
     from datachain.data_storage import AbstractMetastore, AbstractWarehouse
@@ -1207,21 +1207,38 @@ class Catalog:
     def get_dataset_dependencies_by_ids(
         self,
         dataset_id: int,
-        dataset_version_id: int,
-        indirect=False,
+        version_id: int,
+        indirect: bool = True,
     ) -> list[DatasetDependency | None]:
-        dependency_ids = self._get_dataset_dependency_ids_tree(
-            dataset_id,
-            dataset_version_id,
-            indirect=indirect,
+        dependency_nodes = self.metastore.get_dataset_dependency_node(
+            dataset_id=dataset_id,
+            version_id=version_id,
         )
-        all_ids = extract_flat_ids(dependency_ids)
 
-        dependencies = {
-            str(d.id): d
-            for d in self.metastore.get_direct_dataset_dependencies_by_ids(all_ids)
-        }
-        return build_nested_dependencies(dependencies, dependency_ids, indirect)
+        if not dependency_nodes:
+            return []
+
+        dependency_map, children_map = build_dependency_hierarchy(dependency_nodes)
+
+        root_key = (dataset_id, version_id)
+        if root_key not in children_map:
+            return []
+
+        root_dependency_ids = children_map[root_key]
+        root_dependencies = [
+            dependency_map[dep_id]
+            for dep_id in root_dependency_ids
+            if dependency_map[dep_id] is not None
+        ]
+
+        if indirect:
+            for dependency in root_dependencies:
+                if dependency is not None:
+                    populate_nested_dependencies(
+                        dependency, dependency_nodes, dependency_map, children_map
+                    )
+
+        return root_dependencies
 
     def get_dataset_dependencies(
         self,
@@ -1240,37 +1257,17 @@ class Catalog:
         dataset_id = dataset.id
         dataset_version_id = dataset_version.id
 
+        if not indirect:
+            return self.metastore.get_direct_dataset_dependencies(
+                dataset,
+                version,
+            )
+
         return self.get_dataset_dependencies_by_ids(
             dataset_id,
             dataset_version_id,
             indirect,
         )
-
-    def _get_dataset_dependency_ids_tree(
-        self,
-        dataset_id: int,
-        version_id: int,
-        indirect=False,
-    ) -> dict[str, dict]:
-        dependency_tree: dict[str, dict] = {}
-        direct_dependencies = self.metastore.get_dataset_dependency_node(
-            dataset_id=dataset_id,
-            version_id=version_id,
-        )
-        for d in direct_dependencies:
-            if not indirect:
-                dependency_tree[str(d.id)] = {}
-                continue
-
-            nested_dependencies = d.nested_dependencies
-            if nested_dependencies is None and d.dataset_id and d.dataset_version_id:
-                nested_dependencies = self._get_dataset_dependency_ids_tree(
-                    d.dataset_id,
-                    d.dataset_version_id,
-                    indirect=True,
-                )
-            dependency_tree[str(d.id)] = nested_dependencies or {}
-        return dependency_tree
 
     def ls_datasets(
         self,
