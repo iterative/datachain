@@ -1,5 +1,3 @@
-import os
-
 import pytest
 
 from datachain.utils import (
@@ -163,10 +161,10 @@ def test_retry_with_backoff():
         (True, 2, None, True),
     ),
 )
-def test_determine_workers(workers, rows_total, settings, expected):
+def test_determine_workers(workers, rows_total, settings, expected, monkeypatch):
     if settings is not None:
-        os.environ["DATACHAIN_DISTRIBUTED"] = "some_defined_value"
-        os.environ["DATACHAIN_SETTINGS_WORKERS"] = settings
+        monkeypatch.setenv("DATACHAIN_DISTRIBUTED", "some_defined_value")
+        monkeypatch.setenv("DATACHAIN_SETTINGS_WORKERS", settings)
     assert determine_workers(workers, rows_total=rows_total) == expected
 
 
@@ -190,9 +188,9 @@ def test_determine_workers(workers, rows_total, settings, expected):
         (True, 2, None, True),
     ),
 )
-def test_determine_processes(parallel, rows_total, settings, expected):
+def test_determine_processes(parallel, rows_total, settings, expected, monkeypatch):
     if settings is not None:
-        os.environ["DATACHAIN_SETTINGS_PARALLEL"] = settings
+        monkeypatch.setenv("DATACHAIN_SETTINGS_PARALLEL", settings)
     assert determine_processes(parallel, rows_total=rows_total) == expected
 
 

@@ -6,7 +6,6 @@ from collections.abc import Callable, Generator, Sequence
 import sqlalchemy as sa
 
 from datachain.data_storage.schema import PARTITION_COLUMN_ID
-from datachain.query.utils import get_query_column
 
 RowsOutputBatch = Sequence[Sequence]
 RowsOutput = Sequence | RowsOutputBatch
@@ -106,7 +105,7 @@ class Partition(BatchingStrategy):
         query: sa.Select,
         id_col: sa.ColumnElement | None = None,
     ) -> Generator[RowsOutput, None, None]:
-        if (partition_col := get_query_column(query, PARTITION_COLUMN_ID)) is None:
+        if (partition_col := query.selected_columns.get(PARTITION_COLUMN_ID)) is None:
             raise RuntimeError("partition column not found in query")
 
         ids_only = False

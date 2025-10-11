@@ -438,6 +438,9 @@ class UDFStep(Step, ABC):
         """
 
     def populate_udf_table(self, udf_table: "Table", query: Select) -> None:
+        if "sys__id" not in query.selected_columns:
+            raise RuntimeError("Query must have sys__id column to run UDF")
+
         if (rows_total := self.catalog.warehouse.query_count(query)) == 0:
             return
 
@@ -580,13 +583,10 @@ class UDFStep(Step, ABC):
         """
         Create temporary table with group by partitions.
         """
-        # Check if partition_by is set, we need it to create partitions.
-        assert self.partition_by is not None
-        # Check if sys__id is in the query, we need it to be able to join
-        # the partition table with the udf table later.
-        assert any(c.name == "sys__id" for c in query.selected_columns), (
-            "Query must have sys__id column to use partitioning."
-        )
+        if self.partition_by is None:
+            raise RuntimeError("Query must have partition_by set to use partitioning")
+        if (id_col := query.selected_columns.get("sys__id")) is None:
+            raise RuntimeError("Query must have sys__id column to use partitioning")
 
         if isinstance(self.partition_by, (list, tuple, GeneratorType)):
             list_partition_by = list(self.partition_by)
@@ -602,7 +602,7 @@ class UDFStep(Step, ABC):
 
         # fill table with partitions
         cols = [
-            query.selected_columns.sys__id,
+            id_col,
             f.dense_rank().over(order_by=partition_by).label(PARTITION_COLUMN_ID),
         ]
         self.catalog.warehouse.db.execute(
@@ -634,21 +634,11 @@ class UDFStep(Step, ABC):
 
         # Apply partitioning if needed.
         if self.partition_by is not None:
-            if not any(c.name == "sys__id" for c in query.selected_columns):
-                # If sys__id is not in the query, we need to create a temp table
-                # to hold the query results, so we can join it with the
-                # partition table later.
-                columns = [
-                    c if isinstance(c, Column) else Column(c.name, c.type)
-                    for c in query.subquery().columns
-                ]
-                temp_table = self.catalog.warehouse.create_dataset_rows_table(
-                    self.catalog.warehouse.temp_table_name(),
-                    columns=columns,
+            if "sys__id" not in query.selected_columns:
+                _query = query = self.catalog.warehouse._regenerate_system_columns(
+                    query,
+                    keep_existing_columns=True,
                 )
-                temp_tables.append(temp_table.name)
-                self.catalog.warehouse.copy_table(temp_table, query)
-                _query = query = temp_table.select()
 
             partition_tbl = self.create_partitions_table(query)
             temp_tables.append(partition_tbl.name)

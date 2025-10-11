@@ -22,7 +22,6 @@ from datachain.lib.signal_schema import SignalSchema
 from datachain.node import DirType, DirTypeGroup, Node, NodeWithPath, get_path
 from datachain.query.batch import RowsOutput
 from datachain.query.schema import ColumnMeta
-from datachain.query.utils import get_query_id_column
 from datachain.sql.functions import path as pathfunc
 from datachain.sql.types import Int, SQLType
 from datachain.utils import sql_escape_like
@@ -228,7 +227,8 @@ class AbstractWarehouse(ABC, Serializable):
             while True:
                 if limit is not None:
                     limit -= num_yielded
-                    if limit == 0:
+                    num_yielded = 0
+                    if limit <= 0:
                         break
                     if limit < page_size:
                         paginated_query = paginated_query.limit(None).limit(limit)
@@ -246,32 +246,48 @@ class AbstractWarehouse(ABC, Serializable):
                     break  # no more results
                 offset += page_size
 
-    def _regenerate_system_columns(self, selectable):
-        """Return a SELECT that regenerates sys__id and sys__rand deterministically."""
+    def _regenerate_system_columns(
+        self,
+        selectable: sa.Select | sa.CTE,
+        keep_existing_columns: bool = False,
+    ) -> sa.Select:
+        """
+        Return a SELECT that regenerates sys__id and sys__rand deterministically.
 
+        If keep_existing_columns is True, existing sys__id and sys__rand columns
+        will be kept as-is if they exist in the input selectable.
+        """
         base = selectable.subquery() if hasattr(selectable, "subquery") else selectable
+
+        result_columns: dict[str, sa.ColumnElement] = {}
+        for col in base.c:
+            if col.name in result_columns:
+                raise ValueError(f"Duplicate column name {col.name} in SELECT")
+            if col.name in ("sys__id", "sys__rand"):
+                if keep_existing_columns:
+                    result_columns[col.name] = col
+            else:
+                result_columns[col.name] = col
 
         system_types: dict[str, sa.types.TypeEngine] = {
             sys_col.name: sys_col.type
             for sys_col in self.schema.dataset_row_cls.sys_columns()
         }
 
-        result_columns = []
-        for col in base.c:
-            if col.name == "sys__id":
-                expr = self._system_row_number_expr()
-                expr = sa.cast(expr, system_types["sys__id"])
-                result_columns.append(expr.label("sys__id"))
-            elif col.name == "sys__rand":
-                expr = self._system_random_expr()
-                expr = sa.cast(expr, system_types["sys__rand"])
-                result_columns.append(expr.label("sys__rand"))
-            else:
-                result_columns.append(col)
+        # Add missing system columns if needed
+        if "sys__id" not in result_columns:
+            expr = self._system_row_number_expr()
+            expr = sa.cast(expr, system_types["sys__id"])
+            result_columns["sys__id"] = expr.label("sys__id")
+        if "sys__rand" not in result_columns:
+            expr = self._system_random_expr()
+            expr = sa.cast(expr, system_types["sys__rand"])
+            result_columns["sys__rand"] = expr.label("sys__rand")
 
         # Wrap in subquery to materialize window functions, then wrap again in SELECT
         # This ensures window functions are computed before INSERT...FROM SELECT
-        inner = sa.select(*result_columns).select_from(base).subquery()
+        columns = list(result_columns.values())
+        inner = sa.select(*columns).select_from(base).subquery()
         return sa.select(*inner.c).select_from(inner)
 
     def _system_row_number_expr(self):
@@ -380,7 +396,7 @@ class AbstractWarehouse(ABC, Serializable):
         """
         Fetch dataset rows from database using a list of IDs.
         """
-        if (id_col := get_query_id_column(query)) is None:
+        if (id_col := query.selected_columns.get("sys__id")) is None:
             raise RuntimeError("sys__id column not found in query")
 
         query = query._clone().offset(None).limit(None).order_by(None)
