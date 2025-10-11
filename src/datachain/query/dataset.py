@@ -1861,7 +1861,6 @@ class DatasetQuery:
                         )
             else:
                 dependencies.add((dep_dataset, dep_dataset_version))
-
         for dep_dataset, dep_dataset_version in dependencies:
             self.catalog.metastore.add_dataset_dependency(
                 dataset,
