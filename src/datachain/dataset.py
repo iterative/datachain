@@ -20,6 +20,7 @@ LT = TypeVar("LT", bound="DatasetListRecord")
 V = TypeVar("V", bound="DatasetVersion")
 LV = TypeVar("LV", bound="DatasetListVersion")
 DD = TypeVar("DD", bound="DatasetDependency")
+DDN = TypeVar("DDN", bound="DatasetDependencyNode")
 
 DATASET_PREFIX = "ds://"
 QUERY_DATASET_PREFIX = "ds_query_"
@@ -92,6 +93,42 @@ def parse_dataset_name(name: str) -> tuple[str | None, str | None, str]:
 class DatasetDependencyType:
     DATASET = "dataset"
     STORAGE = "storage"
+
+
+@dataclass
+class DatasetDependencyNode:
+    id: int
+    dataset_id: int | None
+    dataset_version_id: int | None
+    source_dataset_id: int
+    source_dataset_version_id: int | None
+    nested_dependencies: dict | None
+
+    @classmethod
+    def parse(
+        cls: builtins.type[DDN],
+        id: int,
+        source_dataset_id: int,
+        source_dataset_version_id: int | None,
+        dataset_id: int | None,
+        dataset_version_id: int | None,
+        nested_dependencies: dict | str | None,
+    ) -> "DatasetDependencyNode | None":
+        if isinstance(nested_dependencies, str):
+            nested_dependencies_dict = json.loads(nested_dependencies)
+        elif nested_dependencies is None:
+            nested_dependencies_dict = None
+        else:
+            nested_dependencies_dict = nested_dependencies
+
+        return cls(
+            id,
+            dataset_id,
+            dataset_version_id,
+            source_dataset_id,
+            source_dataset_version_id,
+            nested_dependencies_dict,
+        )
 
 
 @dataclass

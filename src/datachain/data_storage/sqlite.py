@@ -65,7 +65,7 @@ quote_schema = sqlite_dialect.identifier_preparer.quote_schema
 quote = sqlite_dialect.identifier_preparer.quote
 
 # NOTE! This should be manually increased when we change our DB schema in codebase
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 OUTDATED_SCHEMA_ERROR_MESSAGE = (
     "You have an old version of the database schema. Please refer to the documentation"
@@ -460,6 +460,8 @@ class SQLiteMetastore(AbstractDBMetastore):
         self.default_table_names.append(self._datasets_dependencies.name)
         self.db.create_table(self._jobs, if_not_exists=True)
         self.default_table_names.append(self._jobs.name)
+
+        # ADD  metadata for dependencies
         self.db.create_table(self._checkpoints, if_not_exists=True)
         self.default_table_names.append(self._checkpoints.name)
 
