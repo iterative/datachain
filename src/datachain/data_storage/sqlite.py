@@ -16,10 +16,9 @@ from sqlalchemy import (
     UniqueConstraint,
     exists,
     select,
-    text,
 )
 from sqlalchemy.dialects import sqlite
-from sqlalchemy.schema import CreateColumn, CreateIndex, CreateTable, DropTable
+from sqlalchemy.schema import CreateIndex, CreateTable, DropTable
 from sqlalchemy.sql import func
 from sqlalchemy.sql.elements import BinaryExpression, BooleanClauseList
 from sqlalchemy.sql.expression import bindparam, cast
@@ -66,7 +65,7 @@ quote_schema = sqlite_dialect.identifier_preparer.quote_schema
 quote = sqlite_dialect.identifier_preparer.quote
 
 # NOTE! This should be manually increased when we change our DB schema in codebase
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 OUTDATED_SCHEMA_ERROR_MESSAGE = (
     "You have an old version of the database schema. Please refer to the documentation"
@@ -328,21 +327,6 @@ class SQLiteDatabaseEngine(DatabaseEngine):
     def create_table(self, table: "Table", if_not_exists: bool = True) -> None:
         self.execute(CreateTable(table, if_not_exists=if_not_exists))
 
-    def create_column(
-        self, table: "Table", column: "Column", if_not_exists: bool = True
-    ) -> None:
-        quoted_table_name = quote_schema(table.name)
-        if if_not_exists:
-            res = self.execute_str(
-                "SELECT 1 FROM pragma_table_info(?) WHERE name = ?",
-                (table.name, column.name),
-            )
-            if res.fetchone():
-                return
-        column_str = str(CreateColumn(column))
-        stmt = text(f"ALTER TABLE {quoted_table_name} ADD COLUMN {column_str}")
-        self.execute(stmt)
-
     def drop_table(self, table: "Table", if_exists: bool = False) -> None:
         self.execute(DropTable(table, if_exists=if_exists))
 
@@ -476,10 +460,6 @@ class SQLiteMetastore(AbstractDBMetastore):
         self.default_table_names.append(self._datasets_dependencies.name)
         self.db.create_table(self._jobs, if_not_exists=True)
         self.default_table_names.append(self._jobs.name)
-        self.db.create_column(
-            self._datasets_dependencies,
-            self._datasets_dependency_nested(),
-        )
 
         # ADD  metadata for dependencies
         self.db.create_table(self._checkpoints, if_not_exists=True)
