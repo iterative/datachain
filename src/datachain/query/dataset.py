@@ -636,7 +636,8 @@ class UDFStep(Step, ABC):
         if self.partition_by is not None:
             if "sys__id" not in query.selected_columns:
                 _query = query = self.catalog.warehouse._regenerate_system_columns(
-                    query
+                    query,
+                    keep_existing_columns=True,
                 )
 
             partition_tbl = self.create_partitions_table(query)

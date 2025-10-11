@@ -246,45 +246,48 @@ class AbstractWarehouse(ABC, Serializable):
                     break  # no more results
                 offset += page_size
 
-    def _regenerate_system_columns(self, selectable):
-        """Return a SELECT that regenerates sys__id and sys__rand deterministically."""
+    def _regenerate_system_columns(
+        self,
+        selectable: sa.Select | sa.CTE,
+        keep_existing_columns: bool = False,
+    ) -> sa.Select:
+        """
+        Return a SELECT that regenerates sys__id and sys__rand deterministically.
 
+        If keep_existing_columns is True, existing sys__id and sys__rand columns
+        will be kept as-is if they exist in the input selectable.
+        """
         base = selectable.subquery() if hasattr(selectable, "subquery") else selectable
+
+        result_columns: dict[str, sa.ColumnElement] = {}
+        for col in base.c:
+            if col.name in result_columns:
+                raise ValueError(f"Duplicate column name {col.name} in SELECT")
+            if col.name in ("sys__id", "sys__rand"):
+                if keep_existing_columns:
+                    result_columns[col.name] = col
+            else:
+                result_columns[col.name] = col
 
         system_types: dict[str, sa.types.TypeEngine] = {
             sys_col.name: sys_col.type
             for sys_col in self.schema.dataset_row_cls.sys_columns()
         }
 
-        result_columns = []
-        id_col_found = rand_col_found = False
-        for col in base.c:
-            if col.name == "sys__id":
-                expr = self._system_row_number_expr()
-                expr = sa.cast(expr, system_types["sys__id"])
-                result_columns.append(expr.label("sys__id"))
-                id_col_found = True
-            elif col.name == "sys__rand":
-                expr = self._system_random_expr()
-                expr = sa.cast(expr, system_types["sys__rand"])
-                result_columns.append(expr.label("sys__rand"))
-                rand_col_found = True
-            else:
-                result_columns.append(col)
-
         # Add missing system columns if needed
-        if not id_col_found:
+        if "sys__id" not in result_columns:
             expr = self._system_row_number_expr()
             expr = sa.cast(expr, system_types["sys__id"])
-            result_columns.append(expr.label("sys__id"))
-        if not rand_col_found:
+            result_columns["sys__id"] = expr.label("sys__id")
+        if "sys__rand" not in result_columns:
             expr = self._system_random_expr()
             expr = sa.cast(expr, system_types["sys__rand"])
-            result_columns.append(expr.label("sys__rand"))
+            result_columns["sys__rand"] = expr.label("sys__rand")
 
         # Wrap in subquery to materialize window functions, then wrap again in SELECT
         # This ensures window functions are computed before INSERT...FROM SELECT
-        inner = sa.select(*result_columns).select_from(base).subquery()
+        columns = list(result_columns.values())
+        inner = sa.select(*columns).select_from(base).subquery()
         return sa.select(*inner.c).select_from(inner)
 
     def _system_row_number_expr(self):
