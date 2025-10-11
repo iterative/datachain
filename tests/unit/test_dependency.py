@@ -2,7 +2,7 @@ import datetime
 
 import pytest
 
-from datachain.catalog.catalog import build_nested_dependencies, extract_flat_ids
+from datachain.catalog.catalog import _populate_dependency_tree, extract_flat_ids
 from datachain.dataset import DatasetDependency
 
 
@@ -113,8 +113,8 @@ def dependency_structure():
     return {"306": {"297": {"255": {"250": {}}, "256": {"252": {}}}}}
 
 
-def test_build_nested_dependencies(dataset_deps, dependency_structure):
-    result = build_nested_dependencies(dataset_deps, dependency_structure)
+def test_populate_dependency_tree(dataset_deps, dependency_structure):
+    result = _populate_dependency_tree(dataset_deps, dependency_structure)
 
     assert len(result) == 1  # Only one root dependency
     assert result[0].id == 306

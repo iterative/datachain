@@ -22,7 +22,7 @@ from sqlalchemy import Column
 from tqdm.auto import tqdm
 
 from datachain.cache import Cache
-from datachain.catalog.dependency import build_nested_dependencies, extract_flat_ids
+from datachain.catalog.dependency import _populate_dependency_tree, extract_flat_ids
 from datachain.client import Client
 from datachain.dataset import (
     DATASET_PREFIX,
@@ -1214,7 +1214,7 @@ class Catalog:
             str(d.id): d
             for d in self.metastore.get_direct_dataset_dependencies_by_ids(all_ids)
         }
-        return build_nested_dependencies(dependencies, dependency_ids, indirect)
+        return _populate_dependency_tree(dependencies, dependency_ids, indirect)
 
     def get_dataset_dependencies(
         self,

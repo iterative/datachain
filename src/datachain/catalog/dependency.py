@@ -15,75 +15,52 @@ def extract_flat_ids(d: dict[str, Any]) -> list[int]:
     return sorted(ids)
 
 
-def build_nested_dependencies(
+def _populate_dependency_tree(
     dataset_deps: dict[str, DatasetDependency],
     dependency_structure: dict[str, dict],
     indirect: bool = True,
-    max_depth: int = 100,
 ) -> list[DatasetDependency | None]:
     """
-    Recursively constructs a tree of dataset dependencies based on their relationships,
-    with each dependency containing its own nested dependencies.
+    It takes a flat structure and populates a tree by setting the dependencies
+    attribute on each DatasetDependency object.
 
     Args:
         dataset_deps: Dictionary mapping dependency ids to DatasetDependency objects.
         dependency_structure: Dependency tree with nested dependencies.
-        indirect: Whether to build nested dependencies indirectly.
-        max_depth: Maximum recursion depth to prevent infinite loops.
+        indirect: Whether to build nested dependencies recursively.
 
     Returns:
         List of DatasetDependency objects with their nested dependencies.
     """
 
-    def build_deps(dep_id, deps_dict, visited=None, depth=0):
-        if visited is None:
-            visited = set()
-
-        # Prevent infinite recursion
-        if depth > max_depth:
+    def _populate_node(
+        dep_id: str, deps_dict: dict, visited: set[str]
+    ) -> list[DatasetDependency | None]:
+        if dep_id in visited or dep_id not in dataset_deps:
             return []
 
-        # Prevent circular dependencies
-        if dep_id in visited:
-            return []
+        visited.add(dep_id)
+        deps: list[DatasetDependency | None] = []
 
-        if dep_id not in dataset_deps:
-            return []
-
-        deps = []
         if dep_id in deps_dict:
-            # Add current node to visited set
-            visited.add(dep_id)
-
             for child_id in deps_dict[dep_id]:
                 if child_id in dataset_deps:
-                    # Recursively build child dependencies if indirect=True
-                    child_deps = (
-                        build_deps(
-                            child_id,
-                            deps_dict[dep_id],
-                            visited.copy(),
-                            depth + 1,
-                        )
-                        if indirect
-                        else []
-                    )
                     child_dep = dataset_deps[child_id]
-                    child_dep.dependencies = child_deps
+                    if indirect:
+                        child_dep.dependencies = _populate_node(
+                            child_id, deps_dict[dep_id], visited.copy()
+                        )
                     deps.append(child_dep)
                 else:
                     deps.append(None)
 
-            # Remove current node from visited set after processing
-            visited.discard(dep_id)
         return deps
 
     result: list[DatasetDependency | None] = []
     for root_id in dependency_structure:
         if root_id in dataset_deps:
-            deps = build_deps(root_id, dependency_structure)
             root_dep = dataset_deps[root_id]
-            root_dep.dependencies = deps
+            root_dep.dependencies = _populate_node(root_id, dependency_structure, set())
             result.append(root_dep)
         else:
             result.append(None)
