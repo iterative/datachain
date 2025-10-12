@@ -1210,7 +1210,7 @@ class Catalog:
         version_id: int,
         indirect: bool = True,
     ) -> list[DatasetDependency | None]:
-        dependency_nodes = self.metastore.get_dataset_dependency_node(
+        dependency_nodes = self.metastore.get_dataset_dependency_nodes(
             dataset_id=dataset_id,
             version_id=version_id,
         )

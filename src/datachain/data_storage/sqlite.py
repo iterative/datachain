@@ -460,8 +460,6 @@ class SQLiteMetastore(AbstractDBMetastore):
         self.default_table_names.append(self._datasets_dependencies.name)
         self.db.create_table(self._jobs, if_not_exists=True)
         self.default_table_names.append(self._jobs.name)
-
-        # ADD  metadata for dependencies
         self.db.create_table(self._checkpoints, if_not_exists=True)
         self.default_table_names.append(self._checkpoints.name)
 

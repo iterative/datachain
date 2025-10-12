@@ -370,7 +370,7 @@ class AbstractMetastore(ABC, Serializable):
         """Gets direct dataset dependencies."""
 
     @abstractmethod
-    def get_dataset_dependency_node(
+    def get_dataset_dependency_nodes(
         self, dataset_id: int, version_id: int
     ) -> list[DatasetDependencyNode | None]:
         """Gets dataset dependency node from database."""
@@ -1492,7 +1492,7 @@ class AbstractDBMetastore(AbstractMetastore):
 
         return [self.dependency_class.parse(*r) for r in self.db.execute(query)]
 
-    def get_dataset_dependency_node(
+    def get_dataset_dependency_nodes(
         self, dataset_id: int, version_id: int
     ) -> list[DatasetDependencyNode | None]:
         n = self._namespaces
