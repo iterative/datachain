@@ -1495,9 +1495,9 @@ class AbstractDBMetastore(AbstractMetastore):
     def get_dataset_dependency_nodes(
         self, dataset_id: int, version_id: int
     ) -> list[DatasetDependencyNode | None]:
-        n = self._namespaces
+        n = self._namespaces_select().subquery()
         p = self._projects
-        d = self._datasets
+        d = self._datasets_select().subquery()
         dd = self._datasets_dependencies
         dv = self._datasets_versions
 
