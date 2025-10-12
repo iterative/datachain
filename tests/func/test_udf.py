@@ -131,6 +131,11 @@ def test_udf_none_nested_datamodel_after_outer_merge(test_session):
     assert rows[2][4].source == "file://"
 
 
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("s3", True)],
+    indirect=True,
+)
 def test_udf(cloud_test_catalog):
     session = cloud_test_catalog.session
 
@@ -184,6 +189,11 @@ def test_udf_parallel(cloud_test_catalog_tmpfile):
     assert count == 7
 
 
+@pytest.mark.parametrize(
+    "cloud_type,version_aware",
+    [("s3", True)],
+    indirect=True,
+)
 def test_class_udf(cloud_test_catalog):
     session = cloud_test_catalog.session
 
