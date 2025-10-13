@@ -25,14 +25,15 @@ def build_dependency_hierarchy(
         if node is None:
             continue
         dependency = node.to_dependency()
+        parent_key = (node.source_dataset_id, node.source_dataset_version_id)
 
         if dependency is not None:
             dependency_map[dependency.id] = dependency
-            parent_key = (node.source_dataset_id, node.source_dataset_version_id)
             children_map.setdefault(parent_key, []).append(dependency.id)
         else:
-            # Handle case where dependency creation failed
+            # Handle case where dependency creation failed (e.g., deleted dependency)
             dependency_map[node.id] = None
+            children_map.setdefault(parent_key, []).append(node.id)
 
     return dependency_map, children_map
 
@@ -68,11 +69,7 @@ def populate_nested_dependencies(
         return
 
     child_dependency_ids = children_map[target_key]
-    child_dependencies = [
-        dependency_map[child_id]
-        for child_id in child_dependency_ids
-        if dependency_map[child_id] is not None
-    ]
+    child_dependencies = [dependency_map[child_id] for child_id in child_dependency_ids]
 
     dependency.dependencies = child_dependencies
 

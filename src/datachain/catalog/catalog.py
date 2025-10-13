@@ -1225,11 +1225,7 @@ class Catalog:
             return []
 
         root_dependency_ids = children_map[root_key]
-        root_dependencies = [
-            dependency_map[dep_id]
-            for dep_id in root_dependency_ids
-            if dependency_map[dep_id] is not None
-        ]
+        root_dependencies = [dependency_map[dep_id] for dep_id in root_dependency_ids]
 
         if indirect:
             for dependency in root_dependencies:
