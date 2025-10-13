@@ -282,7 +282,11 @@ def catalog_tmpfile(metastore_tmpfile, warehouse_tmpfile):
 def test_session_tmpfile(catalog_tmpfile):
     # For testing parallel and distributed processing, as these cannot use
     # in-memory databases.
-    return Session("TestSession", catalog=catalog_tmpfile)
+    with Session("TestSession", catalog=catalog_tmpfile) as session:
+        yield session
+
+    # Clean up job-related atexit hooks to prevent errors during pytest shutdown
+    reset_session_job_state()
 
 
 @pytest.fixture

@@ -83,17 +83,11 @@ def test_checkpoints(
     assert len(list(catalog.metastore.list_checkpoints(second_job_id))) == 3
 
 
-@pytest.mark.parametrize(
-    "cloud_type,version_aware",
-    [("s3", True)],
-    indirect=True,
-)
-@pytest.mark.xdist_group(name="tmpfile")
-def test_checkpoints_parallel(cloud_test_catalog_tmpfile, monkeypatch):
+def test_checkpoints_parallel(test_session_tmpfile, monkeypatch):
     def mapper_fail(num) -> int:
         raise Exception("Error")
 
-    test_session = cloud_test_catalog_tmpfile.session
+    test_session = test_session_tmpfile
     catalog = test_session.catalog
 
     dc.read_values(num=[1, 2, 3], session=test_session).save("nums")
