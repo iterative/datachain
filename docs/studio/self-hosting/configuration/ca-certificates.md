@@ -145,7 +145,7 @@ global:
       url: "https://gitlab.internal.company.com"
       clientId: "your-gitlab-client-id"
       clientSecret: "your-gitlab-client-secret"
-      
+
       # SSL verification settings
       ssl:
         verify: true
@@ -170,7 +170,7 @@ storage:
     endpoint: "https://s3.internal.company.com"
     bucket: "datachain-studio-storage"
     region: "us-east-1"
-    
+
     # SSL settings
     ssl:
       enabled: true
@@ -189,7 +189,7 @@ global:
     enabled: true
     http: "http://proxy.company.com:8080"
     https: "https://proxy.company.com:8080"
-    
+
   # CA certificates for proxy SSL
   customCaCerts:
     - |-
@@ -210,13 +210,13 @@ global:
       -----BEGIN CERTIFICATE-----
       ... (internal root CA) ...
       -----END CERTIFICATE-----
-    
+
     # GitLab intermediate CA
     - |-
       -----BEGIN CERTIFICATE-----
       ... (GitLab intermediate CA) ...
       -----END CERTIFICATE-----
-    
+
     # Storage service CA
     - |-
       -----BEGIN CERTIFICATE-----
@@ -350,7 +350,7 @@ global:
       enabled: true
       schedule: "0 2 * * 0"  # Weekly on Sunday at 2 AM
       backup: true
-      
+
     validation:
       enabled: true
       checkExpiry: true
@@ -368,7 +368,7 @@ monitoring:
       - name: "Certificate Expiry Warning"
         condition: "certificate_days_until_expiry < 30"
         severity: "warning"
-      
+
       - name: "Certificate Expiry Critical"
         condition: "certificate_days_until_expiry < 7"
         severity: "critical"
