@@ -49,7 +49,7 @@ global:
       - name: "corporate-ca"
         certificate: |
           -----BEGIN CERTIFICATE-----
-          ... (another certificate) ...  
+          ... (another certificate) ...
           -----END CERTIFICATE-----
 ```
 
@@ -109,7 +109,7 @@ global:
   ssl:
     caCertificates:
       - /usr/local/share/ca-certificates/ca-certificates.crt
-    
+
     # Alternatively, inline certificates
     customCaCerts:
       - |
