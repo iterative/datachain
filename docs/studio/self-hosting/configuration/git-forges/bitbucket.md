@@ -100,7 +100,7 @@ global:
       consumerKey: "your-consumer-key"
       consumerSecret: "your-consumer-secret"
       webhookSecret: "your-webhook-secret"
-      
+
       # SSL configuration for Bitbucket Server
       ssl:
         verify: true
@@ -124,7 +124,7 @@ global:
       clientId: "your-client-id"
       clientSecret: "your-client-secret"
       webhookSecret: "your-webhook-secret"
-      
+
       # OAuth configuration
       oauth:
         version: "2.0"  # "1.0a" for older integrations
@@ -133,10 +133,10 @@ global:
           - team
           - repository
           - pullrequest
-        
+
         # Additional OAuth parameters
         redirectUri: "https://studio.yourcompany.com/auth/bitbucket/callback"
-      
+
       # Webhook configuration
       webhooks:
         events:
@@ -145,32 +145,32 @@ global:
           - pullrequest:updated
           - pullrequest:approved
           - pullrequest:merged
-        
+
         # Webhook delivery settings
         active: true
-        
+
       # Rate limiting
       rateLimit:
         requestsPerHour: 1000
         burstSize: 50
-      
+
       # Connection settings
       timeout:
         connect: 30s
         read: 60s
         write: 30s
-      
+
       # Repository access control
       repositories:
         # Allow specific repositories
         allowList:
           - "workspace/important-repo"
           - "workspace/data-*"
-        
+
         # Block specific repositories
         blockList:
           - "workspace/sensitive-repo"
-      
+
       # Workspace filtering
       workspaces:
         allowList:
@@ -233,7 +233,7 @@ global:
           - pullrequest:created
           - pullrequest:updated
           - pullrequest:merged
-        
+
         # Additional webhook settings
         active: true
         skipCertVerification: false  # Only for testing
@@ -276,13 +276,13 @@ global:
       type: "cloud"  # or "server"
       clientId: "your-oauth-client-id"
       clientSecret: "your-oauth-client-secret"
-      
+
       # OAuth scopes (for Cloud)
       scopes:
         - account
         - team
         - repository
-      
+
       # Team synchronization
       teamSync:
         enabled: true
@@ -305,7 +305,7 @@ global:
         default:
           repository: read
           pullrequest: read
-        
+
         # Custom permissions for specific repositories
         repositories:
           "workspace/critical-repo":
@@ -328,7 +328,7 @@ global:
         "data-engineers": "member"
         "administrators": "admin"
         "viewers": "viewer"
-      
+
       # Workspace-wide settings
       defaultRole: "viewer"
       syncInterval: "1h"
@@ -346,7 +346,7 @@ global:
     bitbucket:
       pipelines:
         enabled: true
-        
+
         # Pipeline trigger settings
         triggers:
           # Trigger on data changes
@@ -355,7 +355,7 @@ global:
             branch: "main"
             variables:
               DATACHAIN_TRIGGER: "data_change"
-          
+
           # Custom pipeline variables
           customVariables:
             DATACHAIN_STUDIO_URL: "https://studio.yourcompany.com"
@@ -372,13 +372,13 @@ global:
     bitbucket:
       buildStatus:
         enabled: true
-        
+
         # Status contexts
         contexts:
           dataProcessing: "datachain/processing"
           dataValidation: "datachain/validation"
           dataQuality: "datachain/quality"
-        
+
         # Status details
         url: "https://studio.yourcompany.com/jobs/{job_id}"
         description: "DataChain data processing job"
@@ -394,24 +394,24 @@ Monitor Bitbucket integration health:
 monitoring:
   bitbucket:
     enabled: true
-    
+
     healthChecks:
       api: true
       webhooks: true
       oauth: true
-    
+
     metrics:
       - apiCalls
       - responseTime
       - errorRate
       - webhookDelivery
-    
+
     alerts:
       - name: "Bitbucket API Errors"
         condition: "bitbucket_api_error_rate > 5%"
         duration: "5m"
         severity: "warning"
-      
+
       - name: "Bitbucket Webhook Failures"
         condition: "bitbucket_webhook_failure_rate > 10%"
         duration: "5m"

@@ -40,12 +40,12 @@ Add the following to your `values.yaml`:
 ingress:
   enabled: true
   className: nginx
-  
+
   # TLS configuration
   tls:
     enabled: true
     secretName: datachain-studio-tls
-  
+
   # Security annotations
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
@@ -104,13 +104,13 @@ Update the configuration file:
 # /opt/datachain-studio/config.yml
 global:
   domain: studio.yourcompany.com
-  
+
   tls:
     enabled: true
     certFile: /etc/ssl/datachain-studio/tls.crt
     keyFile: /etc/ssl/datachain-studio/tls.key
     minVersion: "1.2"
-    
+
   # Nginx SSL configuration
   nginx:
     ssl:
@@ -204,11 +204,11 @@ spec:
 ingress:
   enabled: true
   className: nginx
-  
+
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-  
+
   tls:
     enabled: true
     secretName: datachain-studio-tls-auto
@@ -274,7 +274,7 @@ global:
     enabled: true
     minVersion: "1.2"
     maxVersion: "1.3"
-    
+
     # Strong cipher suites only
     cipherSuites:
       - "TLS_AES_128_GCM_SHA256"
@@ -282,14 +282,14 @@ global:
       - "TLS_CHACHA20_POLY1305_SHA256"
       - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
       - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
-    
+
     # HSTS configuration
     hsts:
       enabled: true
       maxAge: 31536000  # 1 year
       includeSubdomains: true
       preload: true
-    
+
     # OCSP stapling
     ocsp:
       enabled: true

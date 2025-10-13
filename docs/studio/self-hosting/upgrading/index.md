@@ -169,7 +169,7 @@ upgrade:
     enabled: true
     onFailure: true
     timeout: 600s
-    
+
   # Health checks for validation
   healthChecks:
     enabled: true
@@ -206,7 +206,7 @@ Monitor system health during upgrades:
 monitoring:
   upgrade:
     enabled: true
-    
+
     # Metrics to monitor
     metrics:
       - cpu_usage
@@ -214,7 +214,7 @@ monitoring:
       - database_connections
       - response_time
       - error_rate
-    
+
     # Alert thresholds
     alerts:
       - name: "High Error Rate During Upgrade"
@@ -365,17 +365,17 @@ upgrade-production:
 # Automated post-upgrade validation
 validation:
   enabled: true
-  
+
   tests:
     - name: "Health Check"
       url: "https://studio.yourcompany.com/health"
       expected_status: 200
-    
+
     - name: "API Test"
       url: "https://studio.yourcompany.com/api/version"
       expected_status: 200
       timeout: 30s
-    
+
     - name: "Database Test"
       type: "sql"
       query: "SELECT COUNT(*) FROM datasets"

@@ -362,18 +362,18 @@ Set up monitoring to catch issues early:
 # Example monitoring configuration
 monitoring:
   enabled: true
-  
+
   alerts:
     - name: "High Error Rate"
       condition: "error_rate > 5%"
       duration: "5m"
       severity: "warning"
-    
+
     - name: "Service Down"
       condition: "up == 0"
       duration: "1m"
       severity: "critical"
-    
+
     - name: "High Memory Usage"
       condition: "memory_usage > 80%"
       duration: "10m"

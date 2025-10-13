@@ -102,7 +102,7 @@ Transfer the downloaded files to your air-gapped environment:
 ```bash
 # Files to transfer:
 # - studio-frontend-${TARGET_VERSION}.tar
-# - studio-backend-${TARGET_VERSION}.tar  
+# - studio-backend-${TARGET_VERSION}.tar
 # - studio-worker-${TARGET_VERSION}.tar
 # - studio-scheduler-${TARGET_VERSION}.tar
 # - postgres-14.tar (if updated)
@@ -194,23 +194,23 @@ Update your `values.yaml` to reference internal registry:
 # values.yaml
 global:
   imageRegistry: "registry.internal.company.com"
-  
+
 images:
   frontend:
     repository: datachain/studio-frontend
     tag: "1.2.3"
     pullPolicy: IfNotPresent
-  
+
   backend:
     repository: datachain/studio-backend
     tag: "1.2.3"
     pullPolicy: IfNotPresent
-  
+
   worker:
     repository: datachain/studio-worker
     tag: "1.2.3"
     pullPolicy: IfNotPresent
-  
+
   scheduler:
     repository: datachain/studio-scheduler
     tag: "1.2.3"

@@ -93,7 +93,7 @@ global:
         ... (your GitHub App private key) ...
         -----END RSA PRIVATE KEY-----
       webhookSecret: "your-webhook-secret"
-      
+
       # Optional: GitHub Enterprise Server URL
       # url: "https://github.enterprise.com"
 ```
@@ -113,11 +113,11 @@ global:
         ... (private key content) ...
         -----END RSA PRIVATE KEY-----
       webhookSecret: "your-webhook-secret"
-      
+
       # GitHub Enterprise Server configuration
       url: "https://github.enterprise.com"
       apiUrl: "https://github.enterprise.com/api/v3"
-      
+
       # SSL configuration for GitHub Enterprise
       ssl:
         verify: true
@@ -125,7 +125,7 @@ global:
           -----BEGIN CERTIFICATE-----
           ... (GitHub Enterprise CA certificate) ...
           -----END CERTIFICATE-----
-      
+
       # Webhook configuration
       webhooks:
         events:
@@ -133,27 +133,27 @@ global:
           - pull_request
           - release
           - repository
-        
+
         # Custom webhook settings
         deliveryTimeout: 30s
         retryAttempts: 3
-      
+
       # Rate limiting
       rateLimit:
         requestsPerHour: 5000
         burstSize: 100
-      
+
       # Repository access control
       repositories:
         # Allow specific repositories
         allowList:
           - "org/important-repo"
           - "org/data-*"
-        
+
         # Block specific repositories
         blockList:
           - "org/sensitive-repo"
-      
+
       # Organization filtering
       organizations:
         allowList:
@@ -207,15 +207,15 @@ global:
       appId: "your-app-id"
       url: "https://github.enterprise.com"
       apiUrl: "https://github.enterprise.com/api/v3"
-      
+
       # Upload URL for Enterprise Server
       uploadUrl: "https://github.enterprise.com/api/uploads"
-      
+
       privateKey: |
         -----BEGIN RSA PRIVATE KEY-----
         ... private key ...
         -----END RSA PRIVATE KEY-----
-      
+
       # Custom CA certificate for Enterprise Server
       ssl:
         verify: true
@@ -241,7 +241,7 @@ global:
           - push
           - pull_request
           - release
-        
+
         # Webhook delivery settings
         contentType: "application/json"
         insecureSSL: false  # Set to true only for testing
@@ -272,13 +272,13 @@ global:
       enabled: true
       clientId: "your-oauth-app-client-id"
       clientSecret: "your-oauth-app-client-secret"
-      
+
       # OAuth scopes
       scopes:
         - user:email
         - read:org
         - repo
-      
+
       # Team synchronization
       teamSync:
         enabled: true
@@ -302,7 +302,7 @@ global:
           contents: read
           metadata: read
           pull_requests: read
-        
+
         # Custom permissions for specific repositories
         repositories:
           "org/critical-repo":
@@ -326,7 +326,7 @@ global:
         "data-engineers": "member"
         "admin-team": "admin"
         "read-only": "viewer"
-      
+
       # Organization-wide settings
       defaultRole: "viewer"
       syncInterval: "1h"
@@ -342,17 +342,17 @@ Monitor GitHub integration health:
 monitoring:
   github:
     enabled: true
-    
+
     healthChecks:
       api: true
       webhooks: true
       rateLimit: true
-    
+
     alerts:
       - name: "GitHub API Rate Limit"
         condition: "github_rate_limit_remaining < 100"
         severity: "warning"
-      
+
       - name: "GitHub Webhook Failures"
         condition: "github_webhook_failure_rate > 5%"
         severity: "critical"

@@ -87,7 +87,7 @@ global:
       clientId: "your-gitlab-client-id"
       clientSecret: "your-gitlab-client-secret"
       webhookSecret: "your-webhook-secret"
-      
+
       # SSL configuration for self-hosted GitLab
       ssl:
         verify: true
@@ -111,17 +111,17 @@ global:
       clientId: "your-gitlab-client-id"
       clientSecret: "your-gitlab-client-secret"
       webhookSecret: "your-webhook-secret"
-      
+
       # OAuth configuration
       oauth:
         scopes:
           - read_user
           - read_repository
           - read_api
-        
+
         # Additional OAuth parameters
         redirectUri: "https://studio.yourcompany.com/auth/gitlab/callback"
-        
+
       # Webhook configuration
       webhooks:
         events:
@@ -129,33 +129,33 @@ global:
           - merge_requests
           - tag_push
           - releases
-        
+
         # Webhook delivery settings
         enableSSLVerification: true
         pushEventsBranchFilter: ""  # All branches
-        
+
       # Rate limiting
       rateLimit:
         requestsPerMinute: 600
         burstSize: 100
-      
+
       # Connection settings
       timeout:
         connect: 30s
         read: 60s
         write: 30s
-      
+
       # Repository/project access control
       projects:
         # Allow specific projects
         allowList:
           - "group/important-project"
           - "group/data-*"
-        
+
         # Block specific projects
         blockList:
           - "group/sensitive-project"
-      
+
       # Group filtering
       groups:
         allowList:
@@ -218,14 +218,14 @@ global:
           - merge_requests_events
           - tag_push_events
           - releases_events
-        
+
         # Additional webhook settings
         issues_events: false
         wiki_page_events: false
         deployment_events: false
         job_events: false
         pipeline_events: false
-        
+
         # Security settings
         enable_ssl_verification: true
         push_events_branch_filter: ""
@@ -240,7 +240,7 @@ If automatic setup doesn't work, configure webhooks manually:
 2. Add webhook with:
    - **URL**: `https://studio.yourcompany.com/api/webhooks/gitlab`
    - **Secret Token**: Your webhook secret
-   - **Trigger Events**: 
+   - **Trigger Events**:
      - ✓ Push events
      - ✓ Merge request events
      - ✓ Tag push events
@@ -263,13 +263,13 @@ global:
       url: "https://gitlab.yourcompany.com"
       clientId: "your-oauth-client-id"
       clientSecret: "your-oauth-client-secret"
-      
+
       # OAuth scopes
       scopes:
         - read_user
         - read_repository
         - read_api
-      
+
       # Group synchronization
       groupSync:
         enabled: true
@@ -294,7 +294,7 @@ global:
           repository: read
           issues: read
           merge_requests: read
-        
+
         # Custom permissions for specific projects
         projects:
           "group/critical-project":
@@ -318,11 +318,11 @@ global:
         "senior-engineers": "admin"
         "analysts": "viewer"
         "contractors": "viewer"
-      
+
       # Group-wide settings
       defaultRole: "viewer"
       syncInterval: "1h"
-      
+
       # Nested group handling
       includeSubgroups: true
 ```
@@ -339,7 +339,7 @@ global:
     gitlab:
       ci:
         enabled: true
-        
+
         # Pipeline trigger settings
         triggers:
           # Trigger on data changes
@@ -348,14 +348,14 @@ global:
             branch: "main"
             variables:
               DATACHAIN_TRIGGER: "data_change"
-          
+
           # Trigger on schedule
           scheduled:
             enabled: true
             cron: "0 2 * * *"
             variables:
               DATACHAIN_TRIGGER: "scheduled"
-        
+
         # Job monitoring
         monitoring:
           enabled: true
@@ -372,13 +372,13 @@ global:
     gitlab:
       commitStatus:
         enabled: true
-        
+
         # Status contexts
         contexts:
           dataProcessing: "datachain/processing"
           dataValidation: "datachain/validation"
           dataQuality: "datachain/quality"
-        
+
         # Status details
         targetUrl: "https://studio.yourcompany.com/jobs/{job_id}"
         description: "DataChain data processing job"
@@ -394,24 +394,24 @@ Monitor GitLab integration health:
 monitoring:
   gitlab:
     enabled: true
-    
+
     healthChecks:
       api: true
       webhooks: true
       oauth: true
-    
+
     metrics:
       - apiCalls
       - responseTime
       - errorRate
       - webhookDelivery
-    
+
     alerts:
       - name: "GitLab API Errors"
         condition: "gitlab_api_error_rate > 5%"
         duration: "5m"
         severity: "warning"
-      
+
       - name: "GitLab Webhook Failures"
         condition: "gitlab_webhook_failure_rate > 10%"
         duration: "5m"

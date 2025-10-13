@@ -7,7 +7,7 @@ This guide covers installing DataChain Studio on Kubernetes using Helm charts.
 ### Kubernetes Cluster
 
 - **Kubernetes version**: 1.19+
-- **Node requirements**: 
+- **Node requirements**:
   - Minimum: 2 nodes with 8GB RAM, 4 vCPUs each
   - Recommended: 3+ nodes with 16GB RAM, 8 vCPUs each
 - **Storage**: 100GB persistent storage
@@ -125,7 +125,7 @@ git:
       -----BEGIN RSA PRIVATE KEY-----
       your-github-private-key-content
       -----END RSA PRIVATE KEY-----
-  
+
   gitlab:
     enabled: true
     url: "https://gitlab.com"
@@ -141,7 +141,7 @@ resources:
     limits:
       memory: "1Gi"
       cpu: "500m"
-  
+
   backend:
     requests:
       memory: "1Gi"
@@ -149,7 +149,7 @@ resources:
     limits:
       memory: "2Gi"
       cpu: "1000m"
-  
+
   worker:
     requests:
       memory: "1Gi"
@@ -323,10 +323,10 @@ monitoring:
   enabled: true
   serviceMonitor:
     enabled: true
-  
+
   prometheus:
     enabled: true
-  
+
   grafana:
     enabled: true
     adminPassword: your-grafana-password
@@ -337,7 +337,7 @@ monitoring:
 logging:
   level: INFO
   format: json
-  
+
   # External log aggregation
   fluentd:
     enabled: true

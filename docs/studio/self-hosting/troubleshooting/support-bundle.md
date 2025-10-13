@@ -428,13 +428,13 @@ openssl s_client -connect internal-ca.company.com:443 -servername internal-ca.co
 # Check air-gapped environment specifics
 if [ -f "/etc/airgap-marker" ]; then
     echo "Air-gapped environment detected"
-    
+
     # Check internal registry connectivity
     curl -I https://registry.internal.company.com > internal-registry-check.txt 2>&1
-    
+
     # Check internal DNS
     nslookup studio.internal.company.com > internal-dns-check.txt 2>&1
-    
+
     # Check offline documentation
     ls -la /opt/datachain-docs/ > offline-docs-check.txt 2>&1
 fi

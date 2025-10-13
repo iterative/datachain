@@ -30,7 +30,7 @@ kubectl get ingress -n datachain-studio
 kubectl get events -n datachain-studio --sort-by='.lastTimestamp'
 ```
 
-#### AMI Deployments  
+#### AMI Deployments
 
 ```bash
 # SSH to the instance first
@@ -393,7 +393,7 @@ curl -I http://localhost:8000/health  # Direct backend test
    ```bash
    # Kubernetes
    kubectl rollout restart deployment -n datachain-studio
-   
+
    # AMI
    sudo systemctl restart datachain-studio
    ```

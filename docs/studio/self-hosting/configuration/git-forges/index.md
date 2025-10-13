@@ -14,7 +14,7 @@ DataChain Studio supports integration with multiple Git forges to enable:
 ## Supported Git Forges
 
 - **[GitHub](github.md)** - GitHub.com and GitHub Enterprise Server
-- **[GitLab](gitlab.md)** - GitLab.com and self-hosted GitLab instances  
+- **[GitLab](gitlab.md)** - GitLab.com and self-hosted GitLab instances
 - **[Bitbucket](bitbucket.md)** - Bitbucket Cloud and Bitbucket Server
 
 ## General Configuration
@@ -32,7 +32,7 @@ global:
       appId: "your-app-id"
       privateKey: "your-private-key"
       webhookSecret: "your-webhook-secret"
-    
+
     # GitLab configuration
     gitlab:
       enabled: true
@@ -40,7 +40,7 @@ global:
       clientId: "your-client-id"
       clientSecret: "your-client-secret"
       webhookSecret: "your-webhook-secret"
-    
+
     # Bitbucket configuration
     bitbucket:
       enabled: true
@@ -57,18 +57,18 @@ All Git forges support these common options:
 git:
   <forge-name>:
     enabled: true|false
-    
+
     # Authentication settings
     clientId: "oauth-client-id"
     clientSecret: "oauth-client-secret"
-    
+
     # Webhook configuration
     webhookSecret: "webhook-secret-key"
     webhookEvents:
       - push
       - pull_request
       - release
-    
+
     # SSL/TLS settings
     ssl:
       verify: true
@@ -76,12 +76,12 @@ git:
         -----BEGIN CERTIFICATE-----
         ... custom CA certificate ...
         -----END CERTIFICATE-----
-    
+
     # Rate limiting
     rateLimit:
       requestsPerHour: 5000
       burstSize: 100
-    
+
     # Timeout settings
     timeout:
       connect: 30s
@@ -104,14 +104,14 @@ global:
         -----BEGIN RSA PRIVATE KEY-----
         ... GitHub App private key ...
         -----END RSA PRIVATE KEY-----
-    
+
     # Secondary forge for internal repositories
     gitlab:
       enabled: true
       url: "https://gitlab.internal.company.com"
       clientId: "internal-gitlab-client-id"
       clientSecret: "internal-gitlab-secret"
-    
+
     # Additional forge for specific teams
     bitbucket:
       enabled: true
@@ -153,11 +153,11 @@ git:
         - push
         - pull_request
         - release
-      
+
       # Custom webhook settings
       ssl:
         verify: true
-      
+
       contentType: "application/json"
       secret: "webhook-secret-key"
 ```
@@ -204,7 +204,7 @@ git:
           - "org/*-public"
         blocked:
           - "org/sensitive-repo"
-      
+
       # User/organization filtering
       organizations:
         allowed:
@@ -227,7 +227,7 @@ git:
       initialDelay: 1s
       maxDelay: 30s
       exponentialBackoff: true
-    
+
     circuitBreaker:
       enabled: true
       failureThreshold: 10
@@ -242,18 +242,18 @@ Monitor Git forge integrations:
 monitoring:
   gitForges:
     enabled: true
-    
+
     healthChecks:
       enabled: true
       interval: 30s
       timeout: 10s
-    
+
     metrics:
       - apiCalls
       - responseTime
       - errorRate
       - webhookDelivery
-    
+
     alerts:
       - name: "Git Forge API Error Rate High"
         condition: "error_rate > 5%"
