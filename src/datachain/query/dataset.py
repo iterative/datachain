@@ -1170,15 +1170,18 @@ class SQLGroupBy(SQLClause):
 
 def _validate_columns(
     left_columns: Iterable[ColumnElement], right_columns: Iterable[ColumnElement]
-) -> set[str]:
-    left_names = {c.name for c in left_columns}
-    right_names = {c.name for c in right_columns}
+) -> list[str]:
+    left_names = [c.name for c in left_columns]
+    right_names = [c.name for c in right_columns]
 
-    if left_names == right_names:
+    if sorted(left_names) == sorted(right_names):
         return left_names
 
-    missing_right = left_names - right_names
-    missing_left = right_names - left_names
+    left_names_set = set(left_names)
+    right_names_set = set(right_names)
+
+    missing_right = left_names_set - right_names_set
+    missing_left = right_names_set - left_names_set
 
     def _prepare_msg_part(missing_columns: set[str], side: str) -> str:
         return f"{', '.join(sorted(missing_columns))} only present in {side}"
