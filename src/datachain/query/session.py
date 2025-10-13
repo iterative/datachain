@@ -28,7 +28,7 @@ def is_script_run() -> bool:
     """
     try:
         argv0 = sys.argv[0]
-    except Exception:  # noqa: BLE001
+    except (IndexError, AttributeError):
         return False
     return bool(argv0) and argv0 not in ("-c", "-m", "ipython")
 
