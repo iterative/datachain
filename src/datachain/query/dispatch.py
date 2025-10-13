@@ -22,7 +22,6 @@ from datachain.query.dataset import (
 )
 from datachain.query.queue import get_from_queue, put_into_queue
 from datachain.query.udf import UdfInfo
-from datachain.query.utils import get_query_id_column
 from datachain.utils import batched, flatten, safe_closing
 
 if TYPE_CHECKING:
@@ -55,6 +54,9 @@ def udf_entrypoint() -> int:
     udf_info: UdfInfo = load(stdin.buffer)
 
     query = udf_info["query"]
+    if "sys__id" not in query.selected_columns:
+        raise RuntimeError("sys__id column is required in UDF query")
+
     batching = udf_info["batching"]
     is_generator = udf_info["is_generator"]
 
@@ -65,15 +67,16 @@ def udf_entrypoint() -> int:
     wh_cls, wh_args, wh_kwargs = udf_info["warehouse_clone_params"]
     warehouse: AbstractWarehouse = wh_cls(*wh_args, **wh_kwargs)
 
-    id_col = get_query_id_column(query)
-
     with contextlib.closing(
-        batching(warehouse.dataset_select_paginated, query, id_col=id_col)
+        batching(
+            warehouse.dataset_select_paginated,
+            query,
+            id_col=query.selected_columns.sys__id,
+        )
     ) as udf_inputs:
         try:
             UDFDispatcher(udf_info).run_udf(
                 udf_inputs,
-                ids_only=id_col is not None,
                 download_cb=download_cb,
                 processed_cb=processed_cb,
                 generated_cb=generated_cb,
@@ -147,10 +150,10 @@ class UDFDispatcher:
             self.udf_fields,
         )
 
-    def _run_worker(self, ids_only: bool) -> None:
+    def _run_worker(self) -> None:
         try:
             worker = self._create_worker()
-            worker.run(ids_only)
+            worker.run()
         except (Exception, KeyboardInterrupt) as e:
             if self.done_queue:
                 put_into_queue(
@@ -164,7 +167,6 @@ class UDFDispatcher:
     def run_udf(
         self,
         input_rows: Iterable["RowsOutput"],
-        ids_only: bool,
         download_cb: Callback = DEFAULT_CALLBACK,
         processed_cb: Callback = DEFAULT_CALLBACK,
         generated_cb: Callback = DEFAULT_CALLBACK,
@@ -178,9 +180,7 @@ class UDFDispatcher:
 
         if n_workers == 1:
             # no need to spawn worker processes if we are running in a single process
-            self.run_udf_single(
-                input_rows, ids_only, download_cb, processed_cb, generated_cb
-            )
+            self.run_udf_single(input_rows, download_cb, processed_cb, generated_cb)
         else:
             if self.buffer_size < n_workers:
                 raise RuntimeError(
@@ -189,13 +189,12 @@ class UDFDispatcher:
                 )
 
             self.run_udf_parallel(
-                n_workers, input_rows, ids_only, download_cb, processed_cb, generated_cb
+                n_workers, input_rows, download_cb, processed_cb, generated_cb
             )
 
     def run_udf_single(
         self,
         input_rows: Iterable["RowsOutput"],
-        ids_only: bool,
         download_cb: Callback = DEFAULT_CALLBACK,
         processed_cb: Callback = DEFAULT_CALLBACK,
         generated_cb: Callback = DEFAULT_CALLBACK,
@@ -204,18 +203,15 @@ class UDFDispatcher:
         # Rebuild schemas in single process too for consistency (cheap, idempotent).
         ModelStore.rebuild_all()
 
-        if ids_only and not self.is_batching:
+        if not self.is_batching:
             input_rows = flatten(input_rows)
 
         def get_inputs() -> Iterable["RowsOutput"]:
             warehouse = self.catalog.warehouse.clone()
-            if ids_only:
-                for ids in batched(input_rows, DEFAULT_BATCH_SIZE):
-                    yield from warehouse.dataset_rows_select_from_ids(
-                        self.query, ids, self.is_batching
-                    )
-            else:
-                yield from input_rows
+            for ids in batched(input_rows, DEFAULT_BATCH_SIZE):
+                yield from warehouse.dataset_rows_select_from_ids(
+                    self.query, ids, self.is_batching
+                )
 
         prefetch = udf.prefetch
         with _get_cache(self.catalog.cache, prefetch, use_cache=self.cache) as _cache:
@@ -249,7 +245,6 @@ class UDFDispatcher:
         self,
         n_workers: int,
         input_rows: Iterable["RowsOutput"],
-        ids_only: bool,
         download_cb: Callback = DEFAULT_CALLBACK,
         processed_cb: Callback = DEFAULT_CALLBACK,
         generated_cb: Callback = DEFAULT_CALLBACK,
@@ -258,9 +253,7 @@ class UDFDispatcher:
         self.done_queue = self.ctx.Queue()
 
         pool = [
-            self.ctx.Process(
-                name=f"Worker-UDF-{i}", target=self._run_worker, args=[ids_only]
-            )
+            self.ctx.Process(name=f"Worker-UDF-{i}", target=self._run_worker)
             for i in range(n_workers)
         ]
         for p in pool:
@@ -406,13 +399,13 @@ class UDFWorker:
         self.processed_cb = ProcessedCallback("processed", self.done_queue)
         self.generated_cb = ProcessedCallback("generated", self.done_queue)
 
-    def run(self, ids_only: bool) -> None:
+    def run(self) -> None:
         prefetch = self.udf.prefetch
         with _get_cache(self.catalog.cache, prefetch, use_cache=self.cache) as _cache:
             catalog = clone_catalog_with_cache(self.catalog, _cache)
             udf_results = self.udf.run(
                 self.udf_fields,
-                self.get_inputs(ids_only),
+                self.get_inputs(),
                 catalog,
                 self.cache,
                 download_cb=self.download_cb,
@@ -434,13 +427,10 @@ class UDFWorker:
             put_into_queue(self.done_queue, {"status": OK_STATUS})
             yield row
 
-    def get_inputs(self, ids_only: bool) -> Iterable["RowsOutput"]:
+    def get_inputs(self) -> Iterable["RowsOutput"]:
         warehouse = self.catalog.warehouse.clone()
         while (batch := get_from_queue(self.task_queue)) != STOP_SIGNAL:
-            if ids_only:
-                for ids in batched(batch, DEFAULT_BATCH_SIZE):
-                    yield from warehouse.dataset_rows_select_from_ids(
-                        self.query, ids, self.is_batching
-                    )
-            else:
-                yield from batch
+            for ids in batched(batch, DEFAULT_BATCH_SIZE):
+                yield from warehouse.dataset_rows_select_from_ids(
+                    self.query, ids, self.is_batching
+                )

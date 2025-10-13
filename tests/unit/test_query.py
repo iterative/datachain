@@ -53,12 +53,31 @@ def test_args(catalog, mock_popen, reset):
     mock_popen.assert_called_once_with(["mypython", "-c", "pass"], env=expected_env)
 
 
+def test_capture_stdout(catalog, mock_popen):
+    mock_popen.stdout = io.BytesIO(b"Hello, World!\rLorem Ipsum\nDolor Sit Amet\nconse")
+    stdout = []
+
+    catalog.query("pass", stdout_callback=stdout.append)
+    assert stdout == ["Hello, World!\r", "Lorem Ipsum\n", "Dolor Sit Amet\n", "conse"]
+
+
+def test_capture_stderr(catalog, mock_popen):
+    mock_popen.stderr = io.BytesIO(b"Hello, World!\rLorem Ipsum\nDolor Sit Amet\nconse")
+    stderr = []
+
+    catalog.query("pass", stderr_callback=stderr.append)
+    assert stderr == ["Hello, World!\r", "Lorem Ipsum\n", "Dolor Sit Amet\n", "conse"]
+
+
 def test_capture_output(catalog, mock_popen):
     mock_popen.stdout = io.BytesIO(b"Hello, World!\rLorem Ipsum\nDolor Sit Amet\nconse")
-    lines = []
+    mock_popen.stderr = io.BytesIO(b"foo\nbar")
+    stdout = []
+    stderr = []
 
-    catalog.query("pass", capture_output=True, output_hook=lines.append)
-    assert lines == ["Hello, World!\r", "Lorem Ipsum\n", "Dolor Sit Amet\n", "conse"]
+    catalog.query("pass", stdout_callback=stdout.append, stderr_callback=stderr.append)
+    assert stdout == ["Hello, World!\r", "Lorem Ipsum\n", "Dolor Sit Amet\n", "conse"]
+    assert stderr == ["foo\n", "bar"]
 
 
 def test_canceled_by_user(catalog, mock_popen):

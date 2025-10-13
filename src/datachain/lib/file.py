@@ -681,7 +681,7 @@ class File(DataModel):
             normalized_path = self.get_path_normalized()
             info = client.fs.info(client.get_full_path(normalized_path))
             converted_info = client.info_to_file(info, normalized_path)
-            return type(self)(
+            res = type(self)(
                 path=self.path,
                 source=self.source,
                 size=converted_info.size,
@@ -691,6 +691,8 @@ class File(DataModel):
                 last_modified=converted_info.last_modified,
                 location=self.location,
             )
+            res._set_stream(self._catalog)
+            return res
         except FileError as e:
             logger.warning(
                 "File error when resolving %s/%s: %s", self.source, self.path, str(e)
@@ -703,7 +705,7 @@ class File(DataModel):
                 str(e),
             )
 
-        return type(self)(
+        res = type(self)(
             path=self.path,
             source=self.source,
             size=0,
@@ -713,6 +715,8 @@ class File(DataModel):
             last_modified=TIME_ZERO,
             location=self.location,
         )
+        res._set_stream(self._catalog)
+        return res
 
     def rebase(
         self,

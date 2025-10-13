@@ -1074,6 +1074,52 @@ def dog_entries():
     return _create_dog_entries
 
 
+PRIMES_UP_TO_73 = (
+    2,
+    3,
+    5,
+    7,
+    11,
+    13,
+    17,
+    19,
+    23,
+    29,
+    31,
+    37,
+    41,
+    43,
+    47,
+    53,
+    59,
+    61,
+    67,
+    71,
+    73,
+)
+
+
+@pytest.fixture
+def numbers_ds(test_session) -> Generator[DatasetRecord, None, None]:
+    numbers = list(range(1, 74))
+    ds = dc.read_values(
+        number=numbers,
+        parity=["odd" if n % 2 else "even" for n in numbers],
+        primality=["prime" if n in PRIMES_UP_TO_73 else "composite" for n in numbers],
+        last_digit=[n % 10 for n in numbers],
+        session=test_session,
+    ).save("numbers_dataset")
+    assert ds.dataset is not None
+    yield ds.dataset
+    dc.delete_dataset(ds.dataset.name, force=True)
+
+
+@pytest.fixture
+def numbers_table(warehouse, numbers_ds) -> Generator[sqlalchemy.Table, None, None]:
+    table_name = warehouse.dataset_table_name(numbers_ds, numbers_ds.latest_version)
+    yield warehouse.get_table(table_name)
+
+
 @pytest.fixture
 def mock_parquet_data(compressed_parquet_data, dog_entries, version="1.0.0"):
     return compressed_parquet_data(dog_entries(version))
