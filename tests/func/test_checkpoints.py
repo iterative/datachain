@@ -12,7 +12,7 @@ def test_checkpoints_parallel(test_session_tmpfile, monkeypatch):
     test_session = test_session_tmpfile
     catalog = test_session.catalog
 
-    dc.read_values(num=[1, 2, 3], session=test_session).save("nums")
+    dc.read_values(num=list(range(1000)), session=test_session).save("nums")
 
     monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
 
