@@ -156,7 +156,7 @@ datachain job run scripts/segment_customers.py --team my-team
 
 ### Code Collaboration
 
-DataChain Studio integrates with Git workflows for code collaboration:
+For DVC-based projects, DataChain Studio integrates with Git workflows for code collaboration:
 
 #### Git Integration
 - **Branch Protection**: Protect main branches from direct commits

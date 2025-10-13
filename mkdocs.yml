@@ -132,6 +132,8 @@ nav:
                   - Overview: studio/user-guide/jobs/index.md
                   - Create and Run: studio/user-guide/jobs/create-and-run.md
                   - Monitor Jobs: studio/user-guide/jobs/monitor-jobs.md
+              - Experiments (DVC):
+                  - Overview: studio/user-guide/experiments/index.md
               - Git Connections:
                   - Overview: studio/user-guide/git-connections/index.md
                   - GitHub App: studio/user-guide/git-connections/github-app.md

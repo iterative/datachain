@@ -4,19 +4,23 @@ DataChain Studio is a web application that enables Machine Learning and Data tea
 
 - [Run and track jobs](user-guide/jobs/index.md)
 - [Manage datasets](user-guide/datasets/index.md)
+- [Track experiments and manage models](user-guide/experiments/index.md) (via DVC integration)
 - [Collaborate on data projects](user-guide/team-collaboration.md)
 
-It works on top of [DataChain](https://datachain.ai/) and [Git](https://git-scm.com/), maintaining Git as the single-source-of-truth for your data, jobs and datasets.
+DataChain Studio supports multiple workflows:
+- **DataChain workflows**: For unstructured data processing and transformation
+- **DVC + Git workflows**: For ML experiment tracking and model registry, maintaining Git as the single-source-of-truth
 
 Sign in to DataChain Studio using your GitHub.com, GitLab.com, or Bitbucket.org account, or with your email address. Explore the demo projects and datasets, and [let us know](user-guide/troubleshooting.md#support) if you need any help getting started.
 
 ## Why DataChain Studio?
 
-- Simplify data processing job tracking, visualization, and collaboration on top of Git.
+- Simplify data processing job tracking, visualization, and collaboration.
+- Support both modern DataChain workflows and traditional DVC experiment tracking.
 - Keep your code, data and processing connected at all times.
-- Apply your existing software engineering stack for data teams.
-- Build a comprehensive data processing platform for transparency and discovery across all your projects.
-- Because your platform is built on top of Git, you can use [GitOps](https://www.gitops.tech/) for deployment and automation.
+- Apply your existing software engineering stack for data and ML teams.
+- Build a comprehensive data processing and ML platform for transparency and discovery across all your projects.
+- For DVC projects, maintain Git as the single-source-of-truth and use [GitOps](https://www.gitops.tech/) for deployment and automation.
 
 ## Getting Started
 
@@ -39,10 +43,16 @@ New to DataChain Studio? Start with these guides:
 - Monitor job progress and logs
 - Schedule recurring data processing tasks
 
+### ML Experiment Tracking (DVC Integration)
+- Track and compare ML experiments
+- Manage model lifecycle and registry
+- Visualize metrics and plots
+- Git-based experiment versioning
+
 ### Team Collaboration
 - Share projects with team members
 - Control access with role-based permissions
-- Integrate with Git workflows
+- Integrate with development workflows
 
 ### API Integration
 - RESTful API for programmatic access
@@ -53,7 +63,7 @@ New to DataChain Studio? Start with these guides:
 
 DataChain Studio is designed to work with your existing data infrastructure:
 
-- **Git Integration**: Native support for GitHub, GitLab, and Bitbucket
+- **Repository Integration**: Native support for GitHub, GitLab, and Bitbucket
 - **Cloud Storage**: Works with S3, GCS, Azure Blob, and other cloud storage
 - **Flexible Deployment**: Available as SaaS or self-hosted
 - **API-First**: Everything accessible via REST API and CLI
