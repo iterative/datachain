@@ -56,18 +56,18 @@ The experiments feature enables:
 3. **Add experiment tracking to your training code**:
    ```python
    import dvclive
-   
+
    with dvclive.Live() as live:
        for epoch in range(epochs):
            # Training code
            train_loss = train_model()
            val_loss = validate_model()
-           
+
            # Log metrics
            live.log_metric("train/loss", train_loss)
            live.log_metric("val/loss", val_loss)
            live.next_step()
-       
+
        # Log final model
        live.log_artifact("model.pkl", type="model")
    ```
@@ -89,7 +89,7 @@ The experiments feature enables:
    ```bash
    # Register model from experiment
    dvc artifacts get model.pkl --rev experiment-branch
-   
+
    # Add to model registry
    dvc studio model create --name customer-model --version v1.0.0
    ```
@@ -98,7 +98,7 @@ The experiments feature enables:
    ```bash
    # Assign to staging
    dvc studio model assign customer-model --stage staging --version v1.0.0
-   
+
    # Promote to production
    dvc studio model assign customer-model --stage production --version v1.0.0
    ```
@@ -148,7 +148,7 @@ processed_data.export("features.parquet")
 with dvclive.Live() as live:
     model = train_model("features.parquet")
     accuracy = evaluate_model(model)
-    
+
     live.log_metric("accuracy", accuracy)
     live.log_artifact("model.pkl", type="model")
 ```
@@ -197,6 +197,6 @@ If you're currently using DVC without Studio:
 ## Next Steps
 
 - Learn about [dataset management](../datasets/index.md) for data preprocessing
-- Explore [job management](../jobs/index.md) for data processing workflows  
+- Explore [job management](../jobs/index.md) for data processing workflows
 - Set up [team collaboration](../team-collaboration.md) for shared experiments
 - Configure [API integration](../../api/index.md) for automated workflows
