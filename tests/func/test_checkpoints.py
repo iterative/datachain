@@ -5,6 +5,12 @@ from datachain.error import DatasetNotFoundError
 from tests.utils import reset_session_job_state
 
 
+@pytest.fixture(autouse=True)
+def mock_is_script_run(monkeypatch):
+    """Mock is_script_run to return True for stable job names in tests."""
+    monkeypatch.setattr("datachain.query.session.is_script_run", lambda: True)
+
+
 def test_checkpoints_parallel(test_session_tmpfile, monkeypatch):
     def mapper_fail(num) -> int:
         raise Exception("Error")

@@ -15,7 +15,6 @@ from datachain.error import JobNotFoundError, TableMissingError
 
 if TYPE_CHECKING:
     from datachain.catalog import Catalog
-    from datachain.dataset import DatasetRecord
     from datachain.job import Job
 
 logger = logging.getLogger("datachain")
@@ -93,7 +92,6 @@ class Session:
         self.catalog = catalog or get_catalog(
             client_config=client_config, in_memory=in_memory
         )
-        self.dataset_versions: list[tuple[DatasetRecord, str, bool]] = []
 
     def __enter__(self):
         # Push the current context onto the stack
@@ -102,9 +100,8 @@ class Session:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if exc_type:
-            self._cleanup_created_versions()
-
+        # Don't cleanup created versions on exception
+        # Datasets should persist even if the session fails
         self._cleanup_temp_datasets()
         if self.is_new_catalog:
             self.catalog.metastore.close_on_exit()
@@ -112,11 +109,6 @@ class Session:
 
         if Session.SESSION_CONTEXTS:
             Session.SESSION_CONTEXTS.pop()
-
-    def add_dataset_version(
-        self, dataset: "DatasetRecord", version: str, listing: bool = False
-    ) -> None:
-        self.dataset_versions.append((dataset, version, listing))
 
     def get_or_create_job(self) -> "Job":
         """
@@ -245,16 +237,6 @@ class Session:
         # suppress error when metastore has been reset during testing
         except TableMissingError:
             pass
-
-    def _cleanup_created_versions(self) -> None:
-        if not self.dataset_versions:
-            return
-
-        for dataset, version, listing in self.dataset_versions:
-            if not listing:
-                self.catalog.remove_dataset_version(dataset, version)
-
-        self.dataset_versions.clear()
 
     @classmethod
     def get(

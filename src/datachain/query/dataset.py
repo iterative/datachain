@@ -1928,10 +1928,6 @@ class DatasetQuery:
             )
             version = version or dataset.latest_version
 
-            self.session.add_dataset_version(
-                dataset=dataset, version=version, listing=kwargs.get("listing", False)
-            )
-
             dr = self.catalog.warehouse.dataset_rows(dataset)
 
             self.catalog.warehouse.copy_table(dr.get_table(), query.select())

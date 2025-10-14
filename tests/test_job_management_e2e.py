@@ -99,7 +99,7 @@ def test_job_marked_on_exception(
     Test that when a script raises an exception, the Job is marked appropriately.
     - RuntimeError -> FAILED with error details
     - KeyboardInterrupt -> CANCELED without error details
-    Datasets in global context are rolled back on unhandled exceptions.
+    Datasets persist even with unhandled exceptions.
     """
     script = tmp_path / "test_exception.py"
     script_content = textwrap.dedent(f"""
@@ -151,8 +151,8 @@ def test_job_marked_on_exception(
 
     assert job.query == ""
 
-    # Verify datasets were rolled back (correct behavior for unhandled exceptions)
+    # Verify datasets persisted even with unhandled exceptions
     dataset_versions = list(catalog_tmpfile.list_datasets_versions())
     dataset_names = {ds.name for ds, _, _ in dataset_versions}
-    assert "dataset_a" not in dataset_names
-    assert "dataset_b" not in dataset_names
+    assert "dataset_a" in dataset_names
+    assert "dataset_b" in dataset_names
