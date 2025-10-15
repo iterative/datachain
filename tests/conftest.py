@@ -216,7 +216,11 @@ def warehouse(metastore):
 
 @pytest.fixture
 def catalog(metastore, warehouse):
-    return Catalog(metastore=metastore, warehouse=warehouse)
+    catalog = Catalog(metastore=metastore, warehouse=warehouse)
+    yield catalog
+
+    # Clean up job-related atexit hooks to prevent errors during pytest shutdown
+    reset_session_job_state()
 
 
 @pytest.fixture
