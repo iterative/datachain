@@ -417,12 +417,6 @@ class AbstractMetastore(ABC, Serializable):
         """
 
     @abstractmethod
-    def get_last_job_by_name(self, name: str, conn=None) -> Job | None:
-        """
-        Returns the most recently created Job with the given name if exists.
-        """
-
-    @abstractmethod
     def get_job(self, job_id: str) -> Job | None:
         """Returns the job with the given ID."""
 
