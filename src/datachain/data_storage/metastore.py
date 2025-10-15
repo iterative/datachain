@@ -56,8 +56,9 @@ from datachain.project import Project
 from datachain.utils import JSONSerialize
 
 if TYPE_CHECKING:
-    from sqlalchemy import Delete, Insert, Select, Update
+    from sqlalchemy import CTE, Delete, Insert, Select, Subquery, Update
     from sqlalchemy.schema import SchemaItem
+    from sqlalchemy.sql.elements import ColumnElement
 
     from datachain.data_storage import schema
     from datachain.data_storage.db_engine import DatabaseEngine
@@ -1463,6 +1464,18 @@ class AbstractDBMetastore(AbstractMetastore):
         Returns a list of columns to select in a query for fetching dataset dependencies
         """
 
+    @abstractmethod
+    def _dataset_dependency_nodes_select_columns(
+        self,
+        namespaces_subquery: "Subquery",
+        dependency_tree_cte: "CTE",
+        datasets_subquery: "Subquery",
+    ) -> list["ColumnElement"]:
+        """
+        Returns a list of columns to select in a query for fetching
+        dataset dependency nodes.
+        """
+
     def get_direct_dataset_dependencies(
         self, dataset: DatasetRecord, version: str
     ) -> list[DatasetDependency | None]:
@@ -1522,33 +1535,31 @@ class AbstractDBMetastore(AbstractMetastore):
         cte = base_query.cte(name="dependency_tree", recursive=True)
 
         # Recursive case: dependencies of dependencies
-        recursive_query = select(
-            *dep_fields,
-            (cte.c.depth + 1).label("depth"),
-        ).select_from(
-            cte.join(
-                dd,
-                (cte.c.dataset_id == dd.c.source_dataset_id)
-                & (cte.c.dataset_version_id == dd.c.source_dataset_version_id),
+        # Limit depth to 100 to prevent infinite loops in case of circular dependencies
+        recursive_query = (
+            select(
+                *dep_fields,
+                (cte.c.depth + 1).label("depth"),
             )
+            .select_from(
+                cte.join(
+                    dd,
+                    (cte.c.dataset_id == dd.c.source_dataset_id)
+                    & (cte.c.dataset_version_id == dd.c.source_dataset_version_id),
+                )
+            )
+            .where(cte.c.depth < 100)
         )
 
         cte = cte.union(recursive_query)
 
         # Fetch all with full details
-        final_query = select(
-            n.c.name,
-            p.c.name,
-            cte.c.id,
-            cte.c.dataset_id,
-            cte.c.dataset_version_id,
-            d.c.name,
-            dv.c.version,
-            dv.c.created_at,
-            cte.c.source_dataset_id,
-            cte.c.source_dataset_version_id,
-            cte.c.depth,
-        ).select_from(
+        select_cols = self._dataset_dependency_nodes_select_columns(
+            namespaces_subquery=n,
+            dependency_tree_cte=cte,
+            datasets_subquery=d,
+        )
+        final_query = self._datasets_dependencies_select(*select_cols).select_from(
             # Use outer joins to handle cases where dependent datasets have been
             # physically deleted. This allows us to return dependency records with
             # None values instead of silently omitting them, making broken
