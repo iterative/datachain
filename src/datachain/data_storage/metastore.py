@@ -1599,6 +1599,18 @@ class AbstractDBMetastore(AbstractMetastore):
         query = self._jobs_query().where(self._jobs.c.id.in_(ids))
         yield from self._parse_jobs(self.db.execute(query, conn=conn))
 
+    def get_last_job_by_name(self, name: str, conn=None) -> "Job | None":
+        query = (
+            self._jobs_query()
+            .where(self._jobs.c.name == name)
+            .order_by(self._jobs.c.created_at.desc())
+            .limit(1)
+        )
+        results = list(self.db.execute(query, conn=conn))
+        if not results:
+            return None
+        return self._parse_job(results[0])
+
     def create_job(
         self,
         name: str,
