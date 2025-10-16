@@ -446,6 +446,10 @@ class AbstractMetastore(ABC, Serializable):
     def get_job_status(self, job_id: str) -> JobStatus | None:
         """Returns the status of the given job."""
 
+    @abstractmethod
+    def get_last_job_by_name(self, name: str, conn=None) -> "Job | None":
+        """Returns the last job with the given name, ordered by created_at."""
+
     #
     # Checkpoints
     #
