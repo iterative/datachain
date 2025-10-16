@@ -20,7 +20,10 @@ from sqlalchemy import (
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.schema import CreateIndex, CreateTable, DropTable
 from sqlalchemy.sql import func
-from sqlalchemy.sql.elements import BinaryExpression, BooleanClauseList
+from sqlalchemy.sql.elements import (
+    BinaryExpression,
+    BooleanClauseList,
+)
 from sqlalchemy.sql.expression import bindparam, cast
 from sqlalchemy.sql.selectable import Select
 from tqdm.auto import tqdm
@@ -41,6 +44,7 @@ from datachain.sql.types import SQLType
 from datachain.utils import DataChainDir, batched, batched_it
 
 if TYPE_CHECKING:
+    from sqlalchemy import CTE, Subquery
     from sqlalchemy.dialects.sqlite import Insert
     from sqlalchemy.engine.base import Engine
     from sqlalchemy.schema import SchemaItem
@@ -537,6 +541,26 @@ class SQLiteMetastore(AbstractDBMetastore):
             self._datasets.c.name,
             self._datasets_versions.c.version,
             self._datasets_versions.c.created_at,
+        ]
+
+    def _dataset_dependency_nodes_select_columns(
+        self,
+        namespaces_subquery: "Subquery",
+        dependency_tree_cte: "CTE",
+        datasets_subquery: "Subquery",
+    ) -> list["ColumnElement"]:
+        return [
+            namespaces_subquery.c.name,
+            self._projects.c.name,
+            dependency_tree_cte.c.id,
+            dependency_tree_cte.c.dataset_id,
+            dependency_tree_cte.c.dataset_version_id,
+            datasets_subquery.c.name,
+            self._datasets_versions.c.version,
+            self._datasets_versions.c.created_at,
+            dependency_tree_cte.c.source_dataset_id,
+            dependency_tree_cte.c.source_dataset_version_id,
+            dependency_tree_cte.c.depth,
         ]
 
     #
