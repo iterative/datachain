@@ -892,11 +892,8 @@ class SQLiteWarehouse(AbstractWarehouse):
                 if isinstance(c, BinaryExpression):
                     right_left_join = add_left_rows_filter(c)
 
-        # Use CTE instead of subquery to force SQLite to materialize the result
-        # This breaks deep nesting and prevents parser stack overflow.
         union_cte = sqlalchemy.union(left_right_join, right_left_join).cte()
-
-        return self._regenerate_system_columns(union_cte)
+        return sqlalchemy.select(*union_cte.c).select_from(union_cte)
 
     def _system_row_number_expr(self):
         return func.row_number().over()
@@ -908,11 +905,7 @@ class SQLiteWarehouse(AbstractWarehouse):
         """
         Create a temporary table from a query for use in a UDF.
         """
-        columns = [
-            sqlalchemy.Column(c.name, c.type)
-            for c in query.selected_columns
-            if c.name != "sys__id"
-        ]
+        columns = [sqlalchemy.Column(c.name, c.type) for c in query.selected_columns]
         table = self.create_udf_table(columns)
 
         with tqdm(desc="Preparing", unit=" rows", leave=False) as pbar:

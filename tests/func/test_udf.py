@@ -2,7 +2,10 @@ import functools
 import os
 import pickle
 import posixpath
+import sys
+import time
 
+import multiprocess as mp
 import pytest
 
 import datachain as dc
@@ -558,6 +561,119 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
         # while in local mode we expect RuntimeError with the error message
         with pytest.raises(RuntimeError, match="UDF Execution Failed!"):
             chain.show()
+
+
+@pytest.mark.parametrize(
+    "failure_mode,expected_exit_code,error_marker",
+    [
+        ("exception", 1, "Worker 1 failure!"),
+        ("keyboard_interrupt", -2, "KeyboardInterrupt"),
+        ("sys_exit", 1, None),
+        ("os_exit", 1, None),  # os._exit - immediate termination
+    ],
+)
+def test_udf_parallel_worker_failure_exits_peers(
+    test_session_tmpfile,
+    tmp_path,
+    capfd,
+    failure_mode,
+    expected_exit_code,
+    error_marker,
+):
+    """
+    Test that when one worker fails, all other workers exit immediately.
+
+    Tests different failure modes:
+    - exception: Worker raises RuntimeError (normal exception)
+    - keyboard_interrupt: Worker raises KeyboardInterrupt (simulates Ctrl+C)
+    - sys_exit: Worker calls sys.exit() (clean Python exit)
+    - os_exit: Worker calls os._exit() (immediate process termination)
+    """
+    import platform
+
+    # Windows uses different exit codes for KeyboardInterrupt
+    # 3221225786 (0xC000013A) is STATUS_CONTROL_C_EXIT on Windows
+    # while POSIX systems use -2 (SIGINT)
+    if platform.system() == "Windows" and failure_mode == "keyboard_interrupt":
+        expected_exit_code = 3221225786
+
+    vals = list(range(100))
+
+    barrier_dir = tmp_path / "udf_workers_barrier"
+    barrier_dir_str = str(barrier_dir)
+    os.makedirs(barrier_dir_str, exist_ok=True)
+    expected_workers = 3
+
+    def slow_process(val: int) -> int:
+        proc_name = mp.current_process().name
+        with open(os.path.join(barrier_dir_str, f"{proc_name}.started"), "w") as f:
+            f.write(str(time.time()))
+
+        # Wait until all expected workers have written their markers
+        deadline = time.time() + 1.0
+        while time.time() < deadline:
+            try:
+                count = len(
+                    [n for n in os.listdir(barrier_dir_str) if n.endswith(".started")]
+                )
+            except FileNotFoundError:
+                count = 0
+            if count >= expected_workers:
+                break
+            time.sleep(0.01)
+
+        if proc_name == "Worker-UDF-1":
+            if failure_mode == "exception":
+                raise RuntimeError("Worker 1 failure!")
+            if failure_mode == "keyboard_interrupt":
+                raise KeyboardInterrupt("Worker interrupted")
+            if failure_mode == "sys_exit":
+                sys.exit(1)
+            if failure_mode == "os_exit":
+                os._exit(1)
+        time.sleep(5)
+        return val * 2
+
+    chain = (
+        dc.read_values(val=vals, session=test_session_tmpfile)
+        .settings(parallel=3)
+        .map(slow_process, output={"result": int})
+    )
+
+    start = time.time()
+    with pytest.raises(RuntimeError, match="UDF Execution Failed!") as exc_info:
+        list(chain.to_iter("result"))
+    elapsed = time.time() - start
+
+    # Verify timing: should exit immediately when worker fails
+    assert elapsed < 10, f"took {elapsed:.1f}s, should exit immediately"
+
+    # Verify multiple workers were started via barrier markers
+    try:
+        started_files = [
+            n for n in os.listdir(barrier_dir_str) if n.endswith(".started")
+        ]
+    except FileNotFoundError:
+        started_files = []
+    assert len(started_files) == 3, (
+        f"Expected all 3 workers to start, but saw markers for: {started_files}"
+    )
+
+    captured = capfd.readouterr()
+
+    # Verify the RuntimeError has a meaningful message with exit code
+    error_message = str(exc_info.value)
+    assert f"UDF Execution Failed! Exit code: {expected_exit_code}" in error_message, (
+        f"Expected exit code {expected_exit_code}, got: {error_message}"
+    )
+
+    if error_marker:
+        assert error_marker in captured.err, (
+            f"Expected '{error_marker}' in stderr for {failure_mode} mode. "
+            f"stderr output: {captured.err[:500]}"
+        )
+
+    assert "semaphore" not in captured.err
 
 
 @pytest.mark.parametrize(
