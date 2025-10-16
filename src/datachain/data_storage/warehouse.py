@@ -5,7 +5,7 @@ import random
 import string
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Generator, Iterable, Iterator, Sequence
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, Union, cast
 from urllib.parse import urlparse
 
 import attrs
@@ -23,7 +23,7 @@ from datachain.node import DirType, DirTypeGroup, Node, NodeWithPath, get_path
 from datachain.query.batch import RowsOutput
 from datachain.query.schema import ColumnMeta
 from datachain.sql.functions import path as pathfunc
-from datachain.sql.types import Int, SQLType
+from datachain.sql.types import SQLType
 from datachain.utils import sql_escape_like
 
 if TYPE_CHECKING:
@@ -32,6 +32,7 @@ if TYPE_CHECKING:
         _FromClauseArgument,
         _OnClauseArgument,
     )
+    from sqlalchemy.sql.selectable import FromClause
     from sqlalchemy.types import TypeEngine
 
     from datachain.data_storage import schema
@@ -248,45 +249,56 @@ class AbstractWarehouse(ABC, Serializable):
 
     def _regenerate_system_columns(
         self,
-        selectable: sa.Select | sa.CTE,
+        selectable: sa.Select,
         keep_existing_columns: bool = False,
+        regenerate_columns: Iterable[str] | None = None,
     ) -> sa.Select:
         """
-        Return a SELECT that regenerates sys__id and sys__rand deterministically.
+        Return a SELECT that regenerates system columns deterministically.
 
-        If keep_existing_columns is True, existing sys__id and sys__rand columns
-        will be kept as-is if they exist in the input selectable.
+        If keep_existing_columns is True, existing system columns will be kept as-is
+        even when they are listed in ``regenerate_columns``.
+
+        Args:
+            selectable: Base SELECT
+            keep_existing_columns: When True, reuse existing system columns even if
+                they are part of the regeneration set.
+            regenerate_columns: Names of system columns to regenerate. Defaults to
+                {"sys__id", "sys__rand"}. Columns not listed are left untouched.
         """
-        base = selectable.subquery() if hasattr(selectable, "subquery") else selectable
-
-        result_columns: dict[str, sa.ColumnElement] = {}
-        for col in base.c:
-            if col.name in result_columns:
-                raise ValueError(f"Duplicate column name {col.name} in SELECT")
-            if col.name in ("sys__id", "sys__rand"):
-                if keep_existing_columns:
-                    result_columns[col.name] = col
-            else:
-                result_columns[col.name] = col
-
-        system_types: dict[str, sa.types.TypeEngine] = {
+        system_columns = {
             sys_col.name: sys_col.type
             for sys_col in self.schema.dataset_row_cls.sys_columns()
         }
+        regenerate = set(regenerate_columns or system_columns)
+        generators = {
+            "sys__id": self._system_row_number_expr,
+            "sys__rand": self._system_random_expr,
+        }
 
-        # Add missing system columns if needed
-        if "sys__id" not in result_columns:
-            expr = self._system_row_number_expr()
-            expr = sa.cast(expr, system_types["sys__id"])
-            result_columns["sys__id"] = expr.label("sys__id")
-        if "sys__rand" not in result_columns:
-            expr = self._system_random_expr()
-            expr = sa.cast(expr, system_types["sys__rand"])
-            result_columns["sys__rand"] = expr.label("sys__rand")
+        base = cast("FromClause", selectable.subquery())
 
-        # Wrap in subquery to materialize window functions, then wrap again in SELECT
-        # This ensures window functions are computed before INSERT...FROM SELECT
-        columns = list(result_columns.values())
+        def build(name: str) -> sa.ColumnElement:
+            expr = generators[name]()
+            return sa.cast(expr, system_columns[name]).label(name)
+
+        columns: list[sa.ColumnElement] = []
+        present: set[str] = set()
+        changed = False
+
+        for col in base.c:
+            present.add(col.name)
+            regen = col.name in regenerate and not keep_existing_columns
+            columns.append(build(col.name) if regen else col)
+            changed |= regen
+
+        for name in regenerate - present:
+            columns.append(build(name))
+            changed = True
+
+        if not changed:
+            return selectable
+
         inner = sa.select(*columns).select_from(base).subquery()
         return sa.select(*inner.c).select_from(inner)
 
@@ -950,10 +962,15 @@ class AbstractWarehouse(ABC, Serializable):
         SQLite TEMPORARY tables cannot be directly used as they are process-specific,
         and UDFs are run in other processes when run in parallel.
         """
+        columns = [
+            c
+            for c in columns
+            if c.name not in [col.name for col in self.dataset_row_cls.sys_columns()]
+        ]
         tbl = sa.Table(
             name or self.udf_table_name(),
             sa.MetaData(),
-            sa.Column("sys__id", Int, primary_key=True),
+            *self.dataset_row_cls.sys_columns(),
             *columns,
         )
         self.db.create_table(tbl, if_not_exists=True)

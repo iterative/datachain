@@ -1629,7 +1629,7 @@ def test_read_pandas_multiindex(test_session):
 
     # Check the resulting column names and data
     expected_columns = ["a_cat", "b_dog", "b_cat", "a_dog"]
-    assert set(chain.signals_schema.db_signals()) == set(expected_columns)
+    assert set(chain.schema.keys()) == set(expected_columns)
 
     expected_data = [
         {"a_cat": 1, "b_dog": 2, "b_cat": 3, "a_dog": 4},
