@@ -64,6 +64,7 @@ if TYPE_CHECKING:
     from datachain.data_storage.db_engine import DatabaseEngine
 
 logger = logging.getLogger("datachain")
+DEPTH_LIMIT_DEFAULT = 100
 
 
 class AbstractMetastore(ABC, Serializable):
@@ -1506,7 +1507,7 @@ class AbstractDBMetastore(AbstractMetastore):
         return [self.dependency_class.parse(*r) for r in self.db.execute(query)]
 
     def get_dataset_dependency_nodes(
-        self, dataset_id: int, version_id: int
+        self, dataset_id: int, version_id: int, depth_limit: int = DEPTH_LIMIT_DEFAULT
     ) -> list[DatasetDependencyNode | None]:
         n = self._namespaces_select().subquery()
         p = self._projects
@@ -1548,7 +1549,7 @@ class AbstractDBMetastore(AbstractMetastore):
                     & (cte.c.dataset_version_id == dd.c.source_dataset_version_id),
                 )
             )
-            .where(cte.c.depth < 100)
+            .where(cte.c.depth < depth_limit)
         )
 
         cte = cte.union(recursive_query)
