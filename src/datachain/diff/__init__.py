@@ -24,7 +24,7 @@ class CompareStatus(str, Enum):
     SAME = "S"
 
 
-def _compare(  # noqa: C901, PLR0912
+def _compare(  # noqa: C901
     left: "DataChain",
     right: "DataChain",
     on: str | Sequence[str],
@@ -151,11 +151,7 @@ def _compare(  # noqa: C901, PLR0912
     if status_col:
         cols_select.append(diff_col)
 
-    if not dc_diff._sys:
-        # TODO workaround when sys signal is not available in diff
-        dc_diff = dc_diff.settings(sys=True).select(*cols_select).settings(sys=False)
-    else:
-        dc_diff = dc_diff.select(*cols_select)
+    dc_diff = dc_diff.select(*cols_select)
 
     # final schema is schema from the left chain with status column added if needed
     dc_diff.signals_schema = (

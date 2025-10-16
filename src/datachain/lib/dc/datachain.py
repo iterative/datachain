@@ -849,7 +849,9 @@ class DataChain:
                 udf_obj.to_udf_wrapper(self._settings.batch_size),
                 **self._settings.to_dict(),
             ),
-            signal_schema=self.signals_schema | udf_obj.output,
+            signal_schema=SignalSchema({"sys": Sys})
+            | self.signals_schema
+            | udf_obj.output,
         )
 
     def gen(
@@ -887,7 +889,7 @@ class DataChain:
                 udf_obj.to_udf_wrapper(self._settings.batch_size),
                 **self._settings.to_dict(),
             ),
-            signal_schema=udf_obj.output,
+            signal_schema=SignalSchema({"sys": Sys}) | udf_obj.output,
         )
 
     @delta_disabled
@@ -1024,7 +1026,7 @@ class DataChain:
                 partition_by=processed_partition_by,
                 **self._settings.to_dict(),
             ),
-            signal_schema=udf_obj.output,
+            signal_schema=SignalSchema({"sys": Sys}) | udf_obj.output,
         )
 
     def batch_map(
@@ -1090,11 +1092,7 @@ class DataChain:
         sign = UdfSignature.parse(name, signal_map, func, params, output, is_generator)
         DataModel.register(list(sign.output_schema.values.values()))
 
-        signals_schema = self.signals_schema
-        if self._sys:
-            signals_schema = SignalSchema({"sys": Sys}) | signals_schema
-
-        params_schema = signals_schema.slice(
+        params_schema = self.signals_schema.slice(
             sign.params, self._setup, is_batch=is_batch
         )
 
@@ -1149,11 +1147,9 @@ class DataChain:
             )
         )
 
-    def select(self, *args: str, _sys: bool = True) -> "Self":
+    def select(self, *args: str) -> "Self":
         """Select only a specified set of signals."""
         new_schema = self.signals_schema.resolve(*args)
-        if self._sys and _sys:
-            new_schema = SignalSchema({"sys": Sys}) | new_schema
         columns = new_schema.db_signals()
         return self._evolve(
             query=self._query.select(*columns), signal_schema=new_schema
@@ -1703,9 +1699,11 @@ class DataChain:
 
         signals_schema = self.signals_schema.clone_without_sys_signals()
         right_signals_schema = right_ds.signals_schema.clone_without_sys_signals()
-        ds.signals_schema = SignalSchema({"sys": Sys}) | signals_schema.merge(
-            right_signals_schema, rname
-        )
+
+        ds.signals_schema = signals_schema.merge(right_signals_schema, rname)
+
+        if not full:
+            ds.signals_schema = SignalSchema({"sys": Sys}) | ds.signals_schema
 
         return ds
 
@@ -1716,6 +1714,7 @@ class DataChain:
         Parameters:
             other: chain whose rows will be added to `self`.
         """
+        self.signals_schema = self.signals_schema.clone_without_sys_signals()
         return self._evolve(query=self._query.union(other._query))
 
     def subtract(  # type: ignore[override]
