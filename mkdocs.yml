@@ -114,6 +114,7 @@ nav:
               - Overview: guide/processing.md
               - Delta Processing: guide/delta.md
               - Errors Handling and Retries: guide/retry.md
+          - Checkpoints: guide/checkpoints.md
           - Environment Variables: guide/env.md
           - Namespaces: guide/namespaces.md
           - Local DB Migrations: guide/db_migrations.md

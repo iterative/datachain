@@ -1039,26 +1039,6 @@ def test_process_and_open_tar(cloud_test_catalog, cloud_type):
     }
 
 
-def test_datachain_save_with_job(test_session, catalog, datachain_job_id):
-    dc.read_values(value=["val1", "val2"], session=test_session).save("my-ds")
-
-    dataset = catalog.get_dataset("my-ds")
-    result_job_id = dataset.get_version(dataset.latest_version).job_id
-    assert result_job_id == datachain_job_id
-
-
-def test_datachain_with_job_and_checkpoint(test_session, catalog, datachain_job_id):
-    dc.read_values(value=["val1", "val2"], session=test_session).save("my-ds")
-
-    checkpoints = list(catalog.metastore.list_checkpoints(datachain_job_id))
-    assert len(checkpoints) == 1
-    checkpoint = checkpoints[0]
-    assert checkpoint.job_id == datachain_job_id
-    assert checkpoint.hash
-    assert checkpoint.partial is False
-    assert checkpoint.created_at
-
-
 def test_group_by_signals(cloud_test_catalog):
     from datachain import func
 

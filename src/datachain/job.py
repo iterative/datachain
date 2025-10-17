@@ -56,5 +56,5 @@ class Job:
             python_version,
             error_message,
             error_stack,
-            parent_job_id,
+            str(parent_job_id) if parent_job_id else None,
         )

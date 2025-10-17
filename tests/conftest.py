@@ -37,7 +37,7 @@ from datachain.utils import (
     DataChainDir,
 )
 
-from .utils import DEFAULT_TREE, instantiate_tree
+from .utils import DEFAULT_TREE, instantiate_tree, reset_session_job_state
 
 DEFAULT_DATACHAIN_BIN = "datachain"
 DEFAULT_DATACHAIN_GIT_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -216,13 +216,20 @@ def warehouse(metastore):
 
 @pytest.fixture
 def catalog(metastore, warehouse):
-    return Catalog(metastore=metastore, warehouse=warehouse)
+    catalog = Catalog(metastore=metastore, warehouse=warehouse)
+    yield catalog
+
+    # Clean up job-related atexit hooks to prevent errors during pytest shutdown
+    reset_session_job_state()
 
 
 @pytest.fixture
 def test_session(catalog):
     with Session("TestSession", catalog=catalog) as session:
         yield session
+
+    # Clean up job-related atexit hooks to prevent errors during pytest shutdown
+    reset_session_job_state()
 
 
 @pytest.fixture
@@ -279,7 +286,11 @@ def catalog_tmpfile(metastore_tmpfile, warehouse_tmpfile):
 def test_session_tmpfile(catalog_tmpfile):
     # For testing parallel and distributed processing, as these cannot use
     # in-memory databases.
-    return Session("TestSession", catalog=catalog_tmpfile)
+    with Session("TestSession", catalog=catalog_tmpfile) as session:
+        yield session
+
+    # Clean up job-related atexit hooks to prevent errors during pytest shutdown
+    reset_session_job_state()
 
 
 @pytest.fixture
@@ -536,12 +547,18 @@ def cloud_test_catalog_tmpfile(
     metastore_tmpfile,
     warehouse_tmpfile,
 ):
-    return get_cloud_test_catalog(
+    catalog = get_cloud_test_catalog(
         cloud_server,
         tmp_path,
         metastore_tmpfile,
         warehouse_tmpfile,
     )
+    yield catalog
+
+    # Clean up job-related atexit hooks to prevent errors during pytest shutdown
+    from tests.utils import reset_session_job_state
+
+    reset_session_job_state()
 
 
 @pytest.fixture
