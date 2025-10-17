@@ -1072,6 +1072,19 @@ def test_select_except(test_session):
     assert n == len(features_nested)
 
 
+def test_select_except_after_gen(test_session):
+    # https://github.com/iterative/datachain/issues/1359
+    # fixed by https://github.com/iterative/datachain/pull/1400
+    chain = dc.read_values(id=range(10), session=test_session)
+
+    chain = chain.gen(lambda id: [(id, 0)], output={"id": int, "x": int})
+    chain = chain.select_except("x")
+    chain = chain.merge(chain, on="id")
+    chain = chain.select_except("right_id")
+
+    assert set(chain.to_values("id")) == set(range(10))
+
+
 def test_select_wrong_type(test_session):
     chain = dc.read_values(fr1=features_nested, fr2=features, session=test_session)
 
