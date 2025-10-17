@@ -29,11 +29,7 @@ def require_torchcodec(test_case):
         test_case = pytest.mark.skip(
             "test requires torchcoded, not available on Windows yet"
         )(test_case)
-
-    return pytest.mark.skip(
-        "Currently importing torchcodec has some issue and is unstable "
-        "skipping until https://github.com/iterative/datachain/issues/1409 is fixed"
-    )(test_case)
+    return test_case
 
 
 def test_read_hf(test_session):
