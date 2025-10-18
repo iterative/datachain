@@ -3,13 +3,13 @@
 To open your account settings, click on your user icon on the top right corner of DataChain Studio, and go to your `Settings`. You can view and update the following settings:
 
 - [General settings](#general-settings)
-  - [Profile details](#profile-details) update your name and profile picture
-  - [Account details](#account-details) manage your username, password, email addresses, and delete your account
+    - [Profile details](#profile-details) update your name and profile picture
+    - [Account details](#account-details) manage your username, password, email addresses, and delete your account
 - [Git connections](#git-connections) with GitHub, GitLab and Bitbucket
 - [Cloud credentials](#cloud-credentials) for data remotes
 - [Teams](#teams) that you own
 - [Tokens](#tokens)
-  - [Client access tokens](#client-access-tokens) for dataset and job operations
+    - [Client access tokens](#client-access-tokens) for dataset and job operations
 
 !!! note
     This does not include managing your team plan (Free or Enterprise). Team plans are defined for each team separately. [Get Enterprise](team-collaboration.md#get-enterprise).

@@ -1,226 +1,233 @@
 # Create and Run Jobs
 
-This guide covers how to create, configure, and run DataChain jobs in Studio.
+Write and execute DataChain scripts directly in Studio to process data from your connected storage.
 
 ## Prerequisites
 
-Before creating jobs, ensure you have:
+- Connected storage (S3, GCS, Azure Blob Storage, or other supported storage)
+- Storage credentials configured in account settings
+- Access to DataChain Studio workspace
 
-- A connected Git repository with DataChain code
-- Proper cloud credentials configured (if accessing remote data)
-- A dataset set up in DataChain Studio
+## Writing Your Script
 
-## Creating a Job
+### 1. Access the Editor
 
-### 1. Navigate to Jobs
+In DataChain Studio, open the code editor through `Data` tab in the topbar to write your DataChain script. You'll see connected storages listed in the left sidebar.
 
-1. Open your dataset in DataChain Studio
-2. Click on the `Jobs` tab
-3. Click `Create Job` or `Run Job`
+### 2. Write DataChain Code
 
-### 2. Configure Job Parameters
+Write your data processing script using DataChain operations:
 
-#### Basic Configuration
-- **Job Name**: Give your job a descriptive name
-- **Script Path**: Path to your DataChain script (e.g., `src/process_data.py`)
-- **Git Branch**: Select the branch to run from (default: main)
-- **Working Directory**: Set the working directory for the job
+```python
+import datachain as dc
 
-#### Resource Configuration
-- **CPU**: Number of CPU cores (1-16)
-- **Memory**: RAM allocation (1GB-64GB)
-- **GPU**: GPU type and count (optional)
-- **Timeout**: Maximum job runtime (default: 24 hours)
+# Process data from connected storage
+dc.read_storage("gs://datachain-demo").save("datachain-demo")
+```
 
-#### Environment Variables
-Set environment variables for your job:
-```bash
-DATACHAIN_CLIENT_TOKEN=<auto-populated>
+### Basic Operations Example
+
+```python
+from datachain import DataChain
+
+# Read from storage and process
+dc = (
+    DataChain.from_storage("s3://my-bucket/images/")
+    .filter(lambda file: file.size > 1000)
+    .map(lambda file: {"path": file.path, "size": file.size})
+    .save("processed_images")
+)
+
+print(f"Processed {len(dc)} files")
+```
+
+### Working with Multiple Storages
+
+```python
+from datachain import DataChain
+
+# Access different connected storages
+source_data = DataChain.from_storage("s3://source-bucket/data/")
+reference_data = DataChain.from_storage("gs://reference-bucket/metadata/")
+
+# Process and combine
+result = source_data.join(reference_data, on="id").save("combined_data")
+```
+
+## Configuring Run Settings
+
+Click the run settings button to configure your job execution parameters.
+
+### Python Version
+
+Select the Python version for your job environment:
+- Python 3.12 (recommended)
+- Python 3.11
+- Python 3.10
+
+### Workers
+
+Set the number of parallel workers for data processing:
+- **1 worker**: Sequential processing (default)
+- **2-10 workers**: Parallel processing for larger datasets
+- More workers increase throughput but consume more resources
+
+### Priority
+
+Set job queue priority:
+- **1-10**: Higher numbers = higher priority in the job queue
+- **5**: Default priority
+- Use higher priority for time-sensitive jobs
+
+### Requirements.txt
+
+Specify additional Python packages needed for your job:
+
+```text
+pandas==2.0.0
+pillow>=9.0.0
+requests
+torch==2.0.1
+```
+
+### Environment Variables
+
+Set environment variables for your script:
+
+```text
 AWS_REGION=us-east-1
 BATCH_SIZE=1000
+LOG_LEVEL=INFO
+MODEL_VERSION=v2.1
 ```
 
-#### Input Parameters
-Pass parameters to your DataChain script:
-```bash
---input-path s3://my-bucket/data/
---output-path s3://my-bucket/results/
---workers 4
-```
+### Override Credentials
 
-### 3. Data Configuration
+By default, jobs use team credentials for storage access. You can override with:
+- **Using team defaults**: Use configured team credentials
+- **Custom credentials**: Select specific credentials for this job
 
-#### Input Data Sources
-- **Cloud Storage**: S3, GCS, Azure Blob Storage
-- **Databases**: PostgreSQL, MySQL, MongoDB
-- **File Systems**: Local files, network shares
-- **APIs**: REST APIs, GraphQL endpoints
+### Attached Files
 
-#### Output Destinations
-- **Data Storage**: Where to save processed data
-- **Artifacts**: Location for job outputs and logs
-- **Metadata**: Database for storing job metadata
+Upload additional files needed by your job (currently disabled in standard plan).
 
-### Script Examples
+## Running Your Job
 
-#### Basic DataChain Processing
+### Submit for Execution
+
+1. Write your DataChain script in the editor
+2. Click the run settings button (gear icon)
+3. Configure Python version, workers, and priority
+4. Add any required packages or environment variables
+5. Click `Apply settings`
+6. Click the run button to execute
+
+Your job will be queued and executed with the specified configuration.
+
+### Execution Process
+
+1. **QUEUED**: Job enters the execution queue based on priority
+2. **INIT**: Python environment is set up with specified version and requirements
+3. **RUNNING**: Your DataChain script executes with configured workers
+4. **COMPLETE**: Results are saved and available in the data table
+
+## Viewing Results
+
+After job completion:
+
+### Data Table
+
+Results appear in the data table below your script:
+- View processed files and their properties
+- Sort and filter results
+- Examine file paths, sizes, and metadata
+- Download data if needed
+
+### Saved Datasets
+
+Access saved datasets by name:
 ```python
-#!/usr/bin/env python3
-
-import sys
-from datachain import DataChain
-
-def main():
-    # Process data with DataChain
-    dc = (
-        DataChain.from_storage("s3://my-bucket/images/")
-        .map(lambda file: {"size": file.size, "name": file.name})
-        .save("processed_files")
-    )
-
-    print(f"Processed {len(dc)} files")
-
-if __name__ == "__main__":
-    main()
+# Later access to saved results
+saved_dc = DataChain.from_dataset("processed_images")
 ```
 
-#### Parameterized Job
-```python
-#!/usr/bin/env python3
+## Common Patterns
 
-import argparse
-from datachain import DataChain
+### Processing Images
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input-path", required=True)
-    parser.add_argument("--output-path", required=True)
-    parser.add_argument("--batch-size", type=int, default=100)
-    args = parser.parse_args()
-
-    # Process data with parameters
-    dc = (
-        DataChain.from_storage(args.input_path)
-        .batch(args.batch_size)
-        .map(process_batch)
-        .save_to(args.output_path)
-    )
-
-if __name__ == "__main__":
-    main()
-```
-
-## Running Jobs
-
-### Submit Job
-1. Review your job configuration
-2. Click `Submit Job` to queue for execution
-3. The job will be assigned a unique ID and added to the queue
-
-### Job Scheduling
-Jobs are scheduled based on:
-- **Resource Availability**: Wait for required resources
-- **Queue Priority**: First-in-first-out with priority adjustments
-- **Team Limits**: Respect team resource quotas
-
-### Job Execution
-Once running, your job will:
-1. **Initialize**: Set up environment and dependencies
-2. **Execute**: Run your DataChain script
-3. **Monitor**: Stream logs and progress updates
-4. **Complete**: Save results and clean up resources
-
-## Job Templates
-
-Create reusable job templates for common workflows:
-
-### Data Ingestion Template
-```yaml
-name: "Data Ingestion"
-script: "scripts/ingest_data.py"
-resources:
-  cpu: 2
-  memory: "8GB"
-parameters:
-  - name: "source_path"
-    required: true
-  - name: "target_table"
-    required: true
-```
-
-### Feature Engineering Template
-```yaml
-name: "Feature Engineering"
-script: "scripts/feature_engineering.py"
-resources:
-  cpu: 4
-  memory: "16GB"
-  gpu: "nvidia-t4"
-environment:
-  CUDA_VISIBLE_DEVICES: "0"
-```
-
-## Batch Jobs
-
-For processing large datasets, use batch job configurations:
-
-### Parallel Processing
-```python
-from datachain import DataChain
-from concurrent.futures import ThreadPoolExecutor
-
-def process_partition(partition):
-    # Process a partition of data
-    return partition.map(expensive_operation)
-
-# Split data into partitions for parallel processing
-dc = DataChain.from_storage("s3://large-dataset/")
-partitions = dc.partition(num_partitions=10)
-
-with ThreadPoolExecutor(max_workers=4) as executor:
-    results = list(executor.map(process_partition, partitions))
-```
-
-### Chunked Processing
 ```python
 from datachain import DataChain
 
-# Process data in chunks to manage memory
-for chunk in DataChain.from_storage("s3://data/").batch(1000):
-    processed = chunk.map(transform_data)
-    processed.save_to("s3://results/", append=True)
+dc = (
+    DataChain.from_storage("s3://images/")
+    .filter(lambda file: file.path.endswith(('.jpg', '.png')))
+    .map(lambda file: {
+        "path": file.path,
+        "size": file.size,
+        "extension": file.path.split('.')[-1]
+    })
+    .save("image_catalog")
+)
+```
+
+### Data Quality Checks
+
+```python
+from datachain import DataChain
+
+dc = (
+    DataChain.from_storage("gs://data-lake/")
+    .filter(lambda file: file.size > 0)  # Non-empty files
+    .filter(lambda file: file.modified_at > "2024-01-01")  # Recent files
+    .save("validated_data")
+)
+```
+
+### Batch Processing
+
+```python
+from datachain import DataChain
+
+# Process data in batches
+for batch in DataChain.from_storage("s3://large-dataset/").batch(1000):
+    processed = batch.map(transform_function)
+    print(f"Processed batch of {len(processed)} files")
 ```
 
 ## Troubleshooting
 
 ### Common Issues
 
-#### Resource Errors
-- **Out of Memory**: Increase memory allocation or reduce batch size
-- **CPU Timeout**: Optimize code or increase CPU allocation
-- **Storage Full**: Clean up temporary files or increase storage
+#### Package Import Errors
+- Add missing packages to `requirements.txt`
+- Verify package names and versions are correct
+- Check for compatible package versions
 
-#### Configuration Errors
-- **Script Not Found**: Verify script path and Git branch
-- **Import Errors**: Check dependencies and Python environment
-- **Permission Denied**: Verify cloud credentials and access permissions
+#### Storage Access Errors
+- Verify storage credentials are configured
+- Check storage paths are correct and accessible
+- Ensure team has necessary permissions
 
-#### Data Access Issues
-- **Authentication Failed**: Check cloud credentials configuration
-- **Path Not Found**: Verify input data paths and permissions
-- **Network Timeout**: Check network connectivity and retry settings
+#### Memory Errors
+- Reduce batch size in your processing
+- Increase number of workers to distribute load
+- Process data in smaller chunks
+
+#### Timeout Errors
+- Optimize your processing code
+- Reduce amount of data being processed
+- Consider splitting into multiple jobs
 
 ### Debugging Tips
 
-1. **Start Small**: Test with a small dataset first
-2. **Check Logs**: Review job logs for error messages
-3. **Validate Inputs**: Ensure input data is accessible and valid
-4. **Test Locally**: Run scripts locally before submitting to Studio
-5. **Monitor Resources**: Check CPU, memory, and storage usage
+1. **Start Simple**: Test with small data samples first
+2. **Check Logs**: Review job logs in the monitor tab
+3. **Verify Storage**: Ensure connected storage is accessible
+4. **Test Locally**: Test scripts locally when possible
+5. **Use Print Statements**: Add logging to track progress
 
 ## Next Steps
 
-- Learn how to [monitor job execution](monitor-jobs.md)
-- Set up [job notifications](../../webhooks.md)
-- Explore [advanced job configurations](../../../guide/processing.md)
-- Configure [team job sharing](../team-collaboration.md)
+- Learn how to [monitor running jobs](monitor-jobs.md)
+- Set up [team collaboration](../team-collaboration.md)
+- Explore [DataChain operations](../../../references/datachain.md)

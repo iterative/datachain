@@ -1,299 +1,251 @@
-# Team Collaboration
-
-DataChain Studio provides comprehensive team collaboration features that enable data teams to work together effectively on data processing projects, share resources, and maintain consistent workflows.
-
-## Overview
-
-Team collaboration in DataChain Studio includes:
-
-- **Shared Workspaces**: Centralized spaces for team projects and datasets
-- **Role-based Access Control**: Granular permissions for team members
-- **Resource Sharing**: Shared computational resources and storage
-- **Project Management**: Collaborative project organization and tracking
-
-## Creating and Managing Teams
-
-### Create a Team
-
-1. Navigate to your account settings
-2. Go to the "Teams" section
-3. Click "Create a team"
-4. Enter team name and description
-5. Invite initial team members by email
-
-### Team Roles
-
-DataChain Studio supports three main roles:
-
-#### Admin
-- **Full Access**: Complete control over team settings and resources
-- **User Management**: Add, remove, and manage team members
-- **Billing**: Access to billing and subscription management
-- **Configuration**: Configure team-wide settings and integrations
-
-#### Member
-- **Project Access**: Create and manage datasets and jobs
-- **Resource Usage**: Use team computational resources
-- **Collaboration**: Share and collaborate on projects
-- **Limited Admin**: Some administrative functions
-
-#### Viewer
-- **Read-only Access**: View team projects and datasets
-- **No Modifications**: Cannot create or modify resources
-- **Monitoring**: Monitor job progress and results
-
-### Managing Team Members
-
-#### Invite Members
-```bash
-# Via Studio UI
-1. Go to Team Settings → Members
-2. Click "Invite Member"
-3. Enter email address and select role
-4. Send invitation
-
-# Via API
-curl -X POST "https://studio.datachain.ai/api/teams/my-team/members" \
-  -H "Authorization: token $STUDIO_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"email": "user@company.com", "role": "member"}'
-```
-
-#### Change Member Roles
-1. Navigate to Team Settings → Members
-2. Find the team member
-3. Click on their current role
-4. Select the new role from dropdown
-5. Confirm the change
-
-#### Remove Members
-1. Go to Team Settings → Members
-2. Find the team member to remove
-3. Click the "Remove" button
-4. Confirm removal
-
-## Shared Resources
-
-### Computational Resources
-
-Teams can share computational resources for data processing jobs:
-
-#### Resource Pools
-- **Shared Clusters**: Teams can create shared Kubernetes clusters
-- **Resource Quotas**: Set limits on CPU, memory, and GPU usage per team
-- **Cost Management**: Track and allocate computational costs
-- **Priority Queues**: Prioritize jobs from different team members
-
-#### Configuration Example
-```yaml
-# Team resource configuration
-team_resources:
-  cpu_quota: 100           # Total CPU cores
-  memory_quota: "400GB"    # Total memory
-  gpu_quota: 8            # Total GPU count
-  storage_quota: "1TB"    # Total storage
-
-  job_limits:
-    max_concurrent_jobs: 20
-    max_job_duration: "24h"
-    default_priority: "normal"
-```
-
-### Storage Resources
+# Teams
+
+DataChain Studio enables collaborative work through teams, allowing you to share
+projects, datasets, and jobs with team members. You can create teams with one or
+more team members, also called collaborators, and assign different roles to
+control access permissions. The projects that you create in your team's page
+will be accessible to all members of the team.
+
+In this page, you will learn about:
+
+- [How to create a team](#create-a-team)
+- [How to invite collaborators (team members)](#invite-collaborators)
+- [The privileges (access permissions) of different roles](#roles)
+- [How to manage connections to self-hosted GitLab servers](#manage-connections-to-self-hosted-gitlab-servers)
+- [How to configure Single Sign-on (SSO)](#configure-single-sign-on-sso)
+- [How to upgrade to an Enterprise plan](#get-enterprise)
+
+## Create a team
+
+Click on the drop down next to `Personal`. All the teams that you have created
+so far will be listed within `Teams` in the drop down menu. If you have not
+created any team so far, this list will be empty.
+
+To create a new team, click on `Create a team`.
+![](https://static.iterative.ai/img/studio/team_create_v3.png)
+
+You will be asked to enter the URL namespace for your team. Enter a unique name.
+The URL for your team will be formed using this name.
+![](https://static.iterative.ai/img/studio/team_enter_name_v3.png)
+
+Then, click the `Create team` button on the top right corner.
+
+## Invite collaborators
+
+To add collaborators, enter their email addresses. Each collaborator can be
+assigned the [Admin, Edit, or View role](#roles). An email invite will be sent
+to each invitee. Then, click on `Send invites and close`.
+
+![](https://static.iterative.ai/img/studio/team_roles_v3.png)
+
+You can also click on `Skip and close` to skip adding collaborators while
+creating the team, and
+[add them later by accessing team settings](#edit-collaborators).
+
+## Roles
+
+Team members or collaborators can have the following roles:
+
+- **`Viewers`** (Read permission) - Have read-only access to datasets, jobs,
+  queries, and projects. They can view and explore data but cannot make any
+  changes or create new resources.
+- **`Editors`** (Write permission) - Can create and edit datasets, jobs,
+  queries, and projects. They can upload files, run jobs, and manage team
+  resources but cannot modify team settings or manage collaborators.
+- **`Admins`** (Admin permission) - Have full access to all team resources and
+  settings. They can add (invite) and remove collaborators, manage team
+  settings, configure cloud credentials, and perform all operations available to
+  Editors and Viewers.
+
+DataChain Studio does not have the concept of an `Owner` role. The user who
+creates the team has the `Admin` role. The privileges of such an admin is the
+same as that of any other collaborator who has been assigned the `Admin` role.
+
+<admon>
+
+If your Git account does not have write access on the Git repository connected
+to a project, you cannot push changes (e.g., new experiments) to the repository
+even if the project belongs to a team where you are an `Editor` or `Admin`.
+
+</admon>
+
+### Privileges for datasets
+
+| Feature                     | Viewer | Editor | Admin |
+| --------------------------- | ------ | ------ | ----- |
+| List datasets               | Yes    | Yes    | Yes   |
+| View dataset information    | Yes    | Yes    | Yes   |
+| View dataset rows           | Yes    | Yes    | Yes   |
+| View dataset versions       | Yes    | Yes    | Yes   |
+| Export datasets             | Yes    | Yes    | Yes   |
+| Preview files               | Yes    | Yes    | Yes   |
+| Create datasets             | No     | Yes    | Yes   |
+| Edit dataset metadata       | No     | Yes    | Yes   |
+| Delete datasets             | No     | Yes    | Yes   |
+| Upload files                | No     | Yes    | Yes   |
+| Move files in storage       | No     | Yes    | Yes   |
+| Delete files                | No     | Yes    | Yes   |
+| Reindex storage             | No     | Yes    | Yes   |
+| Create dataset from storage | No     | Yes    | Yes   |
+
+### Privileges for jobs
+
+| Feature              | Viewer | Editor | Admin |
+| -------------------- | ------ | ------ | ----- |
+| List jobs            | Yes    | Yes    | Yes   |
+| View job details     | Yes    | Yes    | Yes   |
+| View job logs        | Yes    | Yes    | Yes   |
+| List clusters        | Yes    | Yes    | Yes   |
+| Create jobs          | No     | Yes    | Yes   |
+| Cancel running jobs  | No     | Yes    | Yes   |
+| Update job status    | No     | Yes    | Yes   |
+
+### Privileges for queries
+
+| Feature                 | Viewer | Editor | Admin |
+| ----------------------- | ------ | ------ | ----- |
+| List queries            | Yes    | Yes    | Yes   |
+| View query details      | Yes    | Yes    | Yes   |
+| Create queries          | No     | Yes    | Yes   |
+| Update queries          | No     | Yes    | Yes   |
+| Duplicate queries       | No     | Yes    | Yes   |
+| Delete queries          | No     | Yes    | Yes   |
+
+### Privileges for DVC experiments
+
+| Feature                                       | Viewer | Editor | Admin |
+| --------------------------------------------- | ------ | ------ | ----- |
+| Open a team's project                         | Yes    | Yes    | Yes   |
+| View experiments and metrics                  | Yes    | Yes    | Yes   |
+| Apply filters                                 | Yes    | Yes    | Yes   |
+| Show / hide columns                           | Yes    | Yes    | Yes   |
+| Save filters and column settings              | No     | Yes    | Yes   |
+| Add a new project                             | No     | Yes    | Yes   |
+| Edit project settings                         | No     | Yes    | Yes   |
+| Delete a project                              | No     | Yes    | Yes   |
+| Share a project                               | No     | Yes    | Yes   |
+
+### Privileges for storage and activity logs
 
-Teams can share storage resources and datasets:
-
-#### Shared Datasets
-- **Team Datasets**: Datasets accessible to all team members
-- **Access Control**: Fine-grained permissions for dataset access
-- **Version Control**: Shared versioning of datasets
-- **Collaboration**: Multiple team members can contribute to datasets
-
-#### Storage Configuration
-```yaml
-# Shared storage configuration
-shared_storage:
-  datasets_bucket: "s3://team-datasets/"
-  artifacts_bucket: "s3://team-artifacts/"
-  logs_bucket: "s3://team-logs/"
-
-  access_policies:
-    - role: "admin"
-      permissions: ["read", "write", "delete"]
-    - role: "member"
-      permissions: ["read", "write"]
-    - role: "viewer"
-      permissions: ["read"]
-```
-
-## Project Collaboration
-
-### Shared Projects
-
-Team members can collaborate on data processing projects:
-
-#### Project Sharing
-1. **Create Team Project**: Create projects within team workspace
-2. **Set Permissions**: Configure who can view, edit, or manage projects
-3. **Invite Collaborators**: Add specific team members to projects
-4. **Track Contributions**: Monitor who made changes and when
-
-#### Collaboration Workflow
-```bash
-# 1. Create a shared project
-datachain project create --team my-team --name customer-segmentation
-
-# 2. Add collaborators
-datachain project add-collaborator --project customer-segmentation --user alice@company.com
-
-# 3. Clone and work on project
-git clone https://github.com/company/customer-segmentation
-cd customer-segmentation
-
-# 4. Submit jobs to shared infrastructure
-datachain job run scripts/segment_customers.py --team my-team
-```
-
-### Code Collaboration
-
-For DVC-based projects, DataChain Studio integrates with Git workflows for code collaboration:
-
-#### Git Integration
-- **Branch Protection**: Protect main branches from direct commits
-- **Pull Request Reviews**: Require code reviews before merging
-- **Automated Testing**: Run tests on pull requests
-- **Deployment Pipelines**: Automate deployment to different environments
-
-#### Example Workflow
-```bash
-# 1. Create feature branch
-git checkout -b feature/new-segmentation-algorithm
-
-# 2. Develop and test locally
-datachain run scripts/test_algorithm.py
-
-# 3. Submit job for validation
-datachain job run scripts/validate_algorithm.py --team my-team
-
-# 4. Create pull request
-gh pr create --title "Add new segmentation algorithm" --body "Description of changes"
-
-# 5. Team review and merge
-# Jobs automatically run on merged code
-```
-
-## Communication and Notifications
-
-### Team Notifications
-
-Keep team members informed about important events:
-
-#### Notification Types
-- **Job Completion**: Notify when team jobs complete or fail
-- **Dataset Updates**: Alert when shared datasets are modified
-- **Resource Usage**: Warn when approaching resource limits
-- **Security Events**: Alert on security-related events
-
-#### Notification Channels
-- **Email**: Send notifications to team member emails
-- **Slack**: Integrate with team Slack channels
-- **Webhooks**: Send notifications to custom endpoints
-- **In-app**: Show notifications within Studio interface
-
-#### Configuration Example
-```yaml
-# Team notification settings
-notifications:
-  channels:
-    - type: "email"
-      recipients: ["team-leads@company.com"]
-      events: ["job_failed", "resource_limit"]
-
-    - type: "slack"
-      webhook: "https://hooks.slack.com/services/..."
-      channel: "#data-team"
-      events: ["job_complete", "dataset_updated"]
-
-    - type: "webhook"
-      url: "https://internal-system.company.com/notifications"
-      events: ["all"]
-```
-
-## Security and Compliance
-
-### Access Control
-
-Implement proper security measures for team collaboration:
-
-#### Authentication
-- **Single Sign-On (SSO)**: Integrate with company identity providers
-- **Multi-factor Authentication**: Require MFA for sensitive operations
-- **API Keys**: Manage API access for team members
-- **Session Management**: Control session timeouts and policies
-
-#### Authorization
-- **Role-based Access**: Assign appropriate roles to team members
-- **Resource Permissions**: Control access to specific datasets and jobs
-- **Network Security**: Implement network-level access controls
-- **Audit Logging**: Track all team member activities
-
-### Compliance
-
-Ensure team collaboration meets compliance requirements:
-
-#### Data Governance
-- **Data Classification**: Classify datasets by sensitivity level
-- **Access Auditing**: Track who accessed what data and when
-- **Retention Policies**: Implement data retention and deletion policies
-- **Encryption**: Encrypt data at rest and in transit
-
-#### Compliance Frameworks
-- **GDPR**: Implement GDPR compliance for EU data
-- **HIPAA**: Meet HIPAA requirements for healthcare data
-- **SOC 2**: Maintain SOC 2 compliance for security controls
-- **Custom Policies**: Implement company-specific compliance policies
-
-## Best Practices
-
-### Team Organization
-1. **Clear Roles**: Define clear roles and responsibilities
-2. **Resource Planning**: Plan resource allocation and usage
-3. **Documentation**: Maintain clear documentation and standards
-4. **Regular Reviews**: Conduct regular team and project reviews
-
-### Collaboration
-1. **Communication**: Establish clear communication channels
-2. **Code Reviews**: Implement mandatory code review processes
-3. **Testing**: Maintain comprehensive testing practices
-4. **Version Control**: Use proper version control workflows
-
-### Security
-1. **Least Privilege**: Grant minimum necessary permissions
-2. **Regular Audits**: Conduct regular security audits
-3. **Training**: Provide security training for team members
-4. **Incident Response**: Maintain incident response procedures
-
-## Getting Enterprise {#get-enterprise}
-
-DataChain Studio Enterprise provides advanced team collaboration features:
-
-### Enterprise Features
-- **Advanced RBAC**: Fine-grained role-based access control
-- **SSO Integration**: Enterprise identity provider integration
-- **Audit Logging**: Comprehensive audit and compliance logging
-- **Priority Support**: Dedicated support for enterprise customers
-- **Custom Integrations**: Custom integrations with internal systems
-
-### Contact Sales
-To upgrade to Enterprise:
-- Contact our sales team at sales@datachain.ai
-- Schedule a demo to see Enterprise features
-- Discuss custom requirements and pricing
-- Get help with enterprise deployment
-
-## Next Steps
-
-- Set up [authentication](authentication/single-sign-on.md) for your team
-- Configure [webhooks](../webhooks.md) for team notifications
-- Explore [API integration](../api/index.md) for custom workflows
-- Learn about [self-hosting](../self-hosting/index.md) for enterprise deployments
+| Feature                  | Viewer | Editor | Admin |
+| ------------------------ | ------ | ------ | ----- |
+| List storage files       | Yes    | Yes    | Yes   |
+| View activity logs       | Yes    | Yes    | Yes   |
+| Create activity logs     | No     | Yes    | Yes   |
+| Get presigned URLs       | No     | Yes    | Yes   |
+
+### Privileges to manage the team
+
+| Feature                            | Viewer | Editor | Admin |
+| ---------------------------------- | ------ | ------ | ----- |
+| Manage team settings               | No     | No     | Yes   |
+| Manage team collaborators          | No     | No     | Yes   |
+| Configure cloud credentials        | No     | No     | Yes   |
+| Manage GitLab server connections   | No     | No     | Yes   |
+| Configure Single Sign-on (SSO)     | No     | No     | Yes   |
+| Manage team plan and billing       | No     | No     | Yes   |
+| Delete a team                      | No     | No     | Yes   |
+
+## Manage your team and its resources
+
+Once you have created the team, the team's workspace opens up.
+
+![](https://static.iterative.ai/img/studio/team_page_v6.png)
+
+In this workspace, you can manage the team's:
+- [Datasets](#datasets)
+- [Jobs](#jobs)
+- [Projects (DVC Experiments)](#projects-dvc-experiments)
+- [Settings](#settings)
+
+## Datasets
+
+The datasets dashboard displays all datasets created by team members. Access
+permissions are controlled by team roles:
+- **Viewers** can explore and export datasets
+- **Editors** can create, edit, and delete datasets
+- **Admins** have full control over all datasets
+
+To create a new dataset, you can upload files, connect to cloud storage, or
+create datasets from DataChain queries.
+
+## Jobs
+
+The jobs dashboard shows all DataChain jobs running on the team's compute
+clusters. Team members can:
+- **Viewers** can view job status and logs
+- **Editors** can create, run, and cancel jobs
+- **Admins** have full control over all jobs
+
+## Projects (DVC Experiments)
+
+This is the projects dashboard for DVC experiment tracking. All projects on this
+dashboard are accessible to all team members based on their roles.
+
+To add a project to this dashboard, click on `Add a project`. The process for
+adding a project is the same as that for adding personal projects
+([instructions](./experiments/create-a-project.md)).
+
+## Settings
+
+In the [team settings](#settings) page, you can change the team name, add
+credentials for the data remotes, and delete the team. Note that these settings
+are applicable to the team and are thus different from
+[project settings](./experiments/configure-a-project.md).
+
+Additionally, you can also
+[manage connections to self-hosted GitLab servers](#manage-connections-to-self-hosted-gitlab-servers),
+[configure sso](#configure-single-sign-on-sso),
+[edit collaborators](#edit-collaborators).
+
+### Manage connections to self-hosted GitLab servers
+
+If your team’s Git repositories are on a self-hosted GitLab server, you can go
+to the `GitLab connections` section of the team settings page to set up a
+connection to this server. Once you set up the connection, all your team members
+can connect to the Git repositories on this server. For more details, refer to
+[Custom GitLab Server Connection](./git-connections/custom-gitlab-server.md).
+
+### Configure Single Sign-on (SSO)
+
+Single Sign-on (SSO) allows your team members to authenticate to DataChain
+Studio using your organization's identity Provider (IdP) such as Okta, LDAP,
+Microsoft AD, etc.
+
+Details on how to configure SSO for your team can be found
+[here](./authentication/single-sign-on.md).
+
+Once the SSO configuration is complete, users can login to DataChain Studio
+using their team's login page at
+`http://studio.datachain.ai/api/teams/<TEAM_NAME>/sso`. They can also login
+directly from their Okta dashboards by clicking on the DataChain Studio
+integration icon.
+
+If a user does not have a pre-assigned role when they sign in to a team, they
+will be auto-assigned the [`Viewer` role](#roles).
+
+### Edit collaborators
+
+To manage the collaborators (team members) of your team, go to the
+`Collaborators` section of the team settings page. Here you can invite new team
+members as well as remove or change the [roles](#roles) of existing team
+members.
+
+The number of collaborators in your team depends on your team plan. By default,
+all teams are on the Free plan, and can have 2 collaborators. To add more
+collaborators, [upgrade to the Enterprise plan](#get-enterprise).
+
+All collaborators and pending invites get counted in the subscription. Suppose
+you have subscribed for a 10 member team. If you have 5 members who have
+accepted your team invite and 3 pending invites, then you will have 2 remaining
+seats. This means that you can invite 2 more collaborators. At this point, if
+you remove any one team member or pending invite, that seat becomes available
+and so you will have 3 remaining seats.
+
+## Get Enterprise
+
+**To upgrade to the Enterprise plan**, [schedule a call] with our in-house
+experts. They will try to understand your needs and suggest a suitable plan and
+pricing.
+
+[schedule a call]: https://calendly.com/gtm-2/studio-introduction

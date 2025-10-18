@@ -3,7 +3,6 @@
 DataChain Studio is a web application that enables Machine Learning and Data teams to seamlessly
 
 - [Run and track jobs](user-guide/jobs/index.md)
-- [Manage datasets](user-guide/datasets/index.md)
 - [Track experiments and manage models](user-guide/experiments/index.md) (via DVC integration)
 - [Collaborate on data projects](user-guide/team-collaboration.md)
 
@@ -59,13 +58,5 @@ New to DataChain Studio? Start with these guides:
 - Webhook notifications for automation
 - Command-line tools for developers
 
-## Architecture
-
-DataChain Studio is designed to work with your existing data infrastructure:
-
-- **Repository Integration**: Native support for GitHub, GitLab, and Bitbucket
-- **Cloud Storage**: Works with S3, GCS, Azure Blob, and other cloud storage
-- **Flexible Deployment**: Available as SaaS or self-hosted
-- **API-First**: Everything accessible via REST API and CLI
 
 Visit [studio.datachain.ai](https://studio.datachain.ai) to get started, or learn about [self-hosting](self-hosting/index.md) for enterprise deployments.

@@ -1,122 +1,64 @@
 # Jobs
 
-DataChain Studio provides a comprehensive job management system for running data processing workflows in the cloud. Jobs allow you to execute DataChain scripts, monitor their progress, and manage computational resources efficiently.
+DataChain Studio allows you to run DataChain scripts directly in the cloud, processing data from connected storage. Write your code in the Studio editor and execute it with configurable compute resources.
 
 ## Key Features
 
-- **[Create and Run](create-and-run.md)** - Submit and execute DataChain jobs
-- **[Monitor Jobs](monitor-jobs.md)** - Track job progress, logs, and resource usage
+- **[Create and Run](create-and-run.md)** - Write and execute DataChain scripts in Studio
+- **[Monitor Jobs](monitor-jobs.md)** - Track job progress, view logs, and analyze results
 
-## Job Types
+## How Jobs Work
 
-DataChain Studio supports various types of data processing jobs:
+Jobs in DataChain Studio let you execute data processing workflows:
 
-### DataChain Processing Jobs
-- **Data Transformation**: Transform and clean data using DataChain operations
-- **ML Feature Engineering**: Extract features from unstructured data
-- **Data Quality Checks**: Validate data integrity and quality
-- **Batch Processing**: Process large datasets efficiently
+### Direct Script Execution
+- Write DataChain code directly in the Studio editor
+- Execute scripts against connected storage (S3, GCS, Azure)
+- Results saved automatically
 
-### Scheduled Jobs
-- **Recurring Tasks**: Schedule regular data processing workflows
-- **Event-Driven Jobs**: Trigger jobs based on data availability or webhooks
-- **Pipeline Jobs**: Chain multiple processing steps together
+### Configurable Compute
+- Select Python version for your environment
+- Configure number of workers for parallel processing
+- Set job priority for queue management
+- Specify custom requirements and environment variables
 
 ## Job Lifecycle
 
-Understanding the job lifecycle helps you manage your data processing workflows effectively:
+### 1. Write Script
+Write your DataChain code in the Studio editor using connected storage sources.
 
-### 1. Job Creation
-- Define job parameters and configuration
-- Specify input data sources and output destinations
-- Set resource requirements (CPU, memory, storage)
+### 2. Configure Settings
+Set Python version, workers, priority, and any required dependencies or environment variables.
 
-### 2. Job Submission
-- Queue jobs for execution
-- Validate configuration and dependencies
-- Allocate computational resources
+### 3. Execute
+Submit the job to run on Studio's compute infrastructure with your specified configuration.
 
-### 3. Job Execution
-- Run DataChain processing code
-- Stream logs and progress updates
-- Handle errors and retries automatically
+### 4. Monitor
+View real-time logs, progress, and results as your job executes.
 
-### 4. Job Completion
-- Save results to specified destinations
-- Generate job reports and metrics
-- Clean up temporary resources
+### 5. Review Results
+Access processed data through the Studio interface, with datasets saved automatically.
 
 ## Job States
 
-Jobs in DataChain Studio can be in the following states:
-
-- **CREATED**: Job has been created but not yet scheduled
-- **SCHEDULED**: Job has been scheduled to run
 - **QUEUED**: Job is waiting in the execution queue
-- **INIT**: Job is initializing (starting up)
-- **RUNNING**: Job is actively executing
-- **COMPLETE**: Job completed successfully
-- **FAILED**: Job failed with error
-- **CANCELED**: Job was canceled by user
-- **CANCELING**: Job is being canceled
-
-## Resource Management
-
-DataChain Studio provides flexible resource management:
-
-### Compute Resources
-- **CPU**: Configure CPU requirements for your jobs
-- **Memory**: Specify memory allocation based on data size
-- **GPU**: Access GPU resources for ML workloads
-- **Storage**: Temporary and persistent storage options
-
-### Clusters
-- **Shared Clusters**: Use shared computational resources
-- **Dedicated Clusters**: Deploy dedicated clusters for your team
-- **Auto-scaling**: Automatically scale resources based on demand
-
-## Monitoring and Observability
-
-Keep track of your jobs with comprehensive monitoring:
-
-### Real-time Monitoring
-- **Live Logs**: Stream job logs in real-time
-- **Progress Tracking**: Monitor job progress and ETA
-- **Resource Usage**: Track CPU, memory, and storage utilization
-
-### Historical Analysis
-- **Job History**: Review past job executions
-- **Performance Metrics**: Analyze job performance trends
-- **Cost Analysis**: Track computational costs and optimize usage
-
-## Best Practices
-
-### Job Design
-- **Modular Code**: Break complex workflows into smaller, manageable jobs
-- **Error Handling**: Implement robust error handling and recovery
-- **Resource Optimization**: Right-size resources to balance cost and performance
-- **Testing**: Test jobs with sample data before full-scale execution
-
-### Monitoring
-- **Set Up Alerts**: Configure notifications for job failures or completion
-- **Log Management**: Use structured logging for better debugging
-- **Performance Monitoring**: Track job performance and optimize bottlenecks
-
-### Collaboration
-- **Shared Resources**: Use team resources efficiently
-- **Documentation**: Document job configurations and dependencies
-- **Version Control**: Keep job configurations in version control
+- **INIT**: Job environment is being initialized
+- **RUNNING**: Job is actively processing data
+- **COMPLETE**: Job finished successfully
+- **FAILED**: Job encountered an error
+- **CANCELED**: Job was stopped by user
 
 ## Getting Started
 
-1. **Set up your environment**: Ensure your DataChain code is ready
-2. **Create your first job**: Follow the [create and run guide](create-and-run.md)
-3. **Monitor execution**: Use the [monitoring features](monitor-jobs.md)
-4. **Optimize performance**: Review job metrics and optimize resource usage
+1. Connect your storage sources (S3, GCS, Azure)
+2. Write DataChain code in the Studio editor
+3. Configure job settings (Python version, workers, priority)
+4. Run your job and monitor execution
+5. View results in the data table
 
 ## Next Steps
 
 - Learn how to [create and run jobs](create-and-run.md)
 - Explore [job monitoring capabilities](monitor-jobs.md)
 - Set up [webhooks](../../webhooks.md) for job notifications
-- Configure [team collaboration](../team-collaboration.md) for shared job management
+- Configure [team collaboration](../team-collaboration.md) for shared access

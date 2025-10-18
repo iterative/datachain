@@ -122,18 +122,26 @@ nav:
           - User Guide:
               - Overview: studio/user-guide/index.md
               - Account Management: studio/user-guide/account-management.md
-              - Datasets:
-                  - Overview: studio/user-guide/datasets/index.md
-                  - Create Dataset: studio/user-guide/datasets/create-dataset.md
-                  - Explore Datasets: studio/user-guide/datasets/explore-datasets.md
-                  - Share Dataset: studio/user-guide/datasets/share-dataset.md
-                  - Visualize and Compare: studio/user-guide/datasets/visualize-and-compare.md
               - Jobs:
                   - Overview: studio/user-guide/jobs/index.md
                   - Create and Run: studio/user-guide/jobs/create-and-run.md
                   - Monitor Jobs: studio/user-guide/jobs/monitor-jobs.md
               - Experiments (DVC):
                   - Overview: studio/user-guide/experiments/index.md
+                  - Create a Project: studio/user-guide/experiments/create-a-project.md
+                  - Configure a Project: studio/user-guide/experiments/configure-a-project.md
+                  - Run Experiments: studio/user-guide/experiments/run-experiments.md
+                  - Explore ML Experiments: studio/user-guide/experiments/explore-ml-experiments.md
+                  - Live Metrics and Plots: studio/user-guide/experiments/live-metrics-and-plots.md
+                  - Visualize and Compare: studio/user-guide/experiments/visualize-and-compare.md
+                  - Share a Project: studio/user-guide/experiments/share-a-project.md
+              - Model Registry:
+                  - View and Compare Models: studio/user-guide/model-registry/view-and-compare-models.md
+                  - Add a Model: studio/user-guide/model-registry/add-a-model.md
+                  - Register a Model Version: studio/user-guide/model-registry/register-version.md
+                  - Assign Stage to Model Version: studio/user-guide/model-registry/assign-stage.md
+                  - Use Models: studio/user-guide/model-registry/use-models.md
+                  - Remove a Model, Version, or Stage: studio/user-guide/model-registry/remove-a-model-or-its-details.md
               - Git Connections:
                   - Overview: studio/user-guide/git-connections/index.md
                   - GitHub App: studio/user-guide/git-connections/github-app.md

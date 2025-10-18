@@ -1,364 +1,476 @@
 # Troubleshooting
 
-This guide helps you resolve common issues when using DataChain Studio.
+Here we provide help for some of the problems that you may encounter when using
+DataChain Studio.
 
-## Getting Support {#support}
+## Support
 
-If you can't find a solution to your problem in this guide:
+If you need further help, you can send us a message using `Help` on the DVC
+Studio website. You can also [email us](mailto:support@iterative.ai), create a
+support ticket on [GitHub](https://github.com/iterative/studio-support) or join
+the discussion in [Discord](https://discord.com/invite/dvwXA2N).
 
-### Community Support
-- **GitHub Issues**: Report bugs and feature requests on our [GitHub repository](https://github.com/iterative/datachain)
-- **Discord**: Join our [Discord community](https://discord.gg/datachain) for real-time help
-- **Stack Overflow**: Ask questions with the `datachain` tag
+## Projects and experiments
 
-### Enterprise Support
-- **Support Portal**: Access dedicated support through the enterprise portal
-- **Email Support**: Contact enterprise support at support@datachain.ai
-- **Phone Support**: Available for enterprise customers during business hours
+- [Errors accessing your Git repository](#errors-accessing-your-git-repository)
+- [Errors related to parsing the repository](#errors-related-to-parsing-the-repository)
+- [Errors related to DVC remotes and credentials](#errors-related-to-dvc-remotes-and-credentials)
+- [Error: No DVC repo was found at the root](#error-no-dvc-repo-was-found-at-the-root)
+- [Error: Non-DVC sub-directory of a monorepo](#error-non-dvc-sub-directory-of-a-monorepo)
+- [Error: No commits were found for the sub-directory](#error-no-commits-were-found-for-the-sub-directory)
+- [Project got created, but does not contain any data](#project-got-created-but-does-not-contain-any-data)
+- [Project does not contain the columns that I want](#project-does-not-contain-the-columns-that-i-want)
+- [Project does not contain some of my commits or branches](#project-does-not-contain-some-of-my-commits-or-branches)
+- [Error: Missing metric or plot file(s)](#error-missing-metric-or-plot-files)
+- [Project does not display live metrics and plots](#project-does-not-display-live-metrics-and-plots)
+- [Project does not display DVC experiments](#project-does-not-display-dvc-experiments)
+- [Error: `dvc.lock` validation failed](#error-dvclock-validation-failed)
+- [Project does not reflect updates in the Git repository ](#project-does-not-reflect-updates-in-the-git-repository)
 
-## Common Issues
+## Jobs
 
-### Authentication Problems
+- [Job stuck in QUEUED state](#job-stuck-in-queued-state)
+- [Job fails during INIT](#job-fails-during-init)
+- [Job fails during execution](#job-fails-during-execution)
+- [Storage access errors](#storage-access-errors)
+- [Job performance issues](#job-performance-issues)
 
-#### Cannot log in to Studio
-**Symptoms**: Login page shows errors or redirects fail
+## Model registry
 
-**Solutions**:
-1. Clear browser cache and cookies
-2. Try incognito/private browsing mode
-3. Check if your organization's firewall blocks studio.datachain.ai
-4. Verify your Git provider (GitHub/GitLab/Bitbucket) account is accessible
+- [I cannot find my desired Git repository in the form to add a model](#i-cannot-find-my-desired-git-repository-in-the-form-to-add-a-model)
+- [Model registry does not display the models in my Git repositories](#model-registry-does-not-display-the-models-in-my-git-repositories)
+- [My models have disappeared even though I did not remove (deprecate) them](#my-models-have-disappeared-even-though-i-did-not-remove-deprecate-them)
 
-#### Token authentication fails
-**Symptoms**: API calls return 401 Unauthorized
+## Billing and payment
 
-**Solutions**:
-1. Verify token is correctly copied (no extra spaces)
-2. Check token hasn't expired
-3. Ensure token has correct scopes for the operation
-4. Regenerate token if needed
+- [Questions or problems with billing and payment](#questions-or-problems-with-billing-and-payment)
 
-```bash
-# Test token validity
-curl -H "Authorization: token $DATACHAIN_STUDIO_TOKEN" \
-  https://studio.datachain.ai/api/user
+## Errors accessing your Git repository
+
+When DataChain Studio cannot access your Git repository, it can present one of the
+following errors:
+
+- Repository not found or you don't have access to it
+- Unable to access repository due to stale authorization
+- Unable to access repository
+- Could not access the git repository, because the connection was deleted or the
+  token was expired
+- No tokens to access the repo
+- Insufficient permission to push to this repository
+- No access to this repo
+
+To fix this, make sure that the repository exists and you have access to it.
+Re-login to the correct Git account and try to import the repository again. If
+you are connecting to a GitHub account, also make sure that the DataChain Studio
+GitHub app is installed.
+
+Additionally, network or third party issues (such as GitHub, GitLab or Bitbucket
+outages) can also cause connection issues. In this case, DataChain Studio can display
+an appropriate indication in the error message.
+
+## Errors related to parsing the repository
+
+If you see one of the following errors, it means that for some reason, parsing
+of the Git repository could not start or it stopped unexpectedly. You can try to
+import the repo again.
+
+- Failed to start parsing
+- Parsing stopped unexpectedly
+
+## Errors related to DVC remotes and credentials
+
+DataChain Studio can include data from
+[data remotes](experiments/configure-a-project.md#data-remotes-cloud-storage-credentials)
+in your project. However, it can access data from network-accessible remotes
+such as Amazon S3, Microsoft Azure, etc but not from local DVC
+remotes. If your project uses an unsupported remote, you
+will see one of the following errors:
+
+- Local remote was ignored
+- Remote not supported
+
+Please use one of the following types of data remotes: Amazon S3, Microsoft
+Azure, Google Drive, Google Cloud Storage and SSH.
+
+If the data remotes have access control, then you should [add the required
+credentials to your project](experiments/configure-a-project.md#data-remotes-cloud-storage-credentials). If credentials are missing or
+incorrect, you will see one of the following errors:
+
+- No credentials were provided
+- Credentials are either broken or not recognized
+- No permission to fetch remote data
+
+### Errors related to DVC remotes behind firewall
+
+For self-hosted S3 storage(like Minio) or SSH server, ensure that it is
+available to access from the internet. If your server is behind the firewall,
+you can limit the traffic on the firewall to the server to allow access from our
+IP addresses only, which are:
+
+```
+3.21.85.173/32
+3.142.203.124/32
 ```
 
-### Git Integration Issues
+Additionally, if you provide the hostname, the DNS records associated with the
+storage server should be publicly available to resolve the server name. Use
+[DNS Propagation Checker](https://www.whatsmydns.net/) to confirm if the server
+domain is resolvable. If you still have any trouble setting up the connection to
+your server, please
+[contact us](#support).
 
-#### Repository not visible in Studio
-**Symptoms**: Cannot find your repository when creating datasets
+## Error: No DVC repo was found at the root
 
-**Solutions**:
-1. **GitHub**: Install DataChain Studio GitHub App
-   - Go to Account Settings → Git Connections
-   - Install app on organization/repository
-   - Grant necessary permissions
+If you get this message when you try to add a project:
+`No DVC repo was found at the root`, then it means that you have connected to a
+Git repository which contains a DVC repository in some sub-directory but not at
+the root.
 
-2. **GitLab**: Check OAuth application access
-   - Verify GitLab OAuth app is authorized
-   - Check organization membership and permissions
+This could be a typical situation when your DVC repository is part of a
+[monorepo](https://en.wikipedia.org/wiki/Monorepo).
 
-3. **Bitbucket**: Verify Bitbucket Cloud access
-   - Check Bitbucket OAuth application access
-   - Verify repository permissions
+To solve this, you should [specify the full path to the
+sub-directory](experiments/configure-a-project.md#project-directory) that contains the DVC repo.
 
-#### Repository access denied
-**Symptoms**: Error messages about repository access when creating datasets
+Note that if you're connecting to a repository just to fetch models for the
+model registry, and you are not working with DVC repositories, you can ignore
+this error.
 
-**Solutions**:
-1. Verify you have read access to the repository
-2. For private repositories, ensure proper permissions
-3. Check if repository was moved or deleted
-4. Re-authorize Git connection if needed
+## Error: Non-DVC sub-directory of a monorepo
 
-### Job Execution Issues
+If you get this message when you try to add a project:
+`Non-DVC sub-directory of a monorepo`, then it means that you have connected to
+a Git repository which contains a DVC repository in some sub-directory, but you
+have selected the incorrect sub-directory.
 
-#### Jobs stuck in QUEUED state
-**Symptoms**: Jobs remain queued and never start running
+This could be a typical situation when your DVC repository is part of a
+[monorepo](https://en.wikipedia.org/wiki/Monorepo). Suppose your Git repository
+contains sub-directories A and B. If A contains the DVC repository which you
+want to connect from DataChain Studio, but you specify B when creating the project,
+then you will get the above error.
 
-**Solutions**:
-1. **Check resource availability**:
-   ```bash
-   # Check team resource usage
-   datachain team status
-   ```
+To solve this, you should [specify the full path to the correct
+sub-directory](experiments/configure-a-project.md#project-directory) that contains the DVC repo.
 
-2. **Verify quotas**: Ensure you haven't exceeded team limits
-3. **Check cluster status**: Verify compute clusters are healthy
-4. **Resource requirements**: Reduce CPU/memory requirements if too high
+## Error: No commits were found for the sub-directory
 
-#### Jobs fail during initialization
-**Symptoms**: Jobs fail in INIT state with error messages
+If you get this message when you try to add a project, then it means that you
+have specified an empty or non-existent sub-directory.
 
-**Solutions**:
-1. **Check script path**: Verify the script exists in the repository
-2. **Python environment**: Ensure all dependencies are in requirements.txt
-3. **Git branch**: Verify the specified branch exists
-4. **File permissions**: Check script has execute permissions
+To solve this, you need to change the sub-directory and [specify the full path
+to the correct sub-directory](experiments/configure-a-project.md#project-directory) that contains the DVC repo.
 
-```python
-# Example requirements.txt
-datachain>=0.1.0
-pandas>=1.3.0
-numpy>=1.21.0
+## Project got created, but does not contain any data
+
+If you initialized a DVC repository, but did not push any commit with data,
+metrics or hyperparameters, then even though you will be able to connect to this
+repository, the project will appear empty in DataChain Studio. To solve this, make
+relevant commits to your DVC repository.
+
+Refer to the [DVC documentation](https://dvc.org/doc) for help on making commits
+to a DVC repository.
+
+Note that if you're connecting to a repository just to fetch models for the
+model registry, and your repository is not expected to contain experiment data,
+metrics or hyperparameters, your project will appear empty. This is ok - you
+will still be able to work with your models in the model registry.
+
+## Project does not contain the columns that I want
+
+There are two possible reasons for this:
+
+1. **The required columns were not imported:** DataChain Studio will only import
+   columns that you select in the
+   [**Columns** setting](experiments/configure-a-project.md#columns).
+
+   **What if the repository has more than 500 columns?** Currently DataChain Studio
+   does not import over 500 columns. If you have a large repository (with more
+   than 500 columns), one solution is to split the
+   metrics/<wbr>hyperparameters/<wbr>files that you want to display over
+   multiple subdirectories in your Git repository. For each subdirectory, you
+   can create a new project in DataChain Studio and limit it to that subdirectory.
+
+   To create projects for subdirectories, [specify the project directory in
+   project settings](experiments/configure-a-project.md#project-directory).
+
+   If this solution does not work for your use case, please create a support
+   ticket in the [DataChain Studio support GitHub repository](https://github.com/iterative/studio-support).
+
+2. **The required columns are hidden:** In the project's experiment table, you
+   can hide the columns that you do not want to display. If any column that you
+   want is not visible, make sure you have not hidden it. The following video
+   shows how you can show/hide columns. Once you show/hide columns, remember to
+   save the changes.
+
+   #### Show/hide columns
+
+   ![Showing and hiding columns](https://static.iterative.ai/img/studio/show_hide_columns.gif)
+
+## Project does not contain some of my commits or branches
+
+This is likely not an error. DataChain Studio identifies commits that do not change
+metrics, files or hyperparameters and will auto-hide such commits. It also
+auto-hides commits that contain the string `[skip studio]` in the commit
+message. You can also manually hide commits and branches, which means it is
+possible that the commits or branches you do not see in your project were
+manually hidden by you or someone else in your team.
+
+You can unhide commits and branches to display them. For details, refer to
+[Display preferences -> Hide commits](experiments/explore-ml-experiments.md#hide-commits). However, if the missing commit/branch is
+not in the hidden commits list, please [raise a support request](#support).
+
+## Error: Missing metric or plot file(s)
+
+This error message means that the metric or plot files referenced from
+`dvc.yaml` could not be found in your Git repository or cache. Make sure that
+you have pushed the required files using `dvc push`. Then try to import the
+repository again.
+
+## Error: Skipped big remote file(s)
+
+Files that are larger than 10 MB are currently skipped by DataChain Studio.
+
+## Project does not display live metrics and plots
+
+Confirm that you are correctly following the
+[procedure to send live metrics and plots](experiments/live-metrics-and-plots.md)
+to DataChain Studio.
+
+Note that a live experiment is nested under the parent Git commit in the project
+table. If the parent Git commit is not pushed to the Git repository, the live
+experiment row will appear within a `Detached experiments` dummy branch in the
+project table. Once you push the missing parent commit to the Git remote, the
+live experiment will get nested under the parent commit as expected.
+
+## Project does not display DVC experiments
+
+DataChain Studio automatically checks for updates to your repository using webhooks,
+but it can not rely on this mechanism for custom Git objects, like <abbr>DVC
+experiment</abbr> references. So the experiments you push using `dvc exp push`
+may not automatically display in your project table.
+
+To manually check for updates in your repository, use the `Reload` button 🔄
+located above the project table.
+
+## Error: `dvc.lock` validation failed
+
+This error indicates that the `dvc.lock` file in the given commit has an invalid
+YAML. If the given commit is unimportant to you, you can ignore this error.
+
+One potential cause for this error is that at the time of the given commit, your
+repository used DVC 1.0. The format of lock files used in DVC 1.0 was deprecated
+in the DVC 2.0 release. Upgrading to the latest DVC version will resolve this
+issue for any future commits in your repository.
+
+## Project does not reflect updates in the Git repository
+
+When there are updates (new commits, branches, etc.) in your Git repository,
+your project in DataChain Studio gets reflected to include those updates. If the
+project has stopped receiving updates from the Git repository and you have to
+`re-import` the project each time to get any new commit, then it is possible
+that the DataChain Studio webhook in your repository got deleted or messed up.
+
+DataChain Studio periodically checks for any missing or messed up webhooks, and
+attempts to re-create them. Currently, this happens every 2 hours. The webhook
+also gets re-created every time you create a new project or re-import a
+repository.
+
+## Job stuck in QUEUED state
+
+If your job remains in the QUEUED state for an extended period:
+
+### Possible Causes
+- **No available workers**: All workers in the cluster are busy processing other jobs
+- **Resource quotas exceeded**: Your team has reached the maximum number of concurrent jobs
+- **High priority jobs ahead**: Other jobs with higher priority are being processed first
+
+### Solutions
+1. Check the worker availability in the status bar at the top of Studio
+2. Review your team's resource quotas and usage
+3. Consider adjusting job priority settings if appropriate
+4. Wait for currently running jobs to complete
+5. Contact support if jobs remain queued for unusually long periods
+
+## Job fails during INIT
+
+If your job fails during the initialization phase:
+
+### Common Causes
+- **Invalid package requirements**: Errors in requirements.txt file
+- **Incompatible package versions**: Package version conflicts
+- **Missing dependencies**: Required packages not specified
+
+### Solutions
+1. Check the Logs tab for specific error messages about package installation
+2. Review your requirements.txt file:
+   - Verify package names are spelled correctly
+   - Check for version compatibility between packages
+   - Pin package versions to avoid conflicts (e.g., `pandas==2.0.0`)
+3. Test package installation locally before submitting the job
+4. Minimize the number of dependencies to reduce initialization time
+5. Check the Dependencies tab in job monitoring to see what was installed
+
+### Example of Common Issues
+
+**Bad requirements.txt:**
+```
+pandas
+numpy===1.24.0  # Three equals signs - syntax error
+pillow>=9.0.0,<10.0.0
+invalipakage  # Typo in package name
 ```
 
-#### Jobs fail during execution
-**Symptoms**: Jobs start running but fail with errors
-
-**Solutions**:
-1. **Check logs**: Review job logs for error messages
-2. **Test locally**: Run script locally with sample data
-3. **Resource limits**: Increase memory/CPU if out-of-memory errors
-4. **Data access**: Verify input data paths and credentials
-
-```bash
-# Download job logs for analysis
-datachain job logs <job-id> > job_logs.txt
+**Good requirements.txt:**
 ```
+pandas==2.0.0
+numpy==1.24.0
+pillow>=9.0.0,<10.0.0
+Pillow>=9.0.0
+```
+
+## Job fails during execution
+
+If your job starts running but fails during data processing:
+
+### Script Errors
+- **Syntax errors**: Check your Python code for syntax issues
+- **Logic errors**: Review your DataChain operations for logical mistakes
+- **Unhandled exceptions**: Add proper error handling to your script
 
 ### Data Access Issues
+- **Invalid storage paths**: Verify that storage paths are correct and accessible
+- **Missing credentials**: Ensure storage credentials are configured in account settings
+- **Permission denied**: Check that your credentials have the necessary permissions
+- **Storage path not found**: Verify the bucket/container and path exist
 
-#### Cannot access cloud storage
-**Symptoms**: Jobs fail with S3/GCS/Azure access errors
+### Resource Limits
+- **Out of memory**: Job exceeded allocated memory
+  - Solution: Reduce batch size, increase workers, or process data in chunks
+- **Timeout**: Job took longer than maximum allowed time
+  - Solution: Optimize code or split into smaller jobs
+- **Storage full**: Temporary storage filled up
+  - Solution: Clean up intermediate files or reduce data volume
 
-**Solutions**:
-1. **Verify credentials**: Check cloud credentials in account settings
-2. **Test permissions**: Ensure credentials have required permissions
-3. **Network access**: Verify firewall allows cloud storage access
-4. **Bucket names**: Check bucket names and paths are correct
+### Debugging Steps
+1. **Check the Logs tab**: Look for error messages and stack traces
+2. **Review the Diagnostics tab**: Check which phase failed and execution timeline
+3. **Check the Dependencies tab**: Verify data sources are connected correctly
+4. **Test with a subset**: Try running with a smaller sample of data
+5. **Run locally**: Test your script locally with sample data before submitting
 
-```bash
-# Test S3 access
-aws s3 ls s3://your-bucket-name/
+## Storage access errors
 
-# Test GCS access
-gsutil ls gs://your-bucket-name/
-```
+If you encounter errors accessing cloud storage:
 
-#### Data not found errors
-**Symptoms**: Scripts fail with "file not found" or "path does not exist"
+### Credential Issues
+- **No credentials configured**: Add storage credentials in account settings
+- **Expired credentials**: Refresh or update your credentials
+- **Wrong credentials**: Verify you're using the correct credentials for the storage
 
-**Solutions**:
-1. **Check paths**: Verify data paths are correct and accessible
-2. **Case sensitivity**: Ensure path case matches exactly
-3. **Permissions**: Verify read permissions on data files
-4. **Data availability**: Confirm data exists at expected location
+### Permission Issues
+- **Insufficient permissions**: Your credentials don't have read access to the storage
+- **Bucket not found**: Storage bucket/container name is incorrect
+- **Path not accessible**: The specific path within storage doesn't exist
 
-### Performance Issues
+### Network Issues
+- **Connection timeout**: Network connectivity problems between Studio and storage
+- **Firewall blocking**: Storage is behind a firewall that blocks Studio's IP addresses
 
-#### Slow job execution
-**Symptoms**: Jobs take much longer than expected
+### Solutions
+1. Verify credentials are configured correctly in [account settings](account-management.md)
+2. Check storage bucket permissions and access policies
+3. Test storage connection separately before running the job
+4. Ensure storage path exists and is accessible
+5. For self-hosted storage, verify firewall allows access from Studio's IP addresses:
+   ```
+   3.21.85.173/32
+   3.142.203.124/32
+   ```
 
-**Solutions**:
-1. **Optimize code**: Profile code to identify bottlenecks
-2. **Increase resources**: Allocate more CPU/memory
-3. **Parallel processing**: Use multiple workers for large datasets
-4. **Data locality**: Ensure data and compute are in same region
+## Job performance issues
 
-```python
-# Example parallel processing
-from datachain import DataChain
-from concurrent.futures import ThreadPoolExecutor
+If your jobs are running slower than expected:
 
-def process_batch(batch):
-    return batch.map(expensive_operation)
+### Analyzing Performance
 
-# Process in parallel
-with ThreadPoolExecutor(max_workers=4) as executor:
-    results = list(executor.map(process_batch, data_batches))
-```
+Check the [Diagnostics tab](jobs/monitor-jobs.md#diagnostics-tab) to identify bottlenecks:
 
-#### High memory usage
-**Symptoms**: Jobs fail with out-of-memory errors
+#### Long Queue Times (> 2 minutes)
+- **Cause**: High cluster demand or insufficient available workers
+- **Solution**:
+  - Run jobs during off-peak hours
+  - Consider upgrading to a plan with more workers
+  - Adjust job priority for urgent tasks
 
-**Solutions**:
-1. **Batch processing**: Process data in smaller chunks
-2. **Memory profiling**: Use memory profilers to identify leaks
-3. **Increase allocation**: Request more memory for jobs
-4. **Optimize algorithms**: Use memory-efficient algorithms
+#### Long Worker Start (> 5 minutes)
+- **Cause**: Cold start of compute resources
+- **Solution**:
+  - This is typically infrastructure-related
+  - Contact support if consistently slow
 
-```python
-# Example batch processing
-for batch in DataChain.from_storage("s3://data/").batch(1000):
-    processed = batch.map(transform_data)
-    processed.save_to("s3://results/", append=True)
-```
+#### Slow Dependency Installation (> 3 minutes)
+- **Causes**:
+  - Many packages to install
+  - Large package downloads
+  - Package version resolution conflicts
+- **Solutions**:
+  - Pin package versions in requirements.txt to avoid resolution
+  - Minimize number of dependencies
+  - Use cached virtualenv when possible (shown in Logs)
 
-### Network and Connectivity
+#### Extended Data Warehouse Wake (> 2 minutes)
+- **Cause**: Infrastructure initialization
+- **Solutions**:
+  - Keep warehouse warm by running jobs regularly
+  - Contact support for dedicated warehouse options
 
-#### Timeouts and connection errors
-**Symptoms**: Network timeouts, connection refused errors
+#### Long Running Query Time
+- **Causes**:
+  - Processing large volumes of data
+  - Inefficient DataChain operations
+  - Insufficient workers for dataset size
+- **Solutions**:
+  - Filter data early to reduce processing volume
+  - Use efficient DataChain operations (avoid unnecessary transformations)
+  - Increase worker count for large datasets
+  - Batch operations appropriately
+  - Profile your code to identify slow operations
 
-**Solutions**:
-1. **Check network**: Verify internet connectivity
-2. **Firewall rules**: Ensure firewalls allow Studio traffic
-3. **DNS resolution**: Verify studio.datachain.ai resolves correctly
-4. **Retry logic**: Implement retry logic for transient failures
+### General Performance Tips
 
-#### SSL/TLS certificate errors
-**Symptoms**: Certificate verification failures
+1. **Start small**: Test with a small data sample first
+2. **Monitor metrics**: Track job execution times across runs
+3. **Use appropriate workers**: Balance between cost and performance
+4. **Optimize code**: Profile and optimize DataChain operations
+5. **Review logs**: Check for warnings about performance issues
+6. **Compare runs**: Use the Diagnostics tab to compare execution times
 
-**Solutions**:
-1. **Update certificates**: Ensure system certificates are up to date
-2. **Corporate proxy**: Configure proxy settings if behind corporate firewall
-3. **Custom CA**: Add custom CA certificates if needed
-4. **Disable verification**: Only for testing - not recommended for production
+For detailed monitoring guidance, see [Monitor Jobs](jobs/monitor-jobs.md).
 
-### Team and Permissions
+## I cannot find my desired Git repository in the form to add a model
 
-#### Cannot access team resources
-**Symptoms**: Permission denied errors for team operations
+Only repositories that you have connected to DataChain Studio are available in the
+`Add a model` form. To connect your desired repository to DataChain Studio, go to the
+`Projects` tab and [create a project that connects to this Git
+repository](experiments/create-a-project.md). Then you can come back to the model registry and
+add the model.
 
-**Solutions**:
-1. **Check role**: Verify you have appropriate role in team
-2. **Team membership**: Confirm you're a member of the team
-3. **Resource permissions**: Check resource-specific permissions
-4. **Contact admin**: Ask team admin to verify your permissions
+## Model registry does not display the models in my Git repositories
 
-#### Team invitation issues
-**Symptoms**: Cannot join team or invitation errors
+For a model to be displayed in the model registry, it has to be [added](model-registry/add-a-model.md) using
+DVC.
 
-**Solutions**:
-1. **Check email**: Verify invitation was sent to correct email
-2. **Spam folder**: Check spam/junk folder for invitation
-3. **Account matching**: Ensure Studio account uses invited email
-4. **Resend invitation**: Ask team admin to resend invitation
+## My models have disappeared even though I did not remove (deprecate) them
 
-## Self-hosting Issues
+When a project is deleted, all its models get automatically removed from the
+model registry. So check if the project has been removed. If yes, you can [add
+the project](experiments/create-a-project.md) again. Deleting a project from DataChain Studio does
+not delete any commits or tags from the Git repository. So, adding the project
+back will restore all the models from the repository along with their details,
+including versions and stage assignments.
 
-### Installation Problems
+## Questions or problems with billing and payment
 
-#### Docker/Kubernetes deployment fails
-**Symptoms**: Deployment fails with various errors
-
-**Solutions**:
-1. **Check requirements**: Verify system meets minimum requirements
-2. **Resource allocation**: Ensure sufficient CPU/memory allocated
-3. **Network configuration**: Verify network settings and connectivity
-4. **Persistent storage**: Check storage configuration and availability
-
-#### Database connection issues
-**Symptoms**: Cannot connect to PostgreSQL database
-
-**Solutions**:
-1. **Connection string**: Verify database URL format and credentials
-2. **Network access**: Ensure database is accessible from Studio pods
-3. **Database exists**: Confirm database exists and is properly initialized
-4. **Permissions**: Verify database user has necessary permissions
-
-### Configuration Issues
-
-#### SSL/TLS certificate problems
-**Symptoms**: HTTPS doesn't work or certificate warnings
-
-**Solutions**:
-1. **Certificate validity**: Check certificate is valid and not expired
-2. **Certificate chain**: Ensure complete certificate chain is provided
-3. **Domain matching**: Verify certificate matches Studio domain
-4. **Private key**: Confirm private key matches certificate
-
-#### Authentication integration fails
-**Symptoms**: SSO or OIDC authentication doesn't work
-
-**Solutions**:
-1. **Configuration**: Verify identity provider configuration
-2. **Redirect URLs**: Check callback/redirect URLs are correct
-3. **Scopes**: Ensure proper OAuth scopes are configured
-4. **Network access**: Verify Studio can reach identity provider
-
-## Debugging Tips
-
-### Enable Debug Logging
-
-For local development:
-```bash
-export DATACHAIN_LOG_LEVEL=DEBUG
-datachain run your_script.py
-```
-
-For Studio jobs, add to environment variables:
-```yaml
-environment:
-  DATACHAIN_LOG_LEVEL: DEBUG
-```
-
-### Collect Diagnostic Information
-
-When reporting issues, include:
-
-1. **Job/Error details**:
-   - Job ID (if applicable)
-   - Error messages and stack traces
-   - Timestamps when issue occurred
-
-2. **Environment information**:
-   - DataChain version
-   - Python version
-   - Operating system
-   - Browser version (for UI issues)
-
-3. **Configuration**:
-   - Relevant configuration settings
-   - Environment variables (sanitized)
-   - Network configuration
-
-### Testing Connectivity
-
-Test network connectivity:
-```bash
-# Test Studio API connectivity
-curl -I https://studio.datachain.ai/api/health
-
-# Test specific endpoints
-curl -H "Authorization: token $TOKEN" \
-  https://studio.datachain.ai/api/user
-
-# Test cloud storage access
-aws s3 ls s3://your-bucket/ --region your-region
-```
-
-## Reporting Bugs
-
-When reporting bugs, please include:
-
-1. **Clear description**: What you expected vs. what happened
-2. **Steps to reproduce**: Detailed steps to reproduce the issue
-3. **Environment details**: Versions, OS, browser, etc.
-4. **Error messages**: Complete error messages and stack traces
-5. **Screenshots**: Screenshots for UI issues
-6. **Logs**: Relevant log excerpts (sanitized)
-
-### Bug Report Template
-
-```markdown
-**Description:**
-Brief description of the issue
-
-**Expected Behavior:**
-What should have happened
-
-**Actual Behavior:**
-What actually happened
-
-**Steps to Reproduce:**
-1. Step one
-2. Step two
-3. Step three
-
-**Environment:**
-- DataChain Studio version:
-- Browser/CLI version:
-- Operating System:
-- Python version:
-
-**Additional Context:**
-Any other relevant information
-```
-
-## Next Steps
-
-- Check our [API documentation](../api/index.md) for programmatic solutions
-- Explore [self-hosting options](../self-hosting/index.md) for enterprise deployments
-- Join our [community](https://discord.gg/datachain) for peer support
+Check out the [Frequently Asked Questions](https://studio.datachain.ai/faq) to
+see if your questions have already been answered. If you still have problems,
+please [contact us](#support).

@@ -18,11 +18,14 @@ If a user does not have a pre-assigned role when they sign in to a team, they wi
    1. In the admin console, go to `Applications` -> `Create App Integration` to create a private SSO integration.
    2. Use `SAML 2.0` as the `Sign in method` (and not `OIDC` or some other option).
    3. Enter any name (eg, `DataChain Studio`) as the `App name`.
-   4. `Single sign-on URL`: [https://studio.datachain.ai/api/teams/<TEAM_NAME>/saml/consume](https://studio.datachain.ai/api/teams/<TEAM_NAME>/saml/consume) (Replace <TEAM_NAME> with the name of your team in Studio.
+   4. `Single sign-on URL`: [`https://studio.datachain.ai/api/teams/<TEAM_NAME>/saml/consume`](https://studio.datachain.ai/api/teams/<TEAM_NAME>/saml/consume) (Replace <TEAM_NAME> with the name of your team in Studio.
    5. `Audience URI (SP Entity ID)`: https://studio.datachain.ai/api/saml
    6. `Name ID Format`: Persistent
    7. `Application username (NameID)`: Okta username
-   8. `Attribute Statements (optional)`: 1. `Name`: email 2. `Name format`: URI Reference 3. `Value`: user.email
+   8. `Attribute Statements (optional)`:
+      1. `Name`: email
+      2. `Name format`: URI Reference
+      3. `Value`: user.email
 
    Click on `Next` and `Finish`. Once the integration is created, open the `Sign On` tab and expand the `Hide Details` section. From here, copy the Identity Provider metadata URL.
 

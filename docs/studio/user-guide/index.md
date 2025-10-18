@@ -9,7 +9,6 @@ This section covers how to use DataChain Studio for managing your data processin
 
 ## Core Features
 
-- **[Datasets](datasets/index.md)** - Create, explore, and manage your datasets
 - **[Jobs](jobs/index.md)** - Run and monitor data processing jobs
 - **[Git Connections](git-connections/index.md)** - Connect your Git repositories
 
