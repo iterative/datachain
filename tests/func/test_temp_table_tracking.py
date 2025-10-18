@@ -27,10 +27,10 @@ def test_nested_merge_has_no_duplicate_temp_tables(test_session, mocker):
     inner = generated.merge(base, on="num", inner=True)
     chain = base.merge(inner, on="num", inner=True)
 
-    expected = chain.select("num").to_pandas()["num"].tolist()
+    expected = sorted(chain.select("num").to_pandas()["num"].tolist())
     assert expected == [1, 2]
 
-    rerun = chain.select("num").to_pandas()["num"].tolist()
+    rerun = sorted(chain.select("num").to_pandas()["num"].tolist())
     assert rerun == expected
 
     _assert_no_duplicate_temp_tables(captured)
