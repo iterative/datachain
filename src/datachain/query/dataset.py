@@ -231,8 +231,9 @@ class DatasetDiffOperation(Step):
 
     def apply(self, query_generator, temp_tables: list[str]) -> "StepResult":
         source_query = query_generator.exclude(("sys__id",))
+        right_before = len(self.dq.temp_table_names)
         target_query = self.dq.apply_steps().select()
-        temp_tables.extend(self.dq.temp_table_names)
+        temp_tables.extend(self.dq.temp_table_names[right_before:])
 
         # creating temp table that will hold subtract results
         temp_table_name = self.catalog.warehouse.temp_table_name()
@@ -951,10 +952,12 @@ class SQLUnion(Step):
     def apply(
         self, query_generator: QueryGenerator, temp_tables: list[str]
     ) -> StepResult:
+        left_before = len(self.query1.temp_table_names)
         q1 = self.query1.apply_steps().select().subquery()
-        temp_tables.extend(self.query1.temp_table_names)
+        temp_tables.extend(self.query1.temp_table_names[left_before:])
+        right_before = len(self.query2.temp_table_names)
         q2 = self.query2.apply_steps().select().subquery()
-        temp_tables.extend(self.query2.temp_table_names)
+        temp_tables.extend(self.query2.temp_table_names[right_before:])
 
         columns1 = _drop_system_columns(q1.columns)
         columns2 = _drop_system_columns(q2.columns)
@@ -1004,8 +1007,9 @@ class SQLJoin(Step):
         return hashlib.sha256(b"".join(parts)).hexdigest()
 
     def get_query(self, dq: "DatasetQuery", temp_tables: list[str]) -> sa.Subquery:
+        temp_tables_before = len(dq.temp_table_names)
         query = dq.apply_steps().select()
-        temp_tables.extend(dq.temp_table_names)
+        temp_tables.extend(dq.temp_table_names[temp_tables_before:])
 
         if not any(isinstance(step, (SQLJoin, SQLUnion)) for step in dq.steps):
             return query.subquery(dq.table.name)
