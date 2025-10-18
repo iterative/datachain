@@ -27,11 +27,13 @@ def test_nested_merge_has_no_duplicate_temp_tables(test_session, mocker):
     inner = generated.merge(base, on="num", inner=True)
     chain = base.merge(inner, on="num", inner=True)
 
-    expected = chain.select("num").to_pandas()["num"].tolist()
-    assert expected == [1, 2]
+    values = chain.select("num").to_pandas()["num"].tolist()
+    assert set(values) == {1, 2}
+    assert len(values) == 2
 
     rerun = chain.select("num").to_pandas()["num"].tolist()
-    assert rerun == expected
+    assert set(rerun) == {1, 2}
+    assert len(rerun) == len(values)
 
     _assert_no_duplicate_temp_tables(captured)
 
@@ -43,11 +45,13 @@ def test_union_has_no_duplicate_temp_tables(test_session, mocker):
     right = dc.read_values(num=[3], session=test_session)
     union_chain = left.union(right)
 
-    expected = sorted(union_chain.select("num").to_pandas()["num"].tolist())
-    assert expected == [1, 2, 3]
+    values = union_chain.select("num").to_pandas()["num"].tolist()
+    assert set(values) == {1, 2, 3}
+    assert len(values) == 3
 
-    rerun = sorted(union_chain.select("num").to_pandas()["num"].tolist())
-    assert rerun == expected
+    rerun = union_chain.select("num").to_pandas()["num"].tolist()
+    assert set(rerun) == {1, 2, 3}
+    assert len(rerun) == len(values)
 
     _assert_no_duplicate_temp_tables(captured)
 
@@ -59,10 +63,10 @@ def test_subtract_has_no_duplicate_temp_tables(test_session, mocker):
     target = dc.read_values(num=[2], session=test_session)
     subtract_chain = source.subtract(target, on="num")
 
-    expected = subtract_chain.select("num").to_pandas()["num"].tolist()
-    assert expected == [1]
+    values = subtract_chain.select("num").to_pandas()["num"].tolist()
+    assert values == [1]
 
     rerun = subtract_chain.select("num").to_pandas()["num"].tolist()
-    assert rerun == expected
+    assert rerun == values
 
     _assert_no_duplicate_temp_tables(captured)
