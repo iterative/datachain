@@ -1,12 +1,16 @@
+import hashlib
 from collections.abc import Sequence
 from copy import copy
 from functools import wraps
 from typing import TYPE_CHECKING, TypeVar
 
+from attrs import frozen
+
 import datachain
 from datachain.dataset import DatasetDependency, DatasetRecord
 from datachain.error import DatasetNotFoundError
 from datachain.project import Project
+from datachain.query.dataset import Step, step_result
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -14,7 +18,9 @@ if TYPE_CHECKING:
 
     from typing_extensions import ParamSpec
 
+    from datachain.catalog import Catalog
     from datachain.lib.dc import DataChain
+    from datachain.query.dataset import QueryGenerator
 
     P = ParamSpec("P")
 
@@ -43,11 +49,38 @@ def delta_disabled(
     return _inner
 
 
+@frozen
+class _RegenerateSystemColumnsStep(Step):
+    catalog: "Catalog"
+
+    def hash_inputs(self) -> str:
+        return hashlib.sha256(b"regenerate_sys_columns").hexdigest()
+
+    def apply(self, query_generator: "QueryGenerator", temp_tables: list[str]):
+        selectable = query_generator.select()
+        regenerated = self.catalog.warehouse._regenerate_system_columns(
+            selectable,
+            keep_existing_columns=True,
+            regenerate_columns=None,
+        )
+
+        def q(*columns):
+            return regenerated.with_only_columns(*columns)
+
+        return step_result(q, regenerated.selected_columns)
+
+
 def _append_steps(dc: "DataChain", other: "DataChain"):
     """Returns cloned chain with appended steps from other chain.
     Steps are all those modification methods applied like filters, mappers etc.
     """
     dc = dc.clone()
+    dc._query.steps.append(
+        _RegenerateSystemColumnsStep(
+            catalog=dc.session.catalog,
+        )
+    )
+
     dc._query.steps += other._query.steps.copy()
     dc.signals_schema = other.signals_schema
     return dc

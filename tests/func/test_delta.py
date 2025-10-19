@@ -1,4 +1,5 @@
 import os
+import uuid
 
 import pytest
 import regex as re
@@ -222,6 +223,42 @@ def test_delta_update_unsafe(test_session):
         (5, 5),
         (6, 6),
     }
+
+
+def test_delta_replay_regenerates_system_columns(test_session):
+    source_name = f"regen_source_{uuid.uuid4().hex[:8]}"
+    result_name = f"regen_result_{uuid.uuid4().hex[:8]}"
+
+    dc.read_values(
+        measurement_id=[1, 2],
+        err=["", ""],
+        num=[1, 2],
+        session=test_session,
+    ).save(source_name)
+
+    def build_chain(delta: bool):
+        read_kwargs = {"session": test_session}
+        if delta:
+            read_kwargs.update({"delta": True, "delta_on": "measurement_id"})
+        return (
+            dc.read_dataset(source_name, **read_kwargs)
+            .filter(C.err == "")
+            .select_except("err")
+            .map(double=lambda num: num * 2, output=int)
+            .select_except("num")
+        )
+
+    build_chain(delta=False).save(result_name)
+
+    build_chain(delta=True).save(
+        result_name,
+        delta=True,
+        delta_on="measurement_id",
+    )
+
+    assert set(
+        dc.read_dataset(result_name, session=test_session).to_values("measurement_id")
+    ) == {1, 2}
 
 
 def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
