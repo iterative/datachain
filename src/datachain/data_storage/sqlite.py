@@ -20,7 +20,10 @@ from sqlalchemy import (
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.schema import CreateIndex, CreateTable, DropTable
 from sqlalchemy.sql import func
-from sqlalchemy.sql.elements import BinaryExpression, BooleanClauseList
+from sqlalchemy.sql.elements import (
+    BinaryExpression,
+    BooleanClauseList,
+)
 from sqlalchemy.sql.expression import bindparam, cast
 from sqlalchemy.sql.selectable import Select
 from tqdm.auto import tqdm
@@ -41,6 +44,7 @@ from datachain.sql.types import SQLType
 from datachain.utils import DataChainDir, batched, batched_it
 
 if TYPE_CHECKING:
+    from sqlalchemy import CTE, Subquery
     from sqlalchemy.dialects.sqlite import Insert
     from sqlalchemy.engine.base import Engine
     from sqlalchemy.schema import SchemaItem
@@ -539,6 +543,26 @@ class SQLiteMetastore(AbstractDBMetastore):
             self._datasets_versions.c.created_at,
         ]
 
+    def _dataset_dependency_nodes_select_columns(
+        self,
+        namespaces_subquery: "Subquery",
+        dependency_tree_cte: "CTE",
+        datasets_subquery: "Subquery",
+    ) -> list["ColumnElement"]:
+        return [
+            namespaces_subquery.c.name,
+            self._projects.c.name,
+            dependency_tree_cte.c.id,
+            dependency_tree_cte.c.dataset_id,
+            dependency_tree_cte.c.dataset_version_id,
+            datasets_subquery.c.name,
+            self._datasets_versions.c.version,
+            self._datasets_versions.c.created_at,
+            dependency_tree_cte.c.source_dataset_id,
+            dependency_tree_cte.c.source_dataset_version_id,
+            dependency_tree_cte.c.depth,
+        ]
+
     #
     # Jobs
     #
@@ -868,11 +892,8 @@ class SQLiteWarehouse(AbstractWarehouse):
                 if isinstance(c, BinaryExpression):
                     right_left_join = add_left_rows_filter(c)
 
-        # Use CTE instead of subquery to force SQLite to materialize the result
-        # This breaks deep nesting and prevents parser stack overflow.
         union_cte = sqlalchemy.union(left_right_join, right_left_join).cte()
-
-        return self._regenerate_system_columns(union_cte)
+        return sqlalchemy.select(*union_cte.c).select_from(union_cte)
 
     def _system_row_number_expr(self):
         return func.row_number().over()
@@ -884,11 +905,7 @@ class SQLiteWarehouse(AbstractWarehouse):
         """
         Create a temporary table from a query for use in a UDF.
         """
-        columns = [
-            sqlalchemy.Column(c.name, c.type)
-            for c in query.selected_columns
-            if c.name != "sys__id"
-        ]
+        columns = [sqlalchemy.Column(c.name, c.type) for c in query.selected_columns]
         table = self.create_udf_table(columns)
 
         with tqdm(desc="Preparing", unit=" rows", leave=False) as pbar:

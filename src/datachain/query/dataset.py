@@ -231,8 +231,9 @@ class DatasetDiffOperation(Step):
 
     def apply(self, query_generator, temp_tables: list[str]) -> "StepResult":
         source_query = query_generator.exclude(("sys__id",))
+        right_before = len(self.dq.temp_table_names)
         target_query = self.dq.apply_steps().select()
-        temp_tables.extend(self.dq.temp_table_names)
+        temp_tables.extend(self.dq.temp_table_names[right_before:])
 
         # creating temp table that will hold subtract results
         temp_table_name = self.catalog.warehouse.temp_table_name()
@@ -438,9 +439,6 @@ class UDFStep(Step, ABC):
         """
 
     def populate_udf_table(self, udf_table: "Table", query: Select) -> None:
-        if "sys__id" not in query.selected_columns:
-            raise RuntimeError("Query must have sys__id column to run UDF")
-
         if (rows_total := self.catalog.warehouse.query_count(query)) == 0:
             return
 
@@ -634,12 +632,11 @@ class UDFStep(Step, ABC):
 
         # Apply partitioning if needed.
         if self.partition_by is not None:
-            if "sys__id" not in query.selected_columns:
-                _query = query = self.catalog.warehouse._regenerate_system_columns(
-                    query,
-                    keep_existing_columns=True,
-                )
-
+            _query = query = self.catalog.warehouse._regenerate_system_columns(
+                query_generator.select(),
+                keep_existing_columns=True,
+                regenerate_columns=["sys__id"],
+            )
             partition_tbl = self.create_partitions_table(query)
             temp_tables.append(partition_tbl.name)
             query = query.outerjoin(
@@ -955,33 +952,30 @@ class SQLUnion(Step):
     def apply(
         self, query_generator: QueryGenerator, temp_tables: list[str]
     ) -> StepResult:
+        left_before = len(self.query1.temp_table_names)
         q1 = self.query1.apply_steps().select().subquery()
-        temp_tables.extend(self.query1.temp_table_names)
+        temp_tables.extend(self.query1.temp_table_names[left_before:])
+        right_before = len(self.query2.temp_table_names)
         q2 = self.query2.apply_steps().select().subquery()
-        temp_tables.extend(self.query2.temp_table_names)
+        temp_tables.extend(self.query2.temp_table_names[right_before:])
 
-        columns1, columns2 = _order_columns(q1.columns, q2.columns)
-
-        union_select = sqlalchemy.select(*columns1).union_all(
-            sqlalchemy.select(*columns2)
-        )
-        union_cte = union_select.cte()
-        regenerated = self.query1.catalog.warehouse._regenerate_system_columns(
-            union_cte
-        )
-        result_columns = tuple(regenerated.selected_columns)
+        columns1 = _drop_system_columns(q1.columns)
+        columns2 = _drop_system_columns(q2.columns)
+        columns1, columns2 = _order_columns(columns1, columns2)
 
         def q(*columns):
-            if not columns:
-                return regenerated
+            selected_names = [c.name for c in columns]
+            col1 = [c for c in columns1 if c.name in selected_names]
+            col2 = [c for c in columns2 if c.name in selected_names]
+            union_query = sqlalchemy.select(*col1).union_all(sqlalchemy.select(*col2))
 
-            names = {c.name for c in columns}
-            selected = [c for c in result_columns if c.name in names]
-            return regenerated.with_only_columns(*selected)
+            union_cte = union_query.cte()
+            select_cols = [union_cte.c[name] for name in selected_names]
+            return sqlalchemy.select(*select_cols)
 
         return step_result(
             q,
-            result_columns,
+            columns1,
             dependencies=self.query1.dependencies | self.query2.dependencies,
         )
 
@@ -1013,8 +1007,9 @@ class SQLJoin(Step):
         return hashlib.sha256(b"".join(parts)).hexdigest()
 
     def get_query(self, dq: "DatasetQuery", temp_tables: list[str]) -> sa.Subquery:
+        temp_tables_before = len(dq.temp_table_names)
         query = dq.apply_steps().select()
-        temp_tables.extend(dq.temp_table_names)
+        temp_tables.extend(dq.temp_table_names[temp_tables_before:])
 
         if not any(isinstance(step, (SQLJoin, SQLUnion)) for step in dq.steps):
             return query.subquery(dq.table.name)
@@ -1070,7 +1065,7 @@ class SQLJoin(Step):
         q1 = self.get_query(self.query1, temp_tables)
         q2 = self.get_query(self.query2, temp_tables)
 
-        q1_columns = list(q1.c)
+        q1_columns = _drop_system_columns(q1.c) if self.full else list(q1.c)
         q1_column_names = {c.name for c in q1_columns}
 
         q2_columns = []
@@ -1209,6 +1204,10 @@ def _order_columns(
     ]
 
     return [[d[n] for n in column_order] for d in column_dicts]
+
+
+def _drop_system_columns(columns: Iterable[ColumnElement]) -> list[ColumnElement]:
+    return [c for c in columns if not c.name.startswith("sys__")]
 
 
 @attrs.define
@@ -1927,10 +1926,6 @@ class DatasetQuery:
                 **kwargs,
             )
             version = version or dataset.latest_version
-
-            self.session.add_dataset_version(
-                dataset=dataset, version=version, listing=kwargs.get("listing", False)
-            )
 
             dr = self.catalog.warehouse.dataset_rows(dataset)
 

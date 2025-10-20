@@ -464,7 +464,7 @@ def test_move_dataset_wrong_old_project(test_session, project):
         dc.move_dataset("wrong.wrong.numbers", "new.new.numbers", session=test_session)
 
 
-def test_move_dataset_error_in_session_moved_dataset_removed(catalog):
+def test_move_dataset_error_in_session_moved_dataset_persisted(catalog):
     from datachain.query.session import Session
 
     old_name = "old.old.numbers"
@@ -472,16 +472,18 @@ def test_move_dataset_error_in_session_moved_dataset_removed(catalog):
 
     with pytest.raises(DatasetNotFoundError):
         with Session("new", catalog=catalog) as test_session:
-            dc.read_values(num=[1, 2, 3]).save("aa")
             dc.read_values(num=[1, 2, 3], session=test_session).save(old_name)
             dc.move_dataset(old_name, new_name, session=test_session)
 
             # throws DatasetNotFoundError
             dc.read_dataset("wrong", session=test_session)
 
-    ds = dc.datasets(column="dataset")
+    ds = dc.datasets(column="dataset", session=Session.get(catalog=catalog))
     datasets = [d for d in ds.to_values("dataset")]  # noqa: C416
-    assert len(datasets) == 0
+    assert len(datasets) == 1
+    assert datasets[0].name == "numbers"
+    assert datasets[0].project == "new"
+    assert datasets[0].namespace == "new"
 
 
 def test_edit_dataset_same_name(cloud_test_catalog, dogs_dataset):

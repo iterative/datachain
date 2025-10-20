@@ -27,7 +27,6 @@ from datachain import semver
 from datachain.dataset import DatasetRecord
 from datachain.delta import delta_disabled
 from datachain.error import (
-    JobNotFoundError,
     ProjectCreateNotAllowedError,
     ProjectNotFoundError,
 )
@@ -627,6 +626,9 @@ class DataChain:
         self._validate_version(version)
         self._validate_update_version(update_version)
 
+        # get existing job if running in SaaS, or creating new one if running locally
+        job = self.session.get_or_create_job()
+
         namespace_name, project_name, name = catalog.get_full_dataset_name(
             name,
             namespace_name=self._settings.namespace,
@@ -635,7 +637,7 @@ class DataChain:
         project = self._get_or_create_project(namespace_name, project_name)
 
         # Checkpoint handling
-        job, _hash, result = self._resolve_checkpoint(name, project, kwargs)
+        _hash, result = self._resolve_checkpoint(name, project, job, kwargs)
 
         # Schema preparation
         schema = self.signals_schema.clone_without_sys_signals().serialize()
@@ -655,13 +657,12 @@ class DataChain:
                     attrs=attrs,
                     feature_schema=schema,
                     update_version=update_version,
+                    job_id=job.id,
                     **kwargs,
                 )
             )
 
-        if job:
-            catalog.metastore.create_checkpoint(job.id, _hash)  # type: ignore[arg-type]
-
+        catalog.metastore.create_checkpoint(job.id, _hash)  # type: ignore[arg-type]
         return result
 
     def _validate_version(self, version: str | None) -> None:
@@ -690,22 +691,14 @@ class DataChain:
         self,
         name: str,
         project: Project,
+        job: Job,
         kwargs: dict,
-    ) -> tuple[Job | None, str | None, "DataChain | None"]:
+    ) -> tuple[str, "DataChain | None"]:
         """Check if checkpoint exists and return cached dataset if possible."""
         from .datasets import read_dataset
 
         metastore = self.session.catalog.metastore
-
-        job_id = os.getenv("DATACHAIN_JOB_ID")
         checkpoints_reset = env2bool("DATACHAIN_CHECKPOINTS_RESET", undefined=True)
-
-        if not job_id:
-            return None, None, None
-
-        job = metastore.get_job(job_id)
-        if not job:
-            raise JobNotFoundError(f"Job with id {job_id} not found")
 
         _hash = self._calculate_job_hash(job.id)
 
@@ -718,9 +711,9 @@ class DataChain:
             chain = read_dataset(
                 name, namespace=project.namespace.name, project=project.name, **kwargs
             )
-            return job, _hash, chain
+            return _hash, chain
 
-        return job, _hash, None
+        return _hash, None
 
     def _handle_delta(
         self,
@@ -856,7 +849,9 @@ class DataChain:
                 udf_obj.to_udf_wrapper(self._settings.batch_size),
                 **self._settings.to_dict(),
             ),
-            signal_schema=self.signals_schema | udf_obj.output,
+            signal_schema=SignalSchema({"sys": Sys})
+            | self.signals_schema
+            | udf_obj.output,
         )
 
     def gen(
@@ -894,7 +889,7 @@ class DataChain:
                 udf_obj.to_udf_wrapper(self._settings.batch_size),
                 **self._settings.to_dict(),
             ),
-            signal_schema=udf_obj.output,
+            signal_schema=SignalSchema({"sys": Sys}) | udf_obj.output,
         )
 
     @delta_disabled
@@ -1031,7 +1026,7 @@ class DataChain:
                 partition_by=processed_partition_by,
                 **self._settings.to_dict(),
             ),
-            signal_schema=udf_obj.output,
+            signal_schema=SignalSchema({"sys": Sys}) | udf_obj.output,
         )
 
     def batch_map(
@@ -1097,11 +1092,7 @@ class DataChain:
         sign = UdfSignature.parse(name, signal_map, func, params, output, is_generator)
         DataModel.register(list(sign.output_schema.values.values()))
 
-        signals_schema = self.signals_schema
-        if self._sys:
-            signals_schema = SignalSchema({"sys": Sys}) | signals_schema
-
-        params_schema = signals_schema.slice(
+        params_schema = self.signals_schema.slice(
             sign.params, self._setup, is_batch=is_batch
         )
 
@@ -1156,11 +1147,9 @@ class DataChain:
             )
         )
 
-    def select(self, *args: str, _sys: bool = True) -> "Self":
+    def select(self, *args: str) -> "Self":
         """Select only a specified set of signals."""
         new_schema = self.signals_schema.resolve(*args)
-        if self._sys and _sys:
-            new_schema = SignalSchema({"sys": Sys}) | new_schema
         columns = new_schema.db_signals()
         return self._evolve(
             query=self._query.select(*columns), signal_schema=new_schema
@@ -1710,9 +1699,11 @@ class DataChain:
 
         signals_schema = self.signals_schema.clone_without_sys_signals()
         right_signals_schema = right_ds.signals_schema.clone_without_sys_signals()
-        ds.signals_schema = SignalSchema({"sys": Sys}) | signals_schema.merge(
-            right_signals_schema, rname
-        )
+
+        ds.signals_schema = signals_schema.merge(right_signals_schema, rname)
+
+        if not full:
+            ds.signals_schema = SignalSchema({"sys": Sys}) | ds.signals_schema
 
         return ds
 
@@ -1723,6 +1714,7 @@ class DataChain:
         Parameters:
             other: chain whose rows will be added to `self`.
         """
+        self.signals_schema = self.signals_schema.clone_without_sys_signals()
         return self._evolve(query=self._query.union(other._query))
 
     def subtract(  # type: ignore[override]

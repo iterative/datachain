@@ -54,6 +54,7 @@ from datachain.sql.types import DateTime, SQLType
 from datachain.utils import DataChainDir
 
 from .datasource import DataSource
+from .dependency import build_dependency_hierarchy, populate_nested_dependencies
 
 if TYPE_CHECKING:
     from datachain.data_storage import AbstractMetastore, AbstractWarehouse
@@ -792,6 +793,7 @@ class Catalog:
         description: str | None = None,
         attrs: list[str] | None = None,
         update_version: str | None = "patch",
+        job_id: str | None = None,
     ) -> "DatasetRecord":
         """
         Creates new dataset of a specific version.
@@ -865,6 +867,7 @@ class Catalog:
             create_rows_table=create_rows,
             columns=columns,
             uuid=uuid,
+            job_id=job_id,
         )
 
     def create_new_dataset_version(
@@ -1203,6 +1206,38 @@ class Catalog:
         assert isinstance(dataset_info, dict)
         return DatasetRecord.from_dict(dataset_info)
 
+    def get_dataset_dependencies_by_ids(
+        self,
+        dataset_id: int,
+        version_id: int,
+        indirect: bool = True,
+    ) -> list[DatasetDependency | None]:
+        dependency_nodes = self.metastore.get_dataset_dependency_nodes(
+            dataset_id=dataset_id,
+            version_id=version_id,
+        )
+
+        if not dependency_nodes:
+            return []
+
+        dependency_map, children_map = build_dependency_hierarchy(dependency_nodes)
+
+        root_key = (dataset_id, version_id)
+        if root_key not in children_map:
+            return []
+
+        root_dependency_ids = children_map[root_key]
+        root_dependencies = [dependency_map[dep_id] for dep_id in root_dependency_ids]
+
+        if indirect:
+            for dependency in root_dependencies:
+                if dependency is not None:
+                    populate_nested_dependencies(
+                        dependency, dependency_nodes, dependency_map, children_map
+                    )
+
+        return root_dependencies
+
     def get_dataset_dependencies(
         self,
         name: str,
@@ -1216,29 +1251,21 @@ class Catalog:
             namespace_name=namespace_name,
             project_name=project_name,
         )
-
-        direct_dependencies = self.metastore.get_direct_dataset_dependencies(
-            dataset, version
-        )
+        dataset_version = dataset.get_version(version)
+        dataset_id = dataset.id
+        dataset_version_id = dataset_version.id
 
         if not indirect:
-            return direct_dependencies
+            return self.metastore.get_direct_dataset_dependencies(
+                dataset,
+                version,
+            )
 
-        for d in direct_dependencies:
-            if not d:
-                # dependency has been removed
-                continue
-            if d.is_dataset:
-                # only datasets can have dependencies
-                d.dependencies = self.get_dataset_dependencies(
-                    d.name,
-                    d.version,
-                    namespace_name=d.namespace,
-                    project_name=d.project,
-                    indirect=indirect,
-                )
-
-        return direct_dependencies
+        return self.get_dataset_dependencies_by_ids(
+            dataset_id,
+            dataset_version_id,
+            indirect,
+        )
 
     def ls_datasets(
         self,

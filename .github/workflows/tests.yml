@@ -29,7 +29,7 @@ jobs:
           python-version: '3.10'
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-suffix: lint
@@ -80,7 +80,7 @@ jobs:
 
       - name: Setup PostgreSQL
         if: runner.os != 'Windows'
-        uses: ikalnytskyi/action-setup-postgres@10ab8a56cc77b4823c2bfa57b1d4dd5605ef0481 # v7
+        uses: ikalnytskyi/action-setup-postgres@c4dda34aae1c821e3a771b68b73b13af3198a7ee # v8
         with:
           username: test
           password: test
@@ -102,7 +102,7 @@ jobs:
           python-version: ${{ matrix.pyv }}
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-suffix: tests-${{ matrix.pyv }}
@@ -110,7 +110,7 @@ jobs:
 
       - name: Install FFmpeg on Windows
         if: runner.os == 'Windows'
-        run: choco install ffmpeg
+        run: choco install ffmpeg --version 7.0
 
       - name: Install FFmpeg on macOS
         if: runner.os == 'macOS'
@@ -188,7 +188,7 @@ jobs:
           python-version: ${{ matrix.pyv }}
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-suffix: examples-${{ matrix.pyv }}

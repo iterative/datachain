@@ -1072,6 +1072,19 @@ def test_select_except(test_session):
     assert n == len(features_nested)
 
 
+def test_select_except_after_gen(test_session):
+    # https://github.com/iterative/datachain/issues/1359
+    # fixed by https://github.com/iterative/datachain/pull/1400
+    chain = dc.read_values(id=range(10), session=test_session)
+
+    chain = chain.gen(lambda id: [(id, 0)], output={"id": int, "x": int})
+    chain = chain.select_except("x")
+    chain = chain.merge(chain, on="id")
+    chain = chain.select_except("right_id")
+
+    assert set(chain.to_values("id")) == set(range(10))
+
+
 def test_select_wrong_type(test_session):
     chain = dc.read_values(fr1=features_nested, fr2=features, session=test_session)
 
@@ -2451,7 +2464,7 @@ def test_rename_non_object_column_name_with_mutate(test_session):
     ds = dc.read_values(ids=[1, 2, 3], session=test_session)
     ds = ds.mutate(my_ids=Column("ids"))
 
-    assert ds.signals_schema.values == {"my_ids": int}
+    assert ds.schema == {"my_ids": int}
     assert ds.order_by("my_ids").to_values("my_ids") == [1, 2, 3]
 
     assert ds.signals_schema.values.get("my_ids") is int
@@ -2470,7 +2483,7 @@ def test_rename_object_column_name_with_mutate(test_session):
     ds = ds.mutate(fname=Column("file.path"))
 
     assert ds.order_by("fname").to_values("fname") == ["a", "b", "c"]
-    assert ds.signals_schema.values == {"file": File, "ids": int, "fname": str}
+    assert ds.schema == {"file": File, "ids": int, "fname": str}
 
     # check that persist after saving
     ds.save("mutated")
@@ -3134,15 +3147,16 @@ def test_rename_column_with_mutate(test_session):
     ds = ds.mutate(my_file=Column("file"))
 
     assert ds.order_by("my_file.path").to_values("my_file.path") == ["a", "b", "c"]
-    assert ds.signals_schema.values == {"my_file": File, "ids": int}
+    assert ds.schema == {"my_file": File, "ids": int}
 
     # check that persist after saving
     ds.save("mutated")
 
     ds = dc.read_dataset(name="mutated", session=test_session)
-    assert ds.signals_schema.values.get("my_file") is File
-    assert ds.signals_schema.values.get("ids") is int
-    assert "file" not in ds.signals_schema.values
+    schema = ds.schema
+    assert schema.get("my_file") is File
+    assert schema.get("ids") is int
+    assert "file" not in schema
     assert ds.order_by("my_file.path").to_values("my_file.path") == ["a", "b", "c"]
 
 
@@ -3801,14 +3815,15 @@ def test_window_functions(test_session, desc):
         first=func.first("col2").over(window),
     )
 
-    assert ds.signals_schema.serialize() == {
-        "col1": "str",
-        "col2": "int",
-        "row_number": "int",
-        "rank": "int",
-        "dense_rank": "int",
-        "first": "int",
+    assert ds.schema == {
+        "col1": str,
+        "col2": int,
+        "row_number": int,
+        "rank": int,
+        "dense_rank": int,
+        "first": int,
     }
+
     assert sorted_dicts(ds.to_records(), "col1", "col2") == sorted_dicts(
         [
             {
