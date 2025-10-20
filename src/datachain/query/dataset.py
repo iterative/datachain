@@ -401,7 +401,7 @@ def get_generated_callback(is_generator: bool = False) -> Callback:
 @frozen
 class UDFStep(Step, ABC):
     udf: "UDFAdapter"
-    catalog: "Catalog"
+    session: "Session"
     partition_by: PartitionByType | None = None
     is_generator = False
     # Parameters from Settings
@@ -439,7 +439,8 @@ class UDFStep(Step, ABC):
         """
 
     def populate_udf_table(self, udf_table: "Table", query: Select) -> None:
-        if (rows_total := self.catalog.warehouse.query_count(query)) == 0:
+        catalog = self.session.catalog
+        if (rows_total := catalog.warehouse.query_count(query)) == 0:
             return
 
         from datachain.catalog import QUERY_SCRIPT_CANCELED_EXIT_CODE
@@ -457,8 +458,8 @@ class UDFStep(Step, ABC):
         udf_distributor_class = get_udf_distributor_class()
 
         prefetch = self.udf.prefetch
-        with _get_cache(self.catalog.cache, prefetch, use_cache=self.cache) as _cache:
-            catalog = clone_catalog_with_cache(self.catalog, _cache)
+        with _get_cache(catalog.cache, prefetch, use_cache=self.cache) as _cache:
+            catalog = clone_catalog_with_cache(catalog, _cache)
 
             try:
                 if udf_distributor_class and not catalog.in_memory:
@@ -570,17 +571,19 @@ class UDFStep(Step, ABC):
                         generated_cb.close()
 
             except QueryScriptCancelError:
-                self.catalog.warehouse.close()
+                catalog.warehouse.close()
                 sys.exit(QUERY_SCRIPT_CANCELED_EXIT_CODE)
             except (Exception, KeyboardInterrupt):
                 # Close any open database connections if an error is encountered
-                self.catalog.warehouse.close()
+                catalog.warehouse.close()
                 raise
 
     def create_partitions_table(self, query: Select) -> "Table":
         """
         Create temporary table with group by partitions.
         """
+        catalog = self.session.catalog
+
         if self.partition_by is None:
             raise RuntimeError("Query must have partition_by set to use partitioning")
         if (id_col := query.selected_columns.get("sys__id")) is None:
@@ -596,14 +599,14 @@ class UDFStep(Step, ABC):
         ]
 
         # create table with partitions
-        tbl = self.catalog.warehouse.create_udf_table(partition_columns())
+        tbl = catalog.warehouse.create_udf_table(partition_columns())
 
         # fill table with partitions
         cols = [
             id_col,
             f.dense_rank().over(order_by=partition_by).label(PARTITION_COLUMN_ID),
         ]
-        self.catalog.warehouse.db.execute(
+        catalog.warehouse.db.execute(
             tbl.insert().from_select(
                 cols,
                 query.offset(None).limit(None).with_only_columns(*cols),
@@ -616,14 +619,14 @@ class UDFStep(Step, ABC):
         if partition_by is not None:
             return self.__class__(
                 self.udf,
-                self.catalog,
+                self.session,
                 partition_by=partition_by,
                 parallel=self.parallel,
                 workers=self.workers,
                 min_task_size=self.min_task_size,
                 batch_size=self.batch_size,
             )
-        return self.__class__(self.udf, self.catalog)
+        return self.__class__(self.udf, self.session)
 
     def apply(
         self, query_generator: QueryGenerator, temp_tables: list[str]
@@ -632,7 +635,7 @@ class UDFStep(Step, ABC):
 
         # Apply partitioning if needed.
         if self.partition_by is not None:
-            _query = query = self.catalog.warehouse._regenerate_system_columns(
+            _query = query = self.session.catalog.warehouse._regenerate_system_columns(
                 query_generator.select(),
                 keep_existing_columns=True,
                 regenerate_columns=["sys__id"],
@@ -657,7 +660,7 @@ class UDFStep(Step, ABC):
 @frozen
 class UDFSignal(UDFStep):
     udf: "UDFAdapter"
-    catalog: "Catalog"
+    session: "Session"
     partition_by: PartitionByType | None = None
     is_generator = False
     # Parameters from Settings
@@ -673,12 +676,12 @@ class UDFSignal(UDFStep):
             for (col_name, col_type) in self.udf.output.items()
         ]
 
-        return self.catalog.warehouse.create_udf_table(udf_output_columns)
+        return self.session.catalog.warehouse.create_udf_table(udf_output_columns)
 
     def process_input_query(self, query: Select) -> tuple[Select, list["Table"]]:
         if os.getenv("DATACHAIN_DISABLE_QUERY_CACHE", "") not in ("", "0"):
             return query, []
-        table = self.catalog.warehouse.create_pre_udf_table(query)
+        table = self.session.catalog.warehouse.create_pre_udf_table(query)
         q: Select = sqlalchemy.select(*table.c)
         return q, [table]
 
@@ -736,7 +739,7 @@ class RowGenerator(UDFStep):
     """Extend dataset with new rows."""
 
     udf: "UDFAdapter"
-    catalog: "Catalog"
+    session: "Session"
     partition_by: PartitionByType | None = None
     is_generator = True
     # Parameters from Settings
@@ -747,9 +750,9 @@ class RowGenerator(UDFStep):
     batch_size: int | None = None
 
     def create_udf_table(self, query: Select) -> "Table":
-        warehouse = self.catalog.warehouse
+        warehouse = self.session.catalog.warehouse
 
-        table_name = self.catalog.warehouse.udf_table_name()
+        table_name = warehouse.udf_table_name()
         columns: tuple[Column, ...] = tuple(
             Column(name, typ) for name, typ in self.udf.output.items()
         )
@@ -1774,7 +1777,7 @@ class DatasetQuery:
         query.steps.append(
             UDFSignal(
                 udf,
-                self.catalog,
+                self.session,
                 partition_by=partition_by,
                 parallel=parallel,
                 workers=workers,
@@ -1812,7 +1815,7 @@ class DatasetQuery:
         steps.append(
             RowGenerator(
                 udf,
-                self.catalog,
+                self.session,
                 partition_by=partition_by,
                 parallel=parallel,
                 workers=workers,
