@@ -286,6 +286,29 @@ class DataChain:
         return self._query.session
 
     @property
+    def job(self) -> Job:
+        """
+        Get existing job if running in SaaS, or creating new one if running locally
+        """
+        return self.session.get_or_create_job()
+
+    @property
+    def job_hash(self) -> str:
+        """
+        Calculates hash of the job at the place of this chain in the script.
+        Hash is calculated using previous job checkpoint hash (if exists) and
+        adding hash of this chain to produce new hash.
+        """
+        last_checkpoint = self.session.catalog.metastore.get_last_checkpoint(
+            self.job.id
+        )
+
+        return hashlib.sha256(
+            (bytes.fromhex(last_checkpoint.hash) if last_checkpoint else b"")
+            + bytes.fromhex(self.hash())
+        ).hexdigest()
+
+    @property
     def name(self) -> str | None:
         """Name of the underlying dataset, if there is one."""
         return self._query.name
@@ -580,19 +603,6 @@ class DataChain:
             query=self._query.save(project=project, feature_schema=schema)
         )
 
-    def _calculate_job_hash(self, job_id: str) -> str:
-        """
-        Calculates hash of the job at the place of this chain's save method.
-        Hash is calculated using previous job checkpoint hash (if exists) and
-        adding hash of this chain to produce new hash.
-        """
-        last_checkpoint = self.session.catalog.metastore.get_last_checkpoint(job_id)
-
-        return hashlib.sha256(
-            (bytes.fromhex(last_checkpoint.hash) if last_checkpoint else b"")
-            + bytes.fromhex(self.hash())
-        ).hexdigest()
-
     def save(  # type: ignore[override]
         self,
         name: str,
@@ -626,9 +636,6 @@ class DataChain:
         self._validate_version(version)
         self._validate_update_version(update_version)
 
-        # get existing job if running in SaaS, or creating new one if running locally
-        job = self.session.get_or_create_job()
-
         namespace_name, project_name, name = catalog.get_full_dataset_name(
             name,
             namespace_name=self._settings.namespace,
@@ -636,8 +643,10 @@ class DataChain:
         )
         project = self._get_or_create_project(namespace_name, project_name)
 
+        job_hash = self.job_hash
+
         # Checkpoint handling
-        _hash, result = self._resolve_checkpoint(name, project, job, kwargs)
+        result = self._resolve_checkpoint(name, project, job_hash, kwargs)
 
         # Schema preparation
         schema = self.signals_schema.clone_without_sys_signals().serialize()
@@ -657,12 +666,12 @@ class DataChain:
                     attrs=attrs,
                     feature_schema=schema,
                     update_version=update_version,
-                    job_id=job.id,
+                    job_id=self.job.id,
                     **kwargs,
                 )
             )
 
-        catalog.metastore.create_checkpoint(job.id, _hash)  # type: ignore[arg-type]
+        catalog.metastore.create_checkpoint(self.job.id, job_hash)
         return result
 
     def _validate_version(self, version: str | None) -> None:
@@ -691,29 +700,26 @@ class DataChain:
         self,
         name: str,
         project: Project,
-        job: Job,
+        job_hash: str,
         kwargs: dict,
-    ) -> tuple[str, "DataChain | None"]:
+    ) -> "DataChain | None":
         """Check if checkpoint exists and return cached dataset if possible."""
         from .datasets import read_dataset
 
         metastore = self.session.catalog.metastore
         checkpoints_reset = env2bool("DATACHAIN_CHECKPOINTS_RESET", undefined=True)
 
-        _hash = self._calculate_job_hash(job.id)
-
         if (
-            job.parent_job_id
+            self.job.parent_job_id
             and not checkpoints_reset
-            and metastore.find_checkpoint(job.parent_job_id, _hash)
+            and metastore.find_checkpoint(self.job.parent_job_id, job_hash)
         ):
             # checkpoint found → reuse dataset
-            chain = read_dataset(
+            return read_dataset(
                 name, namespace=project.namespace.name, project=project.name, **kwargs
             )
-            return _hash, chain
 
-        return _hash, None
+        return None
 
     def _handle_delta(
         self,
