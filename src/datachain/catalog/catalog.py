@@ -793,6 +793,7 @@ class Catalog:
         description: str | None = None,
         attrs: list[str] | None = None,
         update_version: str | None = "patch",
+        job_id: str | None = None,
     ) -> "DatasetRecord":
         """
         Creates new dataset of a specific version.
@@ -866,6 +867,7 @@ class Catalog:
             create_rows_table=create_rows,
             columns=columns,
             uuid=uuid,
+            job_id=job_id,
         )
 
     def create_new_dataset_version(
