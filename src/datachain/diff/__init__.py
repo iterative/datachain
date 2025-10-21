@@ -103,8 +103,10 @@ def _compare(  # noqa: C901
     left = left.mutate(**{ldiff_col: 1})
     right = right.mutate(**{rdiff_col: 1})
 
-    if not compare:
+    if compare is None:
         modified_cond = True
+    elif len(compare) == 0:
+        modified_cond = False
     else:
         modified_cond = or_(  # type: ignore[assignment]
             *[
