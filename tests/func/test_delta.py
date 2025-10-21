@@ -98,6 +98,70 @@ def test_delta_update_from_dataset(test_session, tmp_dir, tmp_path):
     create_delta_dataset(ds_name)
 
 
+def test_delta_falls_back_when_dependency_missing(test_session):
+    catalog = test_session.catalog
+
+    source_ds = "delta_removed_dep_source"
+    delta_ds = "delta_removed_dep_result"
+    process_log: list[int] = []
+
+    def record_processing(id: int) -> int:
+        process_log.append(id)
+        return id
+
+    # Create first source dataset and initial delta version that depends on it
+    dc.read_values(id=[1, 2], session=test_session).save(source_ds)
+    dc.read_dataset(
+        source_ds,
+        session=test_session,
+        delta=True,
+        delta_on="id",
+    ).map(processed_id=record_processing).save(delta_ds)
+
+    assert _get_dependencies(catalog, delta_ds, "1.0.0") == [(source_ds, "1.0.0")]
+    assert set(
+        dc.read_dataset(delta_ds, version="1.0.0", session=test_session).to_values("id")
+    ) == {1, 2}
+    assert sorted(process_log[:2]) == [1, 2]
+
+    dc.read_values(id=[1, 2, 10, 20, 30], session=test_session).save(source_ds)
+
+    # Drop the previous version so it is clear the dependency targets 1.0.1
+    dc.delete_dataset(source_ds, version="1.0.0", session=test_session)
+
+    with pytest.raises(DatasetNotFoundError):
+        dc.read_dataset(source_ds, session=test_session, version="1.0.0")
+
+    deps_after_removal = catalog.get_dataset_dependencies(
+        delta_ds,
+        "1.0.0",
+        namespace_name=catalog.metastore.default_project.namespace.name,
+        project_name=catalog.metastore.default_project.name,
+        indirect=False,
+    )
+    assert deps_after_removal == [None]
+
+    dc.read_dataset(
+        source_ds,
+        session=test_session,
+        delta=True,
+        delta_on="id",
+    ).map(processed_id=record_processing).save(delta_ds)
+
+    # Delta logic should fall back to rebuilding from scratch with the new dependency
+    assert _get_dependencies(catalog, delta_ds, "1.0.1") == [(source_ds, "1.0.1")]
+    assert set(
+        dc.read_dataset(delta_ds, version="1.0.1", session=test_session).to_values("id")
+    ) == {1, 2, 10, 20, 30}
+    # Previous version remains intact and still reflects the original source dataset
+    assert set(
+        dc.read_dataset(delta_ds, version="1.0.0", session=test_session).to_values("id")
+    ) == {1, 2}
+    # Fallback rebuilds the dataset, so ids 1 and 2 appear twice across both runs.
+    assert sorted(process_log[:2]) == [1, 2]
+    assert sorted(process_log[2:]) == [1, 2, 10, 20, 30]
+
+
 def test_delta_returns_correct_dataset_on_no_changes(test_session):
     catalog = test_session.catalog
 
