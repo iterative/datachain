@@ -333,6 +333,9 @@ class SQLiteDatabaseEngine(DatabaseEngine):
 
     def drop_table(self, table: "Table", if_exists: bool = False) -> None:
         self.execute(DropTable(table, if_exists=if_exists))
+        # Remove the table from metadata to avoid stale references
+        if table.name in self.metadata.tables:
+            self.metadata.remove(table)
 
     def rename_table(self, old_name: str, new_name: str):
         comp_old_name = quote_schema(old_name)
@@ -671,11 +674,15 @@ class SQLiteWarehouse(AbstractWarehouse):
         columns: Sequence["sqlalchemy.Column"] = (),
         if_not_exists: bool = True,
     ) -> Table:
-        table = self.schema.dataset_row_cls.new_table(
-            name,
-            columns=columns,
-            metadata=self.db.metadata,
-        )
+        # Check if table already exists in metadata
+        if name in self.db.metadata.tables:
+            table = self.db.metadata.tables[name]
+        else:
+            table = self.schema.dataset_row_cls.new_table(
+                name,
+                columns=columns,
+                metadata=self.db.metadata,
+            )
         self.db.create_table(table, if_not_exists=if_not_exists)
         return table
 
@@ -901,12 +908,12 @@ class SQLiteWarehouse(AbstractWarehouse):
     def _system_random_expr(self):
         return self._system_row_number_expr() * 1103515245 + 12345
 
-    def create_pre_udf_table(self, query: "Select") -> "Table":
+    def create_pre_udf_table(self, query: "Select", name: str) -> "Table":
         """
         Create a temporary table from a query for use in a UDF.
         """
         columns = [sqlalchemy.Column(c.name, c.type) for c in query.selected_columns]
-        table = self.create_udf_table(columns)
+        table = self.create_udf_table(columns, name=name)
 
         with tqdm(desc="Preparing", unit=" rows", leave=False) as pbar:
             self.copy_table(table, query, progress_cb=pbar.update)

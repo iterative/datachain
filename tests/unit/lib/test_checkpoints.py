@@ -69,7 +69,6 @@ def test_checkpoints(
             "DATACHAIN_JOB_ID",
             metastore.create_job("my-job", "echo 1;", parent_job_id=first_job_id),
         )
-
     chain.save("nums1")
     chain.save("nums2")
     chain.save("nums3")
@@ -79,7 +78,7 @@ def test_checkpoints(
     assert len(catalog.get_dataset("nums2").versions) == 2 if reset_checkpoints else 1
     assert len(catalog.get_dataset("nums3").versions) == 1
 
-    assert len(list(catalog.metastore.list_checkpoints(first_job_id))) == 2
+    assert len(list(catalog.metastore.list_checkpoints(first_job_id))) == 3
     assert len(list(catalog.metastore.list_checkpoints(second_job_id))) == 3
 
 
@@ -173,9 +172,9 @@ def test_checkpoints_multiple_runs(
         assert num2_versions == 2
         assert num3_versions == 2
 
-    assert len(list(catalog.metastore.list_checkpoints(first_job_id))) == 2
+    assert len(list(catalog.metastore.list_checkpoints(first_job_id))) == 3
     assert len(list(catalog.metastore.list_checkpoints(second_job_id))) == 3
-    assert len(list(catalog.metastore.list_checkpoints(third_job_id))) == 2
+    assert len(list(catalog.metastore.list_checkpoints(third_job_id))) == 3
     assert len(list(catalog.metastore.list_checkpoints(fourth_job_id))) == 3
 
 

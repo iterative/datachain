@@ -669,7 +669,7 @@ def test_gen(test_session):
         assert x.my_name == test_fr.my_name
 
 
-def test_map(test_session):
+def test_mmap(test_session):
     class _TestFr(BaseModel):
         sqrt: float
         my_name: str
@@ -2223,7 +2223,7 @@ def test_order_by_descending(test_session, with_function):
     ]
 
 
-def test_union(test_session):
+def test_uunion(test_session):
     chain1 = dc.read_values(value=[1, 2], session=test_session)
     chain2 = dc.read_values(value=[3, 4], session=test_session)
     chain3 = chain1 | chain2

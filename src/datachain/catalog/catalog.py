@@ -12,6 +12,7 @@ import traceback
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from copy import copy
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from functools import cached_property, reduce
 from threading import Thread
 from typing import IO, TYPE_CHECKING, Any, NoReturn
@@ -22,6 +23,7 @@ from sqlalchemy import Column
 from tqdm.auto import tqdm
 
 from datachain.cache import Cache
+from datachain.checkpoint import Checkpoint
 from datachain.client import Client
 from datachain.dataset import (
     DATASET_PREFIX,
@@ -2039,3 +2041,80 @@ class Catalog:
             client_config=client_config or self.client_config,
             only_index=True,
         )
+
+    def _remove_checkpoint(self, checkpoint: Checkpoint) -> None:
+        """
+        Remove a checkpoint and its associated UDF tables.
+        Internal helper method for checkpoint cleanup operations.
+
+        Args:
+            checkpoint: The checkpoint object to remove.
+        """
+        # Find and drop UDF tables for this checkpoint
+        # UDF table prefix pattern: udf_{job_id}_{hash}
+        # TODO move this table prefix pattern to some common place as we
+        # repeat this in multiple places (e.g in UDFStep and here)
+        table_prefix = f"udf_{checkpoint.job_id}_{checkpoint.hash}"
+        matching_tables = self.warehouse.db.list_tables(prefix=table_prefix)
+        if matching_tables:
+            self.warehouse.cleanup_tables(matching_tables)
+
+        # Remove the checkpoint from metastore
+        self.metastore.remove_checkpoint(checkpoint)
+
+    def remove_checkpoint_by_hash(self, job_id: str, checkpoint_hash: str) -> None:
+        """
+        Remove a specific checkpoint by job_id and hash, along with its UDF tables.
+
+        Args:
+            job_id: The job ID of the checkpoint to remove.
+            checkpoint_hash: The hash of the checkpoint to remove.
+        """
+        # Find the checkpoint
+        checkpoint = self.metastore.find_checkpoint(job_id, checkpoint_hash)
+        if not checkpoint:
+            # Checkpoint doesn't exist, nothing to do
+            return
+
+        self._remove_checkpoint(checkpoint)
+
+    def cleanup_checkpoints(
+        self, job_id: str | None = None, created_after: datetime | None = None
+    ) -> None:
+        """
+        Clean up checkpoints and their associated UDF tables.
+
+        Removes checkpoints based on either TTL or creation time criteria.
+        Also removes corresponding UDF-related tables if they exist.
+
+        Args:
+            job_id: Optional job ID to clean up checkpoints for specific job only.
+                   If None, cleans up all old checkpoints.
+            created_after: If provided, removes all checkpoints created after this
+                          datetime (overrides TTL). Useful for invalidating checkpoints
+                          after a certain point when code changes in re-runs.
+                          If None, uses TTL-based cleanup.
+        """
+
+        # Get checkpoints (for specific job or all jobs)
+        checkpoints = list(self.metastore.list_checkpoints(job_id))
+
+        # Filter checkpoints based on created_after or TTL
+        if created_after is not None:
+            # Remove checkpoints created after the specified datetime
+            checkpoints_to_remove = [
+                cp for cp in checkpoints if cp.created_at > created_after
+            ]
+        else:
+            # Get TTL from environment variable or use default
+            ttl_seconds = int(os.environ.get("CHECKPOINT_TTL", str(TTL_INT)))
+            ttl_threshold = datetime.now(timezone.utc) - timedelta(seconds=ttl_seconds)
+
+            # Remove checkpoints older than TTL
+            checkpoints_to_remove = [
+                cp for cp in checkpoints if cp.created_at < ttl_threshold
+            ]
+
+        # Remove each checkpoint and its associated UDF tables
+        for checkpoint in checkpoints_to_remove:
+            self._remove_checkpoint(checkpoint)

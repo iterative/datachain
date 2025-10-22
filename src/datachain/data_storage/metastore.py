@@ -457,8 +457,13 @@ class AbstractMetastore(ABC, Serializable):
     #
 
     @abstractmethod
-    def list_checkpoints(self, job_id: str, conn=None) -> Iterator[Checkpoint]:
-        """Returns all checkpoints related to some job"""
+    def list_checkpoints(
+        self, job_id: str | None = None, conn=None
+    ) -> Iterator[Checkpoint]:
+        """
+        Returns all checkpoints related to some job, or all checkpoints if
+        job_id is None
+        """
 
     @abstractmethod
     def get_last_checkpoint(self, job_id: str, conn=None) -> Checkpoint | None:
@@ -484,6 +489,12 @@ class AbstractMetastore(ABC, Serializable):
         conn: Any | None = None,
     ) -> Checkpoint:
         """Creates new checkpoint"""
+
+    @abstractmethod
+    def remove_checkpoint(
+        self, checkpoint: Checkpoint, conn: Any | None = None
+    ) -> None:
+        """Removes a checkpoint by checkpoint object"""
 
 
 class AbstractDBMetastore(AbstractMetastore):
@@ -1872,24 +1883,39 @@ class AbstractDBMetastore(AbstractMetastore):
         conn: Any | None = None,
     ) -> Checkpoint:
         """
-        Creates a new job query step.
+        Creates a new checkpoint or returns existing one if already exists.
+        This is idempotent - calling it multiple times with the same job_id and hash
+        will not create duplicates.
         """
-        checkpoint_id = str(uuid4())
-        self.db.execute(
-            self._checkpoints_insert().values(
-                id=checkpoint_id,
-                job_id=job_id,
-                hash=_hash,
-                partial=partial,
-                created_at=datetime.now(timezone.utc),
-            ),
-            conn=conn,
-        )
-        return self.get_checkpoint_by_id(checkpoint_id)
+        # First check if checkpoint already exists
+        existing = self.find_checkpoint(job_id, _hash, partial=partial, conn=conn)
+        if existing:
+            return existing
 
-    def list_checkpoints(self, job_id: str, conn=None) -> Iterator[Checkpoint]:
-        """List checkpoints by job id."""
-        query = self._checkpoints_query().where(self._checkpoints.c.job_id == job_id)
+        checkpoint_id = str(uuid4())
+        query = self._checkpoints_insert().values(
+            id=checkpoint_id,
+            job_id=job_id,
+            hash=_hash,
+            partial=partial,
+            created_at=datetime.now(timezone.utc),
+        )
+
+        # Use on_conflict_do_nothing to handle race conditions
+        if hasattr(query, "on_conflict_do_nothing"):
+            query = query.on_conflict_do_nothing(index_elements=["job_id", "hash"])
+
+        self.db.execute(query, conn=conn)
+
+        return self.find_checkpoint(job_id, _hash, partial=partial, conn=conn)  # type: ignore[return-value]
+
+    def list_checkpoints(
+        self, job_id: str | None = None, conn=None
+    ) -> Iterator[Checkpoint]:
+        """List checkpoints by job id, or all checkpoints if job_id is None."""
+        query = self._checkpoints_query()
+        if job_id is not None:
+            query = query.where(self._checkpoints.c.job_id == job_id)
         rows = list(self.db.execute(query, conn=conn))
 
         yield from [self.checkpoint_class.parse(*r) for r in rows]
@@ -1929,3 +1955,13 @@ class AbstractDBMetastore(AbstractMetastore):
         if not rows:
             return None
         return self.checkpoint_class.parse(*rows[0])
+
+    def remove_checkpoint(
+        self, checkpoint: Checkpoint, conn: Any | None = None
+    ) -> None:
+        """Removes a checkpoint by checkpoint object"""
+        ch = self._checkpoints
+        self.db.execute(
+            self._checkpoints_delete().where(ch.c.id == checkpoint.id),
+            conn=conn,
+        )
