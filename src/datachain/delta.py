@@ -202,7 +202,9 @@ def _get_source_info(
         indirect=False,
     )
 
-    source_ds_dep = next((d for d in dependencies if d.name == source_ds.name), None)
+    source_ds_dep = next(
+        (d for d in dependencies if d and d.name == source_ds.name), None
+    )
     if not source_ds_dep:
         # Starting dataset was removed, back off to normal dataset creation
         return None, None, None, None, None

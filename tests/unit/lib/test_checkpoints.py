@@ -35,7 +35,7 @@ def test_checkpoints(
     catalog = test_session.catalog
     metastore = catalog.metastore
 
-    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", reset_checkpoints)
+    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(reset_checkpoints))
 
     if with_delta:
         chain = dc.read_dataset(
@@ -74,8 +74,9 @@ def test_checkpoints(
     chain.save("nums3")
     second_job_id = test_session.get_or_create_job().id
 
-    assert len(catalog.get_dataset("nums1").versions) == 2 if reset_checkpoints else 1
-    assert len(catalog.get_dataset("nums2").versions) == 2 if reset_checkpoints else 1
+    expected_versions = 1 if with_delta or not reset_checkpoints else 2
+    assert len(catalog.get_dataset("nums1").versions) == expected_versions
+    assert len(catalog.get_dataset("nums2").versions) == expected_versions
     assert len(catalog.get_dataset("nums3").versions) == 1
 
     assert len(list(catalog.metastore.list_checkpoints(first_job_id))) == 3
@@ -87,7 +88,7 @@ def test_checkpoints_modified_chains(
     test_session, monkeypatch, nums_dataset, reset_checkpoints
 ):
     catalog = test_session.catalog
-    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", reset_checkpoints)
+    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(reset_checkpoints))
 
     chain = dc.read_dataset("nums", session=test_session)
 
@@ -119,7 +120,7 @@ def test_checkpoints_multiple_runs(
 ):
     catalog = test_session.catalog
 
-    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", reset_checkpoints)
+    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(reset_checkpoints))
 
     chain = dc.read_dataset("nums", session=test_session)
 
@@ -183,7 +184,7 @@ def test_checkpoints_check_valid_chain_is_returned(
     monkeypatch,
     nums_dataset,
 ):
-    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", False)
+    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
     chain = dc.read_dataset("nums", session=test_session)
 
     # -------------- FIRST RUN -------------------
@@ -196,6 +197,7 @@ def test_checkpoints_check_valid_chain_is_returned(
 
     # checking that we return expected DataChain even though we skipped chain creation
     # because of the checkpoints
+    assert ds.dataset is not None
     assert ds.dataset.name == "nums1"
     assert len(ds.dataset.versions) == 1
     assert ds.order_by("num").to_list("num") == [(1,), (2,), (3,)]
