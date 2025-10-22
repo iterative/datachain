@@ -264,8 +264,8 @@ class DatasetDiffOperation(Step):
         diff_q = self.query(source_query, target_query)
 
         insert_q = temp_table.insert().from_select(
-            source_query.selected_columns,
-            diff_q,  # type: ignore[arg-type]
+            source_query.selected_columns,  # type: ignore[arg-type]
+            diff_q,
         )
 
         self.catalog.warehouse.db.execute(insert_q)
@@ -435,14 +435,14 @@ class UDFStep(Step, ABC):
         return hashlib.sha256(b"".join(parts)).hexdigest()
 
     @abstractmethod
-    def create_udf_output_table(self, query: Select, name: str) -> "Table":
+    def create_output_table(self, name: str) -> "Table":
         """Method that creates a table where temp udf results will be saved"""
 
-    def process_input_query(
-        self, query: Select, input_table_name: str
-    ) -> tuple[Select, list["Table"]]:
-        """Apply any necessary processing to the input query"""
-        return query, []
+    def create_input_table(self, query: Select, input_table_name: str) -> "Table":
+        """Create and populate the UDF input table from the query."""
+        return self.session.catalog.warehouse.create_pre_udf_table(
+            query, input_table_name
+        )
 
     def get_input_query(self, input_table_name: str, original_query: Select) -> Select:
         """
@@ -734,11 +734,15 @@ class UDFStep(Step, ABC):
     def _skip_udf(self, hash_before: str, query):
         warehouse = self.session.catalog.warehouse
         # TODO check that udf output table already exist
-        udf_output_table = warehouse.get_table(self.output_table_name(hash_before))
 
-        input_query = self.get_input_query(self.input_table_name(hash_before), query)
-        q, cols = self.create_result_query(udf_output_table, input_query)
+        input_table_name = self.input_table_name(hash_before)
+        output_table_name = self.output_table_name(hash_before)
 
+        output_table = warehouse.get_table(output_table_name)
+
+        input_query = self.get_input_query(input_table_name, query)
+
+        q, cols = self.create_result_query(output_table, input_query)
         return step_result(q, cols)
 
     def _run_from_scratch(self, hash_before: str, query):
@@ -747,19 +751,19 @@ class UDFStep(Step, ABC):
         self.session.catalog.remove_checkpoint_by_hash(self.job.id, hash_before)
         self.session.catalog.metastore.create_checkpoint(self.job.id, hash_before)
 
-        # creating UDF checkpoint
-        # print(f"Creating checkpoint with job id {self.job.id} and hash {hash_before}")
+        input_table_name = self.input_table_name(hash_before)
+        output_table_name = self.output_table_name(hash_before)
 
-        _query = query  # TODO refactor this query names
-        # TODO remove process_input-query and use create_udf_input_table and
-        # get_input_query
-        query, _ = self.process_input_query(query, self.input_table_name(hash_before))
-        udf_output_table = self.create_udf_output_table(
-            _query, self.output_table_name(hash_before)
-        )
-        self.populate_udf_output_table(udf_output_table, query)
-        q, cols = self.create_result_query(udf_output_table, query)
+        self.create_input_table(query, input_table_name)
+        output_table = self.create_output_table(output_table_name)
 
+        input_query = self.get_input_query(input_table_name, query)
+
+        # main job that runs UDF function to fill the output table with results
+        # this part can be done in parallel with multiple processes / workers
+        self.populate_udf_output_table(output_table, input_query)
+
+        q, cols = self.create_result_query(output_table, input_query)
         return step_result(q, cols)
 
 
@@ -776,7 +780,7 @@ class UDFSignal(UDFStep):
     min_task_size: int | None = None
     batch_size: int | None = None
 
-    def create_udf_output_table(self, query: Select, name: str) -> "Table":
+    def create_output_table(self, name: str) -> "Table":
         udf_output_columns: list[sqlalchemy.Column[Any]] = [
             sqlalchemy.Column(col_name, col_type)
             for (col_name, col_type) in self.udf.output.items()
@@ -786,23 +790,11 @@ class UDFSignal(UDFStep):
             udf_output_columns, name=name
         )
 
-    def create_udf_input_table(self, query: Select, input_table_name: str) -> "Table":
+    def create_input_table(self, query: Select, input_table_name: str) -> "Table":
         """Create and populate the UDF input table from the query."""
         return self.session.catalog.warehouse.create_pre_udf_table(
             query, input_table_name
         )
-
-    def process_input_query(
-        self, query: Select, input_table_name: str
-    ) -> tuple[Select, list["Table"]]:
-        """
-        Create UDF input table and return query. Wrapper for backward compatibility.
-        """
-        if os.getenv("DATACHAIN_DISABLE_QUERY_CACHE", "") not in ("", "0"):
-            return query, []
-        table = self.create_udf_input_table(query, input_table_name)
-        q = self.get_input_query(input_table_name, query)
-        return q, [table]
 
     def create_result_query(
         self, udf_table, query
@@ -868,7 +860,7 @@ class RowGenerator(UDFStep):
     min_task_size: int | None = None
     batch_size: int | None = None
 
-    def create_udf_output_table(self, query: Select, name: str) -> "Table":
+    def create_output_table(self, name: str) -> "Table":
         warehouse = self.session.catalog.warehouse
 
         columns: tuple[Column, ...] = tuple(
@@ -880,23 +872,11 @@ class RowGenerator(UDFStep):
             if_not_exists=True,
         )
 
-    def create_udf_input_table(self, query: Select, input_table_name: str) -> "Table":
+    def create_input_table(self, query: Select, input_table_name: str) -> "Table":
         """Create and populate the UDF input table from the query."""
         return self.session.catalog.warehouse.create_pre_udf_table(
             query, input_table_name
         )
-
-    def process_input_query(
-        self, query: Select, input_table_name: str
-    ) -> tuple[Select, list["Table"]]:
-        """
-        Create UDF input table and return query. Wrapper for backward compatibility.
-        """
-        if os.getenv("DATACHAIN_DISABLE_QUERY_CACHE", "") not in ("", "0"):
-            return query, []
-        table = self.create_udf_input_table(query, input_table_name)
-        q = self.get_input_query(input_table_name, query)
-        return q, [table]
 
     def create_result_query(
         self, udf_table, query: Select

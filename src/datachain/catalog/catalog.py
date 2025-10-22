@@ -2070,10 +2070,8 @@ class Catalog:
             job_id: The job ID of the checkpoint to remove.
             checkpoint_hash: The hash of the checkpoint to remove.
         """
-        # Find the checkpoint
         checkpoint = self.metastore.find_checkpoint(job_id, checkpoint_hash)
         if not checkpoint:
-            # Checkpoint doesn't exist, nothing to do
             return
 
         self._remove_checkpoint(checkpoint)
@@ -2096,21 +2094,17 @@ class Catalog:
                           If None, uses TTL-based cleanup.
         """
 
-        # Get checkpoints (for specific job or all jobs)
         checkpoints = list(self.metastore.list_checkpoints(job_id))
 
         # Filter checkpoints based on created_after or TTL
         if created_after is not None:
-            # Remove checkpoints created after the specified datetime
             checkpoints_to_remove = [
                 cp for cp in checkpoints if cp.created_at > created_after
             ]
         else:
-            # Get TTL from environment variable or use default
             ttl_seconds = int(os.environ.get("CHECKPOINT_TTL", str(TTL_INT)))
             ttl_threshold = datetime.now(timezone.utc) - timedelta(seconds=ttl_seconds)
 
-            # Remove checkpoints older than TTL
             checkpoints_to_remove = [
                 cp for cp in checkpoints if cp.created_at < ttl_threshold
             ]
