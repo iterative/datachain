@@ -2050,31 +2050,30 @@ class Catalog:
         Args:
             checkpoint: The checkpoint object to remove.
         """
-        # Find and drop UDF tables for this checkpoint
-        # UDF table prefix pattern: udf_{job_id}_{hash}
-        # TODO move this table prefix pattern to some common place as we
-        # repeat this in multiple places (e.g in UDFStep and here)
-        table_prefix = f"udf_{checkpoint.job_id}_{checkpoint.hash}"
-        matching_tables = self.warehouse.db.list_tables(prefix=table_prefix)
-        if matching_tables:
-            self.warehouse.cleanup_tables(matching_tables)
-
-        # Remove the checkpoint from metastore
+        # Remove the checkpoint from metastore first
         self.metastore.remove_checkpoint(checkpoint)
 
-    def remove_checkpoint_by_hash(self, job_id: str, checkpoint_hash: str) -> None:
-        """
-        Remove a specific checkpoint by job_id and hash, along with its UDF tables.
+        # Check if any other checkpoint references the same hash
+        # If so, don't remove the shared UDF tables
+        all_checkpoints = list(self.metastore.list_checkpoints())
+        hash_still_referenced = any(
+            cp.hash == checkpoint.hash for cp in all_checkpoints
+        )
 
-        Args:
-            job_id: The job ID of the checkpoint to remove.
-            checkpoint_hash: The hash of the checkpoint to remove.
-        """
-        checkpoint = self.metastore.find_checkpoint(job_id, checkpoint_hash)
-        if not checkpoint:
-            return
+        if not hash_still_referenced:
+            # No other checkpoint uses this hash, safe to clean up shared tables
+            # Shared table prefix pattern: udf_{hash}_
+            table_prefix = f"udf_{checkpoint.hash}_"
+            matching_tables = self.warehouse.db.list_tables(prefix=table_prefix)
+            if matching_tables:
+                self.warehouse.cleanup_tables(matching_tables)
 
-        self._remove_checkpoint(checkpoint)
+        # Also clean up any job-specific partial tables
+        # Partial table pattern: udf_{job_id}_{hash}_*_partial
+        partial_prefix = f"udf_{checkpoint.job_id}_{checkpoint.hash}_"
+        partial_tables = self.warehouse.db.list_tables(prefix=partial_prefix)
+        if partial_tables:
+            self.warehouse.cleanup_tables(partial_tables)
 
     def cleanup_checkpoints(
         self, job_id: str | None = None, created_after: datetime | None = None

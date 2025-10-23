@@ -29,6 +29,7 @@ from tqdm.auto import tqdm
 
 from datachain.asyn import ASYNC_WORKERS, AsyncMapper, OrderedMapper
 from datachain.catalog.catalog import clone_catalog_with_cache
+from datachain.checkpoint import Checkpoint
 from datachain.data_storage.schema import (
     PARTITION_COLUMN_ID,
     partition_col_names,
@@ -654,37 +655,48 @@ class UDFStep(Step, ABC):
             )
         return self.__class__(self.udf, self.session)
 
-    def _checkpoint_exist(self, _hash: str) -> bool:
+    def _checkpoint_exist(self, _hash: str) -> Checkpoint | None:
+        """
+        Check if checkpoint exists for given hash.
+        Returns the Checkpoint object if found, None otherwise.
+        Checks current job first, then parent job if it exists.
+        """
         checkpoints_reset = env2bool("DATACHAIN_CHECKPOINTS_RESET", undefined=True)
 
         # Check in current job first
-        if self.session.catalog.metastore.find_checkpoint(self.job.id, _hash):
-            return True
+        checkpoint = self.session.catalog.metastore.find_checkpoint(self.job.id, _hash)
+        if checkpoint:
+            return checkpoint
 
         # Then check in parent job if exists and reset is not enabled
-        return bool(
-            self.job.parent_job_id
-            and not checkpoints_reset
-            and self.session.catalog.metastore.find_checkpoint(
+        if self.job.parent_job_id and not checkpoints_reset:
+            checkpoint = self.session.catalog.metastore.find_checkpoint(
                 self.job.parent_job_id, _hash
             )
-        )
+            if checkpoint:
+                return checkpoint
+
+        return None
 
     @property
     def job(self) -> Job:
         return self.session.get_or_create_job()
 
-    def table_prefix(self, _hash: str) -> str:
-        return f"udf_{self.job.id}_{_hash}"
-
     def input_table_name(self, _hash: str) -> str:
-        return f"{self.table_prefix(_hash)}_input"
+        """Shared input table name (no job_id)."""
+        return f"udf_{_hash}_input"
 
     def output_table_name(self, _hash: str) -> str:
-        return f"{self.table_prefix(_hash)}_output"
+        """Shared final output table name (no job_id)."""
+        return f"udf_{_hash}_output"
+
+    def partial_output_table_name(self, _hash: str) -> str:
+        """Job-specific partial output table name (includes job_id)."""
+        return f"udf_{self.job.id}_{_hash}_output_partial"
 
     def processed_table_name(self, _hash: str) -> str:
-        return f"{self.table_prefix(_hash)}_processed"
+        """Job-specific processed tracking table name (includes job_id)."""
+        return f"udf_{self.job.id}_{_hash}_processed"
 
     def apply(
         self,
@@ -717,26 +729,28 @@ class UDFStep(Step, ABC):
                 partition_tbl.c.sys__id == query.selected_columns.sys__id,
             ).add_columns(*partition_columns())
 
-        if self._checkpoint_exist(hash_after):
-            result = self._skip_udf(hash_before, query)
+        checkpoint_after = self._checkpoint_exist(hash_after)
+        if checkpoint_after:
+            result = self._skip_udf(checkpoint_after, hash_before, query)
+            # Create checkpoint for current job when skipping
+            self.session.catalog.metastore.create_checkpoint(self.job.id, hash_after)
         elif self._checkpoint_exist(hash_before) and udf_mode == "unsafe":
             # TODO implement continuing with partial checkpoint
-            result = self._run_from_scratch(hash_before, query)
+            result = self._run_from_scratch(hash_before, hash_after, query)
         else:
-            result = self._run_from_scratch(hash_before, query)
-
-        # TODO rename tables to have new job_id in table names since maybe we are
-        # just skipping this as we found checkpoint but they have old job_id in name
-        self.session.catalog.metastore.create_checkpoint(self.job.id, hash_after)
+            result = self._run_from_scratch(hash_before, hash_after, query)
 
         return result
 
-    def _skip_udf(self, hash_before: str, query):
+    def _skip_udf(self, checkpoint: Checkpoint, hash_before: str, query):
+        """
+        Skip UDF execution by reusing existing shared tables.
+        The checkpoint contains hash_after, which is used for the output table name.
+        """
         warehouse = self.session.catalog.warehouse
-        # TODO check that udf output table already exist
 
         input_table_name = self.input_table_name(hash_before)
-        output_table_name = self.output_table_name(hash_before)
+        output_table_name = self.output_table_name(checkpoint.hash)
 
         output_table = warehouse.get_table(output_table_name)
 
@@ -745,26 +759,46 @@ class UDFStep(Step, ABC):
         q, cols = self.create_result_query(output_table, input_query)
         return step_result(q, cols)
 
-    def _run_from_scratch(self, hash_before: str, query):
-        # Remove existing checkpoint for this hash if it exists
-        # This ensures we clean up any old UDF tables from a previous run
-        self.session.catalog.remove_checkpoint_by_hash(self.job.id, hash_before)
+    def _run_from_scratch(self, hash_before: str, hash_after: str, query):
+        """
+        Execute UDF from scratch.
+        Creates shared input table and job-specific partial output table.
+        On success, promotes partial table to shared final table.
+        """
+        warehouse = self.session.catalog.warehouse
+
+        # Create checkpoint with hash_before (marks start of UDF execution)
+        # Don't remove existing checkpoints - with shared tables, multiple jobs
+        # can safely reference the same tables
         self.session.catalog.metastore.create_checkpoint(self.job.id, hash_before)
 
         input_table_name = self.input_table_name(hash_before)
-        output_table_name = self.output_table_name(hash_before)
-
         self.create_input_table(query, input_table_name)
-        output_table = self.create_output_table(output_table_name)
+
+        # Create job-specific partial output table
+        # Use hash_before for the partial name (before UDF completes)
+        partial_output_table_name = self.partial_output_table_name(hash_before)
+        partial_output_table = self.create_output_table(partial_output_table_name)
 
         input_query = self.get_input_query(input_table_name, query)
 
-        # main job that runs UDF function to fill the output table with results
-        # this part can be done in parallel with multiple processes / workers
-        self.populate_udf_output_table(output_table, input_query)
+        # Run UDF to populate partial output table
+        self.populate_udf_output_table(partial_output_table, input_query)
 
-        q, cols = self.create_result_query(output_table, input_query)
+        # Promote partial table to final shared table
+        final_output_table_name = self.output_table_name(hash_after)
+        final_output_table = warehouse.rename_table(
+            partial_output_table, final_output_table_name
+        )
+
+        # Create checkpoint with hash_after (after successful completion)
+        self.session.catalog.metastore.create_checkpoint(self.job.id, hash_after)
+
+        q, cols = self.create_result_query(final_output_table, input_query)
         return step_result(q, cols)
+
+    def _continue_udf(self, hash_before: str, query):
+        pass
 
 
 @frozen

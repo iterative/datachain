@@ -76,9 +76,10 @@ def test_cleanup_checkpoints_with_ttl(test_session, monkeypatch, nums_dataset):
     assert len(checkpoints_before) == 6
 
     # Verify UDF tables exist
+    # Tables are now shared (no job_id) and named udf_{hash}_input and udf_{hash}_output
     udf_tables = []
     for checkpoint in checkpoints_before:
-        table_prefix = f"udf_{checkpoint.job_id}_{checkpoint.hash}"
+        table_prefix = f"udf_{checkpoint.hash}"
         matching_tables = warehouse.db.list_tables(prefix=table_prefix)
         udf_tables.extend(matching_tables)
 
@@ -245,7 +246,8 @@ def test_cleanup_checkpoints_created_after(test_session, nums_dataset):
     assert len(all_checkpoints) == 6
 
     # Get UDF tables before cleanup
-    all_udf_tables_before = warehouse.db.list_tables(prefix=f"udf_{job_id}_")
+    # Tables are now shared (no job_id), so just count all UDF tables
+    all_udf_tables_before = warehouse.db.list_tables(prefix="udf_")
     assert len(all_udf_tables_before) > 0
 
     # Clean up checkpoints created after the cutoff time

@@ -514,6 +514,33 @@ class AbstractWarehouse(ABC, Serializable):
         create it
         """
 
+    def rename_table(self, old_table: sa.Table, new_name: str) -> sa.Table:
+        """
+        Renames a table and returns a new Table object with preserved column types.
+
+        Args:
+            old_table: The existing Table object to rename
+            new_name: New table name
+
+        Returns:
+            SQLAlchemy Table object with the new name and same schema
+        """
+        if self.db.has_table(new_name):
+            # Target already exists, drop the old table since we don't need it
+            self.db.drop_table(old_table, if_exists=True)
+        else:
+            # Target doesn't exist, rename the old table
+            self.db.rename_table(old_table.name, new_name)
+
+        # Create a new table object with the same columns but new name
+        # This preserves the original SQLType types instead of reflecting dialect types
+        return sa.Table(
+            new_name,
+            self.db.metadata,
+            *[sa.Column(c.name, c.type) for c in old_table.columns],
+            extend_existing=True,
+        )
+
     @abstractmethod
     def dataset_table_export_file_names(
         self, dataset: DatasetRecord, version: str
