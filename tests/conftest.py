@@ -181,18 +181,39 @@ def metastore():
 
 
 def check_temp_tables_cleaned_up(original_warehouse):
-    # TODO this is changing with checkpoints, we need to implement job cleaner
-    # that will clean all checkpoints after some CHECKPOINT_TTL
-    return
-    """Ensure that temporary tables are cleaned up."""
+    """Ensure that temporary tables are cleaned up.
+
+    UDF tables are now expected to persist (they're shared across jobs),
+    so we only check for temp tables here.
+    """
     with original_warehouse.clone() as warehouse:
-        assert [
+        temp_tables = [
             t
             for t in sqlalchemy.inspect(warehouse.db.engine).get_table_names()
-            if t.startswith(
-                (warehouse.UDF_TABLE_NAME_PREFIX, warehouse.TMP_TABLE_NAME_PREFIX)
-            )
-        ] == []
+            if t.startswith(warehouse.TMP_TABLE_NAME_PREFIX)
+        ]
+        assert temp_tables == [], f"Temporary tables not cleaned up: {temp_tables}"
+
+
+def cleanup_udf_tables(warehouse):
+    """Clean up all UDF tables after each test.
+
+    UDF tables are shared across jobs and persist after chain finishes,
+    so we need to clean them up after each test to prevent interference.
+    """
+    from datachain.data_storage.sqlite import quote_schema
+
+    udf_table_names = [
+        t
+        for t in warehouse.db.list_tables()
+        if t.startswith(warehouse.UDF_TABLE_NAME_PREFIX)
+    ]
+    for table_name in udf_table_names:
+        quoted_name = quote_schema(table_name)
+        warehouse.db.execute_str(f"DROP TABLE IF EXISTS {quoted_name}")
+        # Remove from metadata to avoid stale references
+        if table_name in warehouse.db.metadata.tables:
+            warehouse.db.metadata.remove(warehouse.db.metadata.tables[table_name])
 
 
 @pytest.fixture
@@ -203,6 +224,7 @@ def warehouse(metastore):
         try:
             check_temp_tables_cleaned_up(_warehouse)
         finally:
+            cleanup_udf_tables(_warehouse)
             _warehouse.cleanup_for_tests()
     else:
         _warehouse = SQLiteWarehouse(db_file=":memory:")
@@ -262,6 +284,7 @@ def warehouse_tmpfile(tmp_path, metastore_tmpfile):
         try:
             check_temp_tables_cleaned_up(_warehouse)
         finally:
+            cleanup_udf_tables(_warehouse)
             _warehouse.cleanup_for_tests()
     else:
         _warehouse = SQLiteWarehouse(db_file=tmp_path / "test.db")
