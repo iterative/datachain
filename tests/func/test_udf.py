@@ -785,22 +785,19 @@ def test_udf_parallel_boostrap(test_session_tmpfile):
 @pytest.mark.parametrize("parallel", (1, 2))
 @pytest.mark.skipif(
     "not os.environ.get('DATACHAIN_DISTRIBUTED')",
-    reason="Set the DATACHAIN_DISTRIBUTED environment variable "
-    "to test distributed UDFs",
+    reason="Set DATACHAIN_DISTRIBUTED environment variable to test distributed UDFs",
 )
 @pytest.mark.xdist_group(name="tmpfile")
-def test_udf_distributed(
-    cloud_test_catalog_tmpfile, workers, parallel, tree, run_datachain_worker
-):
+def test_udf_distributed(cloud_test_catalog_tmpfile, workers, parallel, tree):
     session = cloud_test_catalog_tmpfile.session
 
-    def name_len(name):
-        return (len(name),)
+    def name_len(file_path: str) -> int:
+        return len(file_path)
 
     chain = (
         dc.read_storage(cloud_test_catalog_tmpfile.src_uri, session=session)
         .settings(parallel=parallel, workers=workers)
-        .map(name_len, params=["file.path"], output={"name_len": int})
+        .map(name_len=name_len, params=["file.path"])
         .select("file.path", "name_len")
     )
 
@@ -821,16 +818,15 @@ def test_udf_distributed(
 @pytest.mark.parametrize("parallel", (1, 2))
 @pytest.mark.skipif(
     "not os.environ.get('DATACHAIN_DISTRIBUTED')",
-    reason="Set the DATACHAIN_DISTRIBUTED environment variable "
-    "to test distributed UDFs",
+    reason="Set DATACHAIN_DISTRIBUTED environment variable to test distributed UDFs",
 )
 @pytest.mark.xdist_group(name="tmpfile")
 def test_udf_distributed_exec_error(
-    cloud_test_catalog_tmpfile, workers, parallel, tree, run_datachain_worker
+    cloud_test_catalog_tmpfile, workers, parallel, tree
 ):
     session = cloud_test_catalog_tmpfile.session
 
-    def name_len_error(_name):
+    def name_len_error(_: str) -> int:
         # A udf that raises an exception
         raise RuntimeError("Test Error!")
 
@@ -839,7 +835,7 @@ def test_udf_distributed_exec_error(
         .filter(dc.C("file.size") < 13)
         .filter(dc.C("file.path").glob("cats*") | (dc.C("file.size") < 4))
         .settings(parallel=parallel, workers=workers)
-        .map(name_len_error, params=["file.path"], output={"name_len": int})
+        .map(name_len=name_len_error, params=["file.path"])
     )
     with pytest.raises(DataChainError, match="Test Error!"):
         chain.show()
@@ -852,14 +848,13 @@ def test_udf_distributed_exec_error(
 )
 @pytest.mark.skipif(
     "not os.environ.get('DATACHAIN_DISTRIBUTED')",
-    reason="Set the DATACHAIN_DISTRIBUTED environment variable "
-    "to test distributed UDFs",
+    reason="Set DATACHAIN_DISTRIBUTED environment variable to test distributed UDFs",
 )
 @pytest.mark.parametrize("workers", (1, 2))
 @pytest.mark.parametrize("parallel", (1, 2))
 @pytest.mark.xdist_group(name="tmpfile")
 def test_udf_distributed_interrupt(
-    cloud_test_catalog_tmpfile, capfd, tree, workers, parallel, run_datachain_worker
+    cloud_test_catalog_tmpfile, capfd, tree, workers, parallel
 ):
     session = cloud_test_catalog_tmpfile.session
 

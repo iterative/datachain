@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 import pytest
 
 import datachain as dc
