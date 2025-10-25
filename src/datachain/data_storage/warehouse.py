@@ -1002,7 +1002,7 @@ class AbstractWarehouse(ABC, Serializable):
         """
 
     @abstractmethod
-    def create_pre_udf_table(self, query: sa.Select) -> sa.Table:
+    def create_pre_udf_table(self, query: sa.Select, name: str) -> sa.Table:
         """
         Create a temporary table from a query for use in a UDF.
         """

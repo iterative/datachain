@@ -56,7 +56,9 @@ class _RegenerateSystemColumnsStep(Step):
     def hash_inputs(self) -> str:
         return hashlib.sha256(b"regenerate_sys_columns").hexdigest()
 
-    def apply(self, query_generator: "QueryGenerator", temp_tables: list[str]):
+    def apply(
+        self, query_generator: "QueryGenerator", temp_tables: list[str], *args, **kwargs
+    ):
         selectable = query_generator.select()
         regenerated = self.catalog.warehouse._regenerate_system_columns(
             selectable,
