@@ -314,15 +314,64 @@ def test_delta_replay_regenerates_system_columns(test_session):
 
     build_chain(delta=False).save(result_name)
 
-    build_chain(delta=True).save(
-        result_name,
-        delta=True,
-        delta_on="measurement_id",
-    )
+    build_chain(delta=True).save(result_name)
 
     assert set(
         dc.read_dataset(result_name, session=test_session).to_values("measurement_id")
     ) == {1, 2}
+
+
+def test_storage_delta_replay_regenerates_system_columns(test_session, tmp_dir):
+    data_dir = tmp_dir / f"regen_storage_{uuid.uuid4().hex[:8]}"
+    data_dir.mkdir()
+    storage_uri = data_dir.as_uri()
+    result_name = f"regen_storage_result_{uuid.uuid4().hex[:8]}"
+
+    def write_payload(index: int) -> None:
+        (data_dir / f"item{index}.txt").write_text(f"payload-{index}")
+
+    write_payload(1)
+    write_payload(2)
+
+    def build_chain(delta: bool):
+        read_kwargs = {"session": test_session, "update": True}
+        if delta:
+            read_kwargs |= {
+                "delta": True,
+                "delta_on": ["file.path"],
+                "delta_result_on": ["file.path"],
+            }
+
+        def get_measurement_id(file: File) -> int:
+            match = re.search(r"item(\d+)\.txt$", file.path)
+            assert match
+            return int(match.group(1))
+
+        def get_num(file: File) -> int:
+            return get_measurement_id(file)
+
+        chain = dc.read_storage(storage_uri, **read_kwargs)
+        return (
+            chain.mutate(num=1)
+            .select_except("num")
+            .map(measurement_id=get_measurement_id)
+            .map(err=lambda file: "")
+            .map(num=get_num)
+            .filter(C.err == "")
+            .select_except("err")
+            .map(double=lambda num: num * 2, output=int)
+            .select_except("num")
+        )
+
+    build_chain(delta=False).save(result_name)
+
+    write_payload(3)
+
+    build_chain(delta=True).save(result_name)
+
+    assert set(
+        dc.read_dataset(result_name, session=test_session).to_values("measurement_id")
+    ) == {1, 2, 3}
 
 
 def test_delta_update_from_storage(test_session, tmp_dir, tmp_path):
