@@ -2,11 +2,11 @@ import os
 import os.path
 import signal
 import subprocess  # nosec B404
+import time
 import uuid
 from collections.abc import Generator
 from datetime import datetime
 from pathlib import PosixPath
-from time import sleep
 from typing import NamedTuple
 
 import attrs
@@ -20,6 +20,8 @@ from datachain.catalog import Catalog
 from datachain.catalog.loader import get_metastore, get_warehouse
 from datachain.cli.utils import CommaSeparatedArgs
 from datachain.config import Config, ConfigLevel
+from datachain.data_storage.job import JobQueryType, JobStatus
+from datachain.data_storage.metastore import AbstractMetastore
 from datachain.data_storage.sqlite import (
     SQLiteDatabaseEngine,
     SQLiteMetastore,
@@ -129,6 +131,15 @@ def clean_environment(
     monkeypatch_session.delenv(DataChainDir.ENV_VAR_DATACHAIN_ROOT, raising=False)
 
 
+def _create_job(metastore: AbstractMetastore) -> str:
+    return metastore.create_job(
+        "my-job",
+        'import datachain as dc; dc.read_values(num=[1, 2, 3].save("nums")',
+        query_type=JobQueryType.PYTHON,
+        status=JobStatus.RUNNING,
+    )
+
+
 @pytest.fixture
 def sqlite_db():
     if os.environ.get("DATACHAIN_METASTORE") or os.environ.get("DATACHAIN_WAREHOUSE"):
@@ -162,9 +173,13 @@ def cleanup_sqlite_db(
 
 
 @pytest.fixture
-def metastore():
+def metastore(monkeypatch) -> Generator[AbstractMetastore, None, None]:
     if os.environ.get("DATACHAIN_METASTORE"):
         _metastore = get_metastore()
+
+        job_id = _create_job(_metastore)
+        monkeypatch.setenv("DATACHAIN_JOB_ID", job_id)
+
         yield _metastore
 
         _metastore.cleanup_for_tests()
@@ -233,14 +248,20 @@ def test_session(catalog):
 
 
 @pytest.fixture
-def metastore_tmpfile(tmp_path):
+def metastore_tmpfile(
+    tmp_path, monkeypatch
+) -> Generator[AbstractMetastore, None, None]:
     if os.environ.get("DATACHAIN_METASTORE"):
         _metastore = get_metastore()
+
+        job_id = _create_job(_metastore)
+        monkeypatch.setenv("DATACHAIN_JOB_ID", job_id)
+
         yield _metastore
 
         _metastore.cleanup_for_tests()
     else:
-        _metastore = SQLiteMetastore(db_file=tmp_path / "test.db")
+        _metastore = SQLiteMetastore(db_file=str(tmp_path / "test.db"))
         yield _metastore
 
         cleanup_sqlite_db(_metastore.db.clone(), _metastore.default_table_names)
@@ -261,7 +282,7 @@ def warehouse_tmpfile(tmp_path, metastore_tmpfile):
         finally:
             _warehouse.cleanup_for_tests()
     else:
-        _warehouse = SQLiteWarehouse(db_file=tmp_path / "test.db")
+        _warehouse = SQLiteWarehouse(db_file=str(tmp_path / "test.db"))
         yield _warehouse
         try:
             check_temp_tables_cleaned_up(_warehouse)
@@ -469,13 +490,10 @@ def cloud_server(request, tmp_upath_factory, cloud_type, version_aware, tree):
 
 
 @pytest.fixture
-def datachain_job_id(test_session, monkeypatch):
-    job_id = test_session.catalog.metastore.create_job(
-        "my-job",
-        'import datachain as dc; dc.read_values(num=[1, 2, 3].save("nums")',
-    )
+def datachain_job_id(metastore, monkeypatch) -> Generator[str, None, None]:
+    job_id = _create_job(metastore)
     monkeypatch.setenv("DATACHAIN_JOB_ID", job_id)
-    return job_id
+    yield job_id
 
 
 @pytest.fixture
@@ -853,35 +871,25 @@ def pseudo_random_ds(test_session):
     )
 
 
-@pytest.fixture()
-def run_datachain_worker(datachain_job_id):
+@pytest.fixture(scope="session", autouse=True)
+def distributed_workers() -> Generator[None, None, None]:
     if not os.environ.get("DATACHAIN_DISTRIBUTED"):
-        pytest.skip("Distributed tests are disabled")
+        yield
+        return  # Distributed tests are not enabled
 
-    job_id = os.environ.get("DATACHAIN_JOB_ID")
-    assert job_id, "DATACHAIN_JOB_ID environment variable is required for this test"
+    try:
+        from datachain_worker.utils.celery import celery_app
+    except ImportError as e:
+        raise RuntimeError(
+            "datachain_worker is not installed, cannot run distributed tests"
+        ) from e
 
-    # This worker can take several tasks in parallel, as it's very handy
-    # for testing, where we don't want [yet] to constrain the number of
-    # available workers.
-    workers = []
-    worker_cmd = [
-        "celery",
-        "-A",
-        "datachain_worker.tasks",
-        "worker",
-        "--loglevel=INFO",
-        "--hostname=tests-datachain-worker-main",
-        "--pool=solo",
-        "--concurrency=1",
-        "--max-tasks-per-child=1",
-        "--prefetch-multiplier=1",
-        "-Q",
-        f"datachain-worker-main-{job_id}",
-    ]
-    print(f"Starting worker with command: {' '.join(worker_cmd)}")
-    workers.append(subprocess.Popen(worker_cmd, shell=False))  # noqa: S603
+    print(f"[SETUP] Starting 2 Celery UDF workers at {time.strftime('%X')}", flush=True)
+
+    workers: list[subprocess.Popen] = []
+    queues: list[str] = []
     for i in range(2):
+        queue_name = f"udf-{uuid.uuid4()}"
         worker_cmd = [
             "celery",
             "-A",
@@ -894,28 +902,38 @@ def run_datachain_worker(datachain_job_id):
             "--max-tasks-per-child=1",
             "--prefetch-multiplier=1",
             "-Q",
-            "udf_runner_queue",
+            queue_name,
         ]
-        print(f"Starting worker with command: {' '.join(worker_cmd)}")
+        queues.append(queue_name)
+        print(
+            f"[SETUP] Starting worker with command: {' '.join(worker_cmd)}", flush=True
+        )
         workers.append(subprocess.Popen(worker_cmd, shell=False))  # noqa: S603
-    try:
-        from datachain_worker.utils.celery import celery_app
 
+    try:
         inspect = celery_app.control.inspect()
-        attempts = 0
+
         # Wait 10 seconds for the Celery worker(s) to be up
+        attempts = 0
         while not inspect.active() and attempts < 10:
-            print("Waiting for Celery worker(s) to start...")
-            sleep(1)
+            print("[SETUP] Waiting for Celery worker(s) to start...", flush=True)
+            time.sleep(1)
             attempts += 1
 
-        if attempts == 10:
-            raise RuntimeError("Celery worker(s) did not start in time")
-
-        yield workers
+        if attempts < 10:
+            print(
+                "[SETUP COMPLETE] Celery workers are ready at {time.strftime('%X')}",
+                flush=True,
+            )
+            os.environ["DATACHAIN_STEP_ID"] = "1"
+            os.environ["UDF_RUNNER_QUEUE_NAME_LIST"] = ",".join(queues)
+            yield
+        else:
+            raise RuntimeError("Celery workers did not start in time")
     finally:
+        print("[TEARDOWN] Stopping Celery workers", flush=True)
         for worker in workers:
-            print(f"Stopping worker {worker.pid}")
+            print(f"[TEARDOWN] Stopping worker {worker.pid}", flush=True)
             os.kill(worker.pid, signal.SIGTERM)
         for worker in workers:
             try:
