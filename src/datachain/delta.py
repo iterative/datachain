@@ -150,7 +150,9 @@ def _get_retry_chain(
         error_records = result_dataset.filter(C(delta_retry) != "")
         error_source_records = source_dc.merge(
             error_records, on=on, right_on=right_on, inner=True
-        ).select(*list(source_dc.signals_schema.values))
+        ).select(
+            *list(source_dc.signals_schema.clone_without_sys_signals().values.keys())
+        )
         retry_chain = error_source_records
 
     # Handle missing records if delta_retry is True
