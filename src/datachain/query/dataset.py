@@ -1065,7 +1065,7 @@ class SQLJoin(Step):
         q1 = self.get_query(self.query1, temp_tables)
         q2 = self.get_query(self.query2, temp_tables)
 
-        q1_columns = _drop_system_columns(q1.c) if self.full else list(q1.c)
+        q1_columns = _drop_system_columns(q1.c)
         q1_column_names = {c.name for c in q1_columns}
 
         q2_columns = []
