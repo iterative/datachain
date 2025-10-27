@@ -426,8 +426,10 @@ class UDFStep(Step, ABC):
         """Method that creates a table where temp udf results will be saved"""
 
     def process_input_query(self, query: Select) -> tuple[Select, list["Table"]]:
-        """Apply any necessary processing to the input query"""
-        return query, []
+        """Materialize inputs, ensure sys columns are available, needed for checkpoints,
+        needed for map to work (merge results)"""
+        table = self.catalog.warehouse.create_pre_udf_table(query)
+        return sqlalchemy.select(*table.c), [table]
 
     @abstractmethod
     def create_result_query(
@@ -674,13 +676,6 @@ class UDFSignal(UDFStep):
         ]
 
         return self.catalog.warehouse.create_udf_table(udf_output_columns)
-
-    def process_input_query(self, query: Select) -> tuple[Select, list["Table"]]:
-        if os.getenv("DATACHAIN_DISABLE_QUERY_CACHE", "") not in ("", "0"):
-            return query, []
-        table = self.catalog.warehouse.create_pre_udf_table(query)
-        q: Select = sqlalchemy.select(*table.c)
-        return q, [table]
 
     def create_result_query(
         self, udf_table, query

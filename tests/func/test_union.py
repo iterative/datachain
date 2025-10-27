@@ -57,3 +57,30 @@ def test_union_parallel_udf_ids_only_no_dup(test_session_tmpfile, monkeypatch):
     assert total == 2 * n
     assert len(distinct_idx) == 2 * n
     assert total == len(distinct_idx)
+
+
+def test_union_parallel_gen_ids_only_no_dup(test_session_tmpfile, monkeypatch):
+    monkeypatch.setattr("datachain.query.dispatch.DEFAULT_BATCH_SIZE", 5, raising=False)
+    n = 30
+
+    x_ids = list(range(n))
+    y_ids = list(range(n, 2 * n))
+
+    x = dc.read_values(idx=x_ids, session=test_session_tmpfile)
+    y = dc.read_values(idx=y_ids, session=test_session_tmpfile)
+
+    xy = x.union(y)
+
+    def expand(idx):
+        yield f"val-{idx}"
+
+    generated = xy.settings(parallel=2).gen(
+        gen=expand,
+        params=("idx",),
+        output={"val": str},
+    )
+
+    values = generated.to_values("val")
+
+    assert len(values) == 2 * n
+    assert set(values) == {f"val-{i}" for i in range(2 * n)}
