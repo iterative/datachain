@@ -1699,10 +1699,16 @@ def test_agg_offset_limit(catalog_tmpfile, parallel, offset, limit, files):
         value=list(range(100)),
         session=catalog_tmpfile.session,
     )
+    # Read values in general doesn't guarantee order, so we need to order first
+    ds = ds.order_by("filename")
     if offset is not None:
         ds = ds.offset(offset)
     if limit is not None:
         ds = ds.limit(limit)
+
+    limited_filenames = ds.to_values("filename")
+    assert set(limited_filenames) == set(files)
+
     ds = (
         ds.settings(parallel=parallel)
         .agg(
