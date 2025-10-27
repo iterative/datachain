@@ -140,7 +140,7 @@ def test_merge_similar_objects(test_session):
     rname = "qq"
     ch = ch1.merge(ch2, "emp.person.name", rname=rname)
 
-    assert list(ch.signals_schema.values.keys()) == ["sys", "emp", rname + "emp"]
+    assert list(ch.signals_schema.values.keys()) == ["emp", rname + "emp"]
 
     empl = list(ch.to_list())
     assert len(empl) == 4
@@ -175,7 +175,7 @@ def test_merge_similar_objects_in_memory():
     assert ch.session.catalog.metastore.db.db_file == ":memory:"
     assert ch.session.catalog.warehouse.db.db_file == ":memory:"
 
-    assert list(ch.signals_schema.values.keys()) == ["sys", "emp", rname + "emp"]
+    assert list(ch.signals_schema.values.keys()) == ["emp", rname + "emp"]
 
     empl = list(ch.to_list())
     assert len(empl) == 4
@@ -198,7 +198,6 @@ def test_merge_values(test_session):
     ch = ch1.merge(ch2, "id")
 
     assert list(ch.signals_schema.values.keys()) == [
-        "sys",
         "id",
         "descr",
         "right_id",
@@ -339,3 +338,42 @@ def test_merge_on_expression(test_session):
         count += 1
 
     assert count == len(team) * len(team)
+
+
+def test_merge_with_drops_sys_columns(test_session):
+    left = dc.read_values(id=[1, 1], lval=[10, 20], session=test_session)
+    right = dc.read_values(id=[1, 1], rval=["a", "b"], session=test_session)
+
+    merged = left.merge(right, on="id")
+
+    assert "sys" not in merged.signals_schema.values
+
+    cols = merged.settings(sys=True).to_pandas(flatten=True).columns
+    assert all(not str(col).startswith("sys") for col in cols)
+
+    ds_name = "merge_left_dups_sys_check_sys"
+    merged.save(ds_name)
+
+    df_with_sys = (
+        dc.read_dataset(ds_name, session=test_session)
+        .settings(sys=True)
+        .to_pandas(flatten=True)
+    )
+
+    sys_cols = [c for c in df_with_sys.columns if str(c).startswith("sys")]
+    assert sys_cols
+
+    def _col(name: str) -> str:
+        for col in df_with_sys.columns:
+            if str(col) == f"sys.{name}":
+                return str(col)
+        raise AssertionError(f"Missing sys column for {name}")
+
+    sys_id_col = _col("id")
+    sys_rand_col = _col("rand")
+
+    sys_ids = list(df_with_sys[sys_id_col])
+    assert len(sys_ids) == len(set(sys_ids))
+
+    sys_rand = list(df_with_sys[sys_rand_col])
+    assert len(sys_rand) == len(set(sys_rand))

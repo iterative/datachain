@@ -29,7 +29,6 @@ from sqlalchemy.sql.selectable import Select
 from tqdm.auto import tqdm
 
 import datachain.sql.sqlite
-from datachain import semver
 from datachain.data_storage import AbstractDBMetastore, AbstractWarehouse
 from datachain.data_storage.db_engine import DatabaseEngine
 from datachain.data_storage.schema import DefaultSchema
@@ -706,61 +705,6 @@ class SQLiteWarehouse(AbstractWarehouse):
             StorageURI(row["file__source"])
             for row in self.db.execute(query, cursor=cur)
         ]
-
-    def merge_dataset_rows(
-        self,
-        src: DatasetRecord,
-        dst: DatasetRecord,
-        src_version: str,
-        dst_version: str,
-    ) -> None:
-        dst_empty = False
-
-        if not self.db.has_table(self.dataset_table_name(src, src_version)):
-            # source table doesn't exist, nothing to do
-            return
-
-        src_dr = self.dataset_rows(src, src_version).table
-
-        if not self.db.has_table(self.dataset_table_name(dst, dst_version)):
-            # destination table doesn't exist, create it
-            self.create_dataset_rows_table(
-                self.dataset_table_name(dst, dst_version),
-                columns=src_dr.columns,
-            )
-            dst_empty = True
-
-        dst_dr = self.dataset_rows(dst, dst_version).table
-        merge_fields = [c.name for c in src_dr.columns if c.name != "sys__id"]
-        select_src = select(*(getattr(src_dr.columns, f) for f in merge_fields))
-
-        if dst_empty:
-            # we don't need union, but just select from source to destination
-            insert_query = sqlite.insert(dst_dr).from_select(merge_fields, select_src)
-        else:
-            dst_version_latest = None
-            # find the previous version of the destination dataset
-            dst_previous_versions = [
-                v.version
-                for v in dst.versions  # type: ignore [union-attr]
-                if semver.compare(v.version, dst_version) == -1
-            ]
-            if dst_previous_versions:
-                dst_version_latest = max(dst_previous_versions)
-
-            dst_dr_latest = self.dataset_rows(dst, dst_version_latest).table
-
-            select_dst_latest = select(
-                *(getattr(dst_dr_latest.c, f) for f in merge_fields)
-            )
-            union_query = sqlalchemy.union(select_src, select_dst_latest)
-            insert_query = (
-                sqlite.insert(dst_dr)
-                .from_select(merge_fields, union_query)
-                .prefix_with("OR IGNORE")
-            )
-
-        self.db.execute(insert_query)
 
     def prepare_entries(self, entries: "Iterable[File]") -> Iterable[dict[str, Any]]:
         return (e.model_dump() for e in entries)

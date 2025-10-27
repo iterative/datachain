@@ -371,21 +371,6 @@ class AbstractWarehouse(ABC, Serializable):
         table = sa.Table(table_name, self.db.metadata)
         self.db.drop_table(table, if_exists=if_exists)
 
-    @abstractmethod
-    def merge_dataset_rows(
-        self,
-        src: "DatasetRecord",
-        dst: "DatasetRecord",
-        src_version: str,
-        dst_version: str,
-    ) -> None:
-        """
-        Merges source dataset rows and current latest destination dataset rows
-        into a new rows table created for new destination dataset version.
-        Note that table for new destination version must be created upfront.
-        Merge results should not contain duplicates.
-        """
-
     def dataset_rows_select(
         self,
         query: sa.Select,
