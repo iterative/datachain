@@ -770,6 +770,7 @@ class SQLiteWarehouse(AbstractWarehouse):
         table: Table,
         rows: Iterable[dict[str, Any]],
         batch_size: int = INSERT_BATCH_SIZE,
+        batch_callback: Callable[[list[dict[str, Any]]], None] | None = None,
     ) -> None:
         for row_chunk in batched(rows, batch_size):
             with self.db.transaction() as conn:
@@ -780,6 +781,9 @@ class SQLiteWarehouse(AbstractWarehouse):
                     row_chunk,
                     conn=conn,
                 )
+            # After transaction commits, call callback with the chunk that was inserted
+            if batch_callback:
+                batch_callback(list(row_chunk))
 
     def insert_dataset_rows(self, df, dataset: DatasetRecord, version: str) -> int:
         dr = self.dataset_rows(dataset, version)

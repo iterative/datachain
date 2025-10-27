@@ -23,6 +23,7 @@ class UdfInfo(TypedDict):
     cache: bool
     rows_total: int
     batch_size: int
+    processed_table: "Table | None"
 
 
 class AbstractUDFDistributor(ABC):

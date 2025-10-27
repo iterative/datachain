@@ -366,21 +366,65 @@ def process_udf_outputs(
     udf: "UDFAdapter",
     cb: Callback = DEFAULT_CALLBACK,
     batch_size: int = INSERT_BATCH_SIZE,
+    processed_table: "Table | None" = None,
 ) -> None:
     # Optimization: Compute row types once, rather than for every row.
     udf_col_types = get_col_types(warehouse, udf.output)
+
+    # Track processed input sys__ids for RowGenerator
+    # batch_processed_sys_ids: sys__ids in current batch that haven't been inserted yet
+    # all_processed_sys_ids: all sys__ids we've inserted so far (to avoid duplicates)
+    batch_processed_sys_ids: set[int] = set()
+    all_processed_sys_ids: set[int] = set()
+
+    def _batch_callback(batch: list[dict[str, Any]]) -> None:
+        """Called after each batch of outputs is inserted.
+
+        Inserts the corresponding input sys__ids into the processed table.
+        """
+        if processed_table is not None and batch_processed_sys_ids:
+            # Only insert sys__ids that we haven't already inserted
+            new_sys_ids = batch_processed_sys_ids - all_processed_sys_ids
+            if new_sys_ids:
+                warehouse.insert_rows(
+                    processed_table,
+                    ({"sys__id": sys_id} for sys_id in sorted(new_sys_ids)),
+                    batch_size=batch_size,
+                    batch_callback=None,
+                )
+                warehouse.insert_rows_done(processed_table)
+                all_processed_sys_ids.update(new_sys_ids)
+            batch_processed_sys_ids.clear()
 
     def _insert_rows():
         for udf_output in udf_results:
             if not udf_output:
                 continue
 
+            # Track the input sys__id for this batch of outputs (from one input)
+            current_input_sys_id = None
+
             with safe_closing(udf_output):
                 for row in udf_output:
                     cb.relative_update()
+
+                    # For RowGenerator, extract and track the input sys__id
+                    # Always remove _input_sys_id as it's only for internal tracking
+                    if "_input_sys_id" in row:
+                        current_input_sys_id = row.pop("_input_sys_id")
+
                     yield adjust_outputs(warehouse, row, udf_col_types)
 
-    warehouse.insert_rows(udf_table, _insert_rows(), batch_size=batch_size)
+            # After processing all outputs from this input, mark it as processed
+            if processed_table is not None and current_input_sys_id is not None:
+                batch_processed_sys_ids.add(current_input_sys_id)
+
+    warehouse.insert_rows(
+        udf_table,
+        _insert_rows(),
+        batch_size=batch_size,
+        batch_callback=_batch_callback if processed_table is not None else None,
+    )
     warehouse.insert_rows_done(udf_table)
 
 
@@ -465,7 +509,9 @@ class UDFStep(Step, ABC):
         to select
         """
 
-    def populate_udf_output_table(self, udf_table: "Table", query: Select) -> None:
+    def populate_udf_output_table(
+        self, udf_table: "Table", query: Select, processed_table: "Table | None" = None
+    ) -> None:
         catalog = self.session.catalog
         if (rows_total := catalog.warehouse.query_count(query)) == 0:
             return
@@ -542,6 +588,7 @@ class UDFStep(Step, ABC):
                         cache=self.cache,
                         rows_total=rows_total,
                         batch_size=self.batch_size or INSERT_BATCH_SIZE,
+                        processed_table=processed_table,
                     )
 
                     # Run the UDFDispatcher in another process to avoid needing
@@ -591,6 +638,7 @@ class UDFStep(Step, ABC):
                                 self.udf,
                                 cb=generated_cb,
                                 batch_size=self.batch_size or INSERT_BATCH_SIZE,
+                                processed_table=processed_table,
                             )
                     finally:
                         download_cb.close()
@@ -773,6 +821,7 @@ class UDFStep(Step, ABC):
         On success, promotes partial table to shared final table.
         """
         warehouse = self.session.catalog.warehouse
+        udf_mode = os.getenv("DATACHAIN_UDF_CHECKPOINT_MODE", "safe")
 
         # Create checkpoint with hash_before (marks start of UDF execution)
         # Don't remove existing checkpoints - with shared tables, multiple jobs
@@ -789,10 +838,22 @@ class UDFStep(Step, ABC):
         )
         partial_output_table = self.create_output_table(partial_output_table_name)
 
+        # For RowGenerator in unsafe mode, create processed table to track
+        # which inputs were processed. Only needed when using partial tables
+        # (unsafe mode) for checkpoint recovery
+        processed_table = None
+        if self.is_generator and udf_mode == "unsafe":
+            processed_table = warehouse.create_udf_table(
+                [sa.Column("sys__id", sa.Integer, primary_key=True)],
+                name=UDFStep.processed_table_name(self.job.id, hash_before),
+            )
+
         input_query = self.get_input_query(input_table_name, query)
 
         # Run UDF to populate partial output table
-        self.populate_udf_output_table(partial_output_table, input_query)
+        self.populate_udf_output_table(
+            partial_output_table, input_query, processed_table=processed_table
+        )
 
         # Promote partial table to final shared table
         final_output_table_name = UDFStep.output_table_name(hash_after)
@@ -853,13 +914,46 @@ class UDFStep(Step, ABC):
         current_partial_table = self.create_output_table(current_partial_table_name)
         warehouse.copy_table(current_partial_table, sa.select(parent_partial_table))
 
+        # For RowGenerator, we need a separate processed table to track which
+        # input rows have been processed (since output doesn't have 1:1 mapping)
+        processed_table = None
+        if self.is_generator:
+            # Create processed table with only sys__id column
+            processed_table = warehouse.create_udf_table(
+                [sa.Column("sys__id", sa.Integer, primary_key=True)],
+                name=UDFStep.processed_table_name(self.job.id, hash_before),
+            )
+
+            # Create processed table name (similar to partial table but with
+            # _processed suffix)
+            parent_processed_table_name = UDFStep.processed_table_name(
+                parent_job_id, hash_before
+            )
+            # Copy parent's processed table if it exists
+            if warehouse.db.has_table(parent_processed_table_name):
+                parent_processed_table = warehouse.get_table(
+                    parent_processed_table_name
+                )
+                warehouse.copy_table(processed_table, sa.select(parent_processed_table))
+
         # Calculate unprocessed input rows
+        # For UDFSignal: use partial output table (has sys__id from input)
+        # For RowGenerator: use processed tracking table
+        if self.is_generator:
+            assert processed_table is not None  # Always created above for generators
+            tracking_table = processed_table
+        else:
+            tracking_table = current_partial_table
         unprocessed_query = self.calculate_unprocessed_rows(
-            warehouse.get_table(input_table_name), current_partial_table, query
+            warehouse.get_table(input_table_name), tracking_table, query
         )
 
         # Execute UDF only on unprocessed rows, appending to partial table
-        self.populate_udf_output_table(current_partial_table, unprocessed_query)
+        # For RowGenerator, also pass processed table to track which inputs
+        # were processed
+        self.populate_udf_output_table(
+            current_partial_table, unprocessed_query, processed_table=processed_table
+        )
 
         # Promote partial table to final shared table
         final_output_table = warehouse.rename_table(
@@ -874,16 +968,27 @@ class UDFStep(Step, ABC):
         return step_result(q, cols)
 
     def calculate_unprocessed_rows(
-        self, input_table: "Table", partial_output_table: "Table", original_query
+        self, input_table: "Table", processed_table: "Table", original_query
     ):
         """
         Calculate which input rows haven't been processed yet.
 
-        For UDFSignal: Returns input rows where sys__id is NOT in partial output.
-        This will be overridden in UDFGenerator for more complex logic.
+        Works for both UDFSignal and RowGenerator by checking sys__id values.
+        - For UDFSignal: processed_table is the partial output table (which
+          has sys__id)
+        - For RowGenerator: processed_table is a dedicated tracking table with
+          only sys__id
+
+        Args:
+            input_table: The UDF input table
+            processed_table: Table containing sys__id column of processed input rows
+            original_query: The original query for input data
+
+        Returns:
+            A filtered query containing only unprocessed rows
         """
         # Get sys__id values that have already been processed
-        processed_ids = sa.select(partial_output_table.c.sys__id).subquery()
+        processed_ids = sa.select(processed_table.c.sys__id).subquery()
 
         # Filter original query to only include unprocessed rows
         # Use the sys__id column from the query's selected columns, not from input_table
