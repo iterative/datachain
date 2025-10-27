@@ -2,9 +2,11 @@
 
 Checkpoints allow DataChain to automatically skip re-creating datasets that were successfully saved in previous script runs. When a script fails or is interrupted, you can re-run it and DataChain will resume from where it left off, reusing datasets that were already created.
 
-**Note:** Checkpoints are currently available only for local script runs. Support for Studio is planned for future releases.
+Checkpoints are available for both local script runs and Studio executions.
 
 ## How Checkpoints Work
+
+### Local Script Runs
 
 When you run a Python script locally (e.g., `python my_script.py`), DataChain automatically:
 
@@ -15,6 +17,18 @@ When you run a Python script locally (e.g., `python my_script.py`), DataChain au
 5. **Checks for existing checkpoints** on subsequent runs - if a matching checkpoint exists in the parent job, DataChain skips the save and reuses the existing dataset
 
 This means that if your script creates multiple datasets and fails partway through, the next run will skip recreating the datasets that were already successfully saved.
+
+### Studio Runs
+
+When running jobs on Studio, the checkpoint workflow is managed through the UI:
+
+1. **Job execution** is triggered using the Run button in the Studio interface
+2. **Checkpoint control** is explicit - you choose between:
+   - **Run from scratch**: Ignores any existing checkpoints and recreates all datasets
+   - **Continue from last checkpoint**: Resumes from the last successful checkpoint, skipping already-completed stages
+3. **Parent-child job linking** is handled automatically by the system - no need for script path matching or job name conventions
+4. **Checkpoint behavior** during execution is the same as local runs: datasets are saved at each `.save()` call and can be reused on retry
+
 
 ## Example
 
@@ -66,7 +80,6 @@ Checkpoints are **not** used when:
 - Running code interactively (Python REPL, Jupyter notebooks)
 - Running code as a module (e.g., `python -m mymodule`)
 - The `DATACHAIN_CHECKPOINTS_RESET` environment variable is set (see below)
-- Running on Studio (checkpoints support planned for future releases)
 
 ## Resetting Checkpoints
 
@@ -176,16 +189,11 @@ for ds in dc.datasets():
 
 ## Limitations
 
-- **Local only:** Checkpoints currently work only for local script runs. Studio support is planned.
 - **Script-based:** Code must be run as a script (not interactively or as a module).
 - **Hash-based matching:** Any change to the chain will create a different hash, preventing checkpoint reuse.
 - **Same script path:** The script must be run from the same absolute path for parent job linking to work.
 
 ## Future Plans
-
-### Studio Support
-
-Support for checkpoints on Studio is planned for future releases, which will enable checkpoint functionality for collaborative workflows and cloud-based data processing.
 
 ### UDF-Level Checkpoints
 
