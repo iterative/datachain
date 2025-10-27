@@ -878,3 +878,146 @@ def test_udf_distributed_interrupt(
         chain.show()
     captured = capfd.readouterr()
     assert "semaphore" not in captured.err
+
+
+def test_gen_works_after_union(test_session_tmpfile, monkeypatch):
+    """
+    Union drops sys columns, we test that UDF generates them correctly after that.
+    """
+    monkeypatch.setattr("datachain.query.dispatch.DEFAULT_BATCH_SIZE", 5, raising=False)
+    n = 30
+
+    x_ids = list(range(n))
+    y_ids = list(range(n, 2 * n))
+
+    x = dc.read_values(idx=x_ids, session=test_session_tmpfile)
+    y = dc.read_values(idx=y_ids, session=test_session_tmpfile)
+
+    xy = x.union(y)
+
+    def expand(idx):
+        yield f"val-{idx}"
+
+    generated = xy.settings(parallel=2).gen(
+        gen=expand,
+        params=("idx",),
+        output={"val": str},
+    )
+
+    values = generated.to_values("val")
+
+    assert len(values) == 2 * n
+    assert set(values) == {f"val-{i}" for i in range(2 * n)}
+
+
+@pytest.mark.parametrize("full", [False, True])
+def test_gen_works_after_merge(test_session_tmpfile, monkeypatch, full):
+    """Merge drops sys columns as well; ensure UDF generation still works."""
+    monkeypatch.setattr("datachain.query.dispatch.DEFAULT_BATCH_SIZE", 5, raising=False)
+    n = 30
+
+    idxs = list(range(n))
+
+    left = dc.read_values(
+        idx=idxs,
+        left_value=[f"left-{i}" for i in idxs],
+        session=test_session_tmpfile,
+    )
+    right = dc.read_values(
+        idx=idxs,
+        right_value=[f"right-{i}" for i in idxs],
+        session=test_session_tmpfile,
+    )
+
+    merged = left.merge(right, on="idx", full=full)
+
+    def expand(idx, left_value, right_value):
+        yield f"val-{idx}-{left_value}-{right_value}"
+
+    generated = merged.settings(parallel=2).gen(
+        gen=expand,
+        params=("idx", "left_value", "right_value"),
+        output={"val": str},
+    )
+
+    values = generated.to_values("val")
+
+    assert len(values) == n
+    expected = {f"val-{i}-left-{i}-right-{i}" for i in idxs}
+    assert set(values) == expected
+
+
+def test_agg_works_after_union(test_session_tmpfile, monkeypatch):
+    """Union must preserve sys columns for aggregations with functional partitions."""
+    from datachain import func
+
+    monkeypatch.setattr("datachain.query.dispatch.DEFAULT_BATCH_SIZE", 5, raising=False)
+
+    groups = 5
+    n = 30
+
+    x_paths = [f"group-{i % groups}/item-{i}" for i in range(n)]
+    y_paths = [f"group-{i % groups}/item-{n + i}" for i in range(n)]
+
+    x = dc.read_values(path=x_paths, session=test_session_tmpfile)
+    y = dc.read_values(path=y_paths, session=test_session_tmpfile)
+
+    xy = x.union(y)
+
+    def summarize(paths):
+        group = paths[0].split("/")[0]
+        yield group, len(paths)
+
+    aggregated = xy.settings(parallel=2).agg(
+        summarize,
+        params=("path",),
+        output={"partition": str, "count": int},
+        partition_by=func.parent("path"),
+    )
+
+    records = aggregated.to_records()
+    expected_counts = {f"group-{g}": 2 * n // groups for g in range(groups)}
+    assert {row["partition"]: row["count"] for row in records} == expected_counts
+
+
+@pytest.mark.parametrize("full", [False, True])
+def test_agg_works_after_merge(test_session_tmpfile, monkeypatch, full):
+    """Ensure merge keeps sys columns for aggregations with functional partitions."""
+    from datachain import func
+
+    monkeypatch.setattr("datachain.query.dispatch.DEFAULT_BATCH_SIZE", 5, raising=False)
+
+    groups = 5
+    n = 30
+    idxs = list(range(n))
+
+    left = dc.read_values(
+        idx=idxs,
+        left_path=[f"group-{i % groups}/left-{i}" for i in idxs],
+        session=test_session_tmpfile,
+    )
+    right = dc.read_values(
+        idx=idxs,
+        right_value=idxs,
+        session=test_session_tmpfile,
+    )
+
+    merged = left.merge(right, on="idx", full=full)
+
+    def summarize(left_path, right_value):
+        group = left_path[0].split("/")[0]
+        yield group, sum(right_value)
+
+    aggregated = merged.settings(parallel=2).agg(
+        summarize,
+        params=("left_path", "right_value"),
+        output={"partition": str, "total": int},
+        partition_by=func.parent("left_path"),
+    )
+
+    records = aggregated.to_records()
+    expected_totals = {
+        f"group-{g}": sum(val for val in idxs if val % groups == g)
+        for g in range(groups)
+    }
+    assert {row["partition"]: row["total"] for row in records} == expected_totals
