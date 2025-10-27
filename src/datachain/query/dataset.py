@@ -703,7 +703,7 @@ class UDFStep(Step, ABC):
             )
         return self.__class__(self.udf, self.session)
 
-    def _checkpoint_exist(self, _hash: str) -> Checkpoint | None:
+    def _checkpoint_exist(self, _hash: str, partial: bool = False) -> Checkpoint | None:
         """
         Check if checkpoint exists for given hash.
         Returns the Checkpoint object if found, None otherwise.
@@ -712,14 +712,16 @@ class UDFStep(Step, ABC):
         checkpoints_reset = env2bool("DATACHAIN_CHECKPOINTS_RESET", undefined=True)
 
         # Check in current job first
-        checkpoint = self.session.catalog.metastore.find_checkpoint(self.job.id, _hash)
+        checkpoint = self.session.catalog.metastore.find_checkpoint(
+            self.job.id, _hash, partial=partial
+        )
         if checkpoint:
             return checkpoint
 
         # Then check in parent job if exists and reset is not enabled
         if self.job.parent_job_id and not checkpoints_reset:
             checkpoint = self.session.catalog.metastore.find_checkpoint(
-                self.job.parent_job_id, _hash
+                self.job.parent_job_id, _hash, partial=partial
             )
             if checkpoint:
                 return checkpoint
@@ -787,10 +789,10 @@ class UDFStep(Step, ABC):
             # Create checkpoint for current job when skipping
             self.session.catalog.metastore.create_checkpoint(self.job.id, hash_after)
         elif (
-            checkpoint_before := self._checkpoint_exist(hash_before)
+            checkpoint_partial := self._checkpoint_exist(hash_before, partial=True)
         ) and udf_mode == "unsafe":
             result = self._continue_udf(
-                checkpoint_before, hash_before, hash_after, query
+                checkpoint_partial, hash_before, hash_after, query
             )
         else:
             result = self._run_from_scratch(hash_before, hash_after, query)
@@ -826,7 +828,9 @@ class UDFStep(Step, ABC):
         # Create checkpoint with hash_before (marks start of UDF execution)
         # Don't remove existing checkpoints - with shared tables, multiple jobs
         # can safely reference the same tables
-        self.session.catalog.metastore.create_checkpoint(self.job.id, hash_before)
+        self.session.catalog.metastore.create_checkpoint(
+            self.job.id, hash_before, partial=True
+        )
 
         input_table_name = UDFStep.input_table_name(hash_before)
         self.create_input_table(query, input_table_name)
@@ -902,7 +906,9 @@ class UDFStep(Step, ABC):
             )
 
         # Create checkpoint with hash_before for current job
-        self.session.catalog.metastore.create_checkpoint(self.job.id, hash_before)
+        self.session.catalog.metastore.create_checkpoint(
+            self.job.id, hash_before, partial=True
+        )
 
         # Ensure input table exists (shared, so may already exist from parent)
         input_table_name = UDFStep.input_table_name(hash_before)

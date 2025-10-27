@@ -641,10 +641,6 @@ def test_generator_yielding_nothing(test_session, monkeypatch, nums_dataset):
     assert result == [(20,), (40,), (60,)]
 
 
-@pytest.mark.xfail(
-    reason="Multi-UDF chain checkpoint recovery needs investigation - "
-    "gen step tries to continue from non-existent partial table"
-)
 def test_multiple_udf_chain_continue(test_session, monkeypatch, nums_dataset):
     """Test continuing from partial with multiple UDFs in chain.
 
@@ -665,10 +661,10 @@ def test_multiple_udf_chain_continue(test_session, monkeypatch, nums_dataset):
         return num * 2
 
     class Doubler(dc.Generator):
-        def process(self, num):
-            gen_processed.append(num)
-            yield num
-            yield num
+        def process(self, doubled):
+            gen_processed.append(doubled)
+            yield doubled
+            yield doubled
 
     # First run - fails in mapper
     # batch_size=2: processes [1,2] (commits), then [3,4] (fails on 4)
