@@ -73,7 +73,8 @@ def test_cleanup_checkpoints_with_ttl(test_session, monkeypatch, nums_dataset):
     job_id = test_session.get_or_create_job().id
 
     checkpoints_before = list(metastore.list_checkpoints(job_id))
-    assert len(checkpoints_before) == 6
+    assert len(checkpoints_before) == 4
+    assert all(c.partial is False for c in checkpoints_before)
 
     # Verify UDF tables exist
     # Tables are now shared (no job_id) and named udf_{hash}_input and udf_{hash}_output
@@ -125,7 +126,8 @@ def test_cleanup_checkpoints_with_custom_ttl(test_session, monkeypatch, nums_dat
     job_id = test_session.get_or_create_job().id
 
     checkpoints = list(metastore.list_checkpoints(job_id))
-    assert len(checkpoints) == 3
+    assert len(checkpoints) == 2
+    assert all(c.partial is False for c in checkpoints)
 
     # Modify all checkpoints to be 2 hours old (older than custom TTL)
     ch = metastore._checkpoints
@@ -164,8 +166,8 @@ def test_cleanup_checkpoints_for_specific_job(test_session, monkeypatch, nums_da
     # Verify both jobs have checkpoints
     first_checkpoints = list(metastore.list_checkpoints(first_job_id))
     second_checkpoints = list(metastore.list_checkpoints(second_job_id))
-    assert len(first_checkpoints) == 3
-    assert len(second_checkpoints) == 3
+    assert len(first_checkpoints) == 2
+    assert len(second_checkpoints) == 2
 
     # Make both checkpoints old
     ch = metastore._checkpoints
@@ -182,7 +184,7 @@ def test_cleanup_checkpoints_for_specific_job(test_session, monkeypatch, nums_da
 
     # Verify only first job's checkpoints were removed
     assert len(list(metastore.list_checkpoints(first_job_id))) == 0
-    assert len(list(metastore.list_checkpoints(second_job_id))) == 3
+    assert len(list(metastore.list_checkpoints(second_job_id))) == 2
 
 
 def test_cleanup_checkpoints_no_old_checkpoints(test_session, nums_dataset):
@@ -197,14 +199,14 @@ def test_cleanup_checkpoints_no_old_checkpoints(test_session, nums_dataset):
     job_id = test_session.get_or_create_job().id
 
     checkpoints_before = list(metastore.list_checkpoints(job_id))
-    assert len(checkpoints_before) == 3
+    assert len(checkpoints_before) == 2
 
     # Run cleanup (should not remove recent checkpoints)
     catalog.cleanup_checkpoints()
 
     # Verify checkpoints were not removed
     checkpoints_after = list(metastore.list_checkpoints(job_id))
-    assert len(checkpoints_after) == 3
+    assert len(checkpoints_after) == 2
     checkpoint_ids_before = {cp.id for cp in checkpoints_before}
     checkpoint_ids_after = {cp.id for cp in checkpoints_after}
     assert checkpoint_ids_before == checkpoint_ids_after
@@ -227,7 +229,7 @@ def test_cleanup_checkpoints_created_after(test_session, nums_dataset):
 
     # Get the first set of checkpoints
     first_checkpoints = list(metastore.list_checkpoints(job_id))
-    assert len(first_checkpoints) == 3
+    assert len(first_checkpoints) == 2
 
     # Sleep a tiny bit to ensure different timestamps
     time.sleep(0.01)
@@ -243,7 +245,7 @@ def test_cleanup_checkpoints_created_after(test_session, nums_dataset):
 
     # Verify we now have more checkpoints
     all_checkpoints = list(metastore.list_checkpoints(job_id))
-    assert len(all_checkpoints) == 6
+    assert len(all_checkpoints) == 4
 
     # Get UDF tables before cleanup
     # Tables are now shared (no job_id), so just count all UDF tables
@@ -255,7 +257,7 @@ def test_cleanup_checkpoints_created_after(test_session, nums_dataset):
 
     # Verify only first checkpoints remain
     remaining_checkpoints = list(metastore.list_checkpoints(job_id))
-    assert len(remaining_checkpoints) == 3
+    assert len(remaining_checkpoints) == 2
 
     # Verify the remaining checkpoints are the first ones
     remaining_ids = {cp.id for cp in remaining_checkpoints}
@@ -299,17 +301,17 @@ def test_cleanup_checkpoints_created_after_with_multiple_jobs(
     # Verify initial state
     first_job_checkpoints = list(metastore.list_checkpoints(first_job_id))
     second_job_checkpoints = list(metastore.list_checkpoints(second_job_id))
-    assert len(first_job_checkpoints) == 6
-    assert len(second_job_checkpoints) == 3
+    assert len(first_job_checkpoints) == 4
+    assert len(second_job_checkpoints) == 2
 
     # Clean up only first job's checkpoints created after cutoff
     catalog.cleanup_checkpoints(job_id=first_job_id, created_after=cutoff_time)
 
     first_job_after = list(metastore.list_checkpoints(first_job_id))
-    assert len(first_job_after) == 3
+    assert len(first_job_after) == 2
 
     second_job_after = list(metastore.list_checkpoints(second_job_id))
-    assert len(second_job_after) == 3
+    assert len(second_job_after) == 2
 
 
 def test_udf_generator_continue_parallel(test_session_tmpfile, monkeypatch):
@@ -325,7 +327,6 @@ def test_udf_generator_continue_parallel(test_session_tmpfile, monkeypatch):
     warehouse = catalog.warehouse
 
     monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
-    monkeypatch.setenv("DATACHAIN_UDF_CHECKPOINT_MODE", "unsafe")
 
     # Track which numbers have been processed
     processed_nums = []

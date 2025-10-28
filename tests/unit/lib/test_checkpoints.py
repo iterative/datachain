@@ -238,7 +238,8 @@ def test_udf_checkpoints_cross_job_reuse(
     assert call_count["count"] == 6
 
     checkpoints = list(catalog.metastore.list_checkpoints(first_job_id))
-    assert len(checkpoints) == 2, "Should have 2 checkpoints (before and after UDF)"
+    assert len(checkpoints) == 1
+    assert checkpoints[0].partial is False
 
     # -------------- SECOND RUN - should reuse UDF checkpoint -------------------
     reset_session_job_state()
@@ -254,12 +255,10 @@ def test_udf_checkpoints_cross_job_reuse(
 
     # Check that second job created checkpoints
     checkpoints_second = list(catalog.metastore.list_checkpoints(second_job_id))
-    if reset_checkpoints:
-        # With reset, both checkpoints are created (hash_before and hash_after)
-        assert len(checkpoints_second) == 2
-    else:
-        # Without reset, only hash_after checkpoint is created when skipping
-        assert len(checkpoints_second) == 1
+    # After successful completion, only final checkpoint remains
+    # (partial checkpoint is deleted after promotion)
+    assert len(checkpoints_second) == 1
+    assert checkpoints_second[0].partial is False
 
     # Verify the data is correct
     result = chain.order_by("num").to_list("doubled")
@@ -333,17 +332,13 @@ def test_udf_shared_tables_naming(test_session, monkeypatch, nums_dataset):
 
     # Get checkpoints from first run to construct expected table names
     checkpoints = list(catalog.metastore.list_checkpoints(first_job_id))
-    assert len(checkpoints) == 2
-
-    # Checkpoints are ordered by creation, so first is hash_before, second is hash_after
-    hash_before = checkpoints[0].hash
-    hash_after = checkpoints[1].hash
+    assert len(checkpoints) == 1
 
     # Construct expected shared table names (no job_id in names)
     expected_udf_tables = sorted(
         [
-            f"udf_{hash_before}_input",
-            f"udf_{hash_after}_output",
+            "udf_21560e6493eb726c1f04e58ce846ba691ee357f4921920c18d5ad841cbb57acb_input",
+            "udf_233b788c955915319d648ddc92b8a23547794e7efc5df97ba45d6e6928717e14_output",
         ]
     )
 
@@ -382,7 +377,6 @@ def test_udf_signals_continue_from_partial(
     catalog = test_session.catalog
     warehouse = catalog.warehouse
     monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
-    monkeypatch.setenv("DATACHAIN_UDF_CHECKPOINT_MODE", "unsafe")
 
     # Track which numbers have been processed and which run we're on
     processed_nums = []
@@ -436,9 +430,14 @@ def test_udf_signals_continue_from_partial(
         catalog.metastore.list_checkpoints(second_job_id),
         key=lambda c: c.created_at,
     )
-    assert len(checkpoints) == 3
-    output_table_name = UDFStep.output_table_name(checkpoints[1].hash)
-    assert warehouse.db.has_table(output_table_name)
+
+    # After successful completion, only final checkpoints remain (partial ones deleted)
+    # 2 checkpoints: [0] from map() UDF, [1] from nums dataset generation
+    assert len(checkpoints) == 2
+    assert all(c.partial is False for c in checkpoints)
+    # Verify the map() UDF output table exists (checkpoints[0])
+    # nums dataset checkpoint (checkpoints[1]) is from skipped/reused generation
+    assert warehouse.db.has_table(UDFStep.output_table_name(checkpoints[0].hash))
 
     # Verify all rows were processed
     assert (
@@ -488,7 +487,6 @@ def test_udf_generator_continue_from_partial(
     catalog = test_session.catalog
     warehouse = catalog.warehouse
     monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
-    monkeypatch.setenv("DATACHAIN_UDF_CHECKPOINT_MODE", "unsafe")
 
     # Track which numbers have been processed and which run we're on
     processed_nums = []
@@ -553,9 +551,10 @@ def test_udf_generator_continue_from_partial(
         catalog.metastore.list_checkpoints(second_job_id),
         key=lambda c: c.created_at,
     )
-    assert len(checkpoints) == 3
-    output_table_name = UDFStep.output_table_name(checkpoints[1].hash)
-    assert warehouse.db.has_table(output_table_name)
+    assert len(checkpoints) == 2
+    assert all(c.partial is False for c in checkpoints)
+    # Verify gen() UDF output table exists (checkpoints[0])
+    assert warehouse.db.has_table(UDFStep.output_table_name(checkpoints[0].hash))
 
     # Verify all outputs were generated
     # 6 inputs x 2 outputs each = 12 total outputs
@@ -591,7 +590,6 @@ def test_udf_generator_continue_from_partial(
 def test_generator_yielding_nothing(test_session, monkeypatch, nums_dataset):
     """Test that generator correctly handles inputs that yield zero outputs."""
     monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
-    monkeypatch.setenv("DATACHAIN_UDF_CHECKPOINT_MODE", "unsafe")
 
     processed = []
 
@@ -648,7 +646,6 @@ def test_multiple_udf_chain_continue(test_session, monkeypatch, nums_dataset):
     completes and gen runs from scratch.
     """
     monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
-    monkeypatch.setenv("DATACHAIN_UDF_CHECKPOINT_MODE", "unsafe")
 
     map_processed = []
     gen_processed = []
@@ -699,3 +696,79 @@ def test_multiple_udf_chain_continue(test_session, monkeypatch, nums_dataset):
     # Values: [2,4,6,8,10,12] each appearing twice
     expected = sorted([(i,) for i in [2, 2, 4, 4, 6, 6, 8, 8, 10, 10, 12, 12]])
     assert result == expected
+
+
+def test_udf_code_change_triggers_rerun(test_session, monkeypatch, nums_dataset):
+    """Test that changing UDF code (hash) triggers rerun from scratch."""
+    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
+    monkeypatch.setenv("DATACHAIN_UDF_CHECKPOINT_MODE", "unsafe")
+
+    map1_calls = []
+    map2_calls = []
+
+    # Run 1: map1 succeeds, map2 fails
+    def mapper1_v1(num: int) -> int:
+        map1_calls.append(num)
+        return num * 2
+
+    def mapper2_failing(doubled: int) -> int:
+        map2_calls.append(doubled)
+        if doubled == 8 and len(map2_calls) == 4:  # Fails on 4th call
+            raise Exception("Map2 failure")
+        return doubled * 3
+
+    reset_session_job_state()
+    with pytest.raises(Exception, match="Map2 failure"):
+        (
+            dc.read_dataset("nums", session=test_session)
+            .settings(batch_size=2)
+            .map(doubled=mapper1_v1)
+            .map(tripled=mapper2_failing)
+            .save("results")
+        )
+
+    assert len(map1_calls) == 6  # All processed
+    assert len(map2_calls) == 4  # Failed at 4th
+
+    # Run 2: Change map1 code, map2 fixed - both should rerun
+    def mapper1_v2(num: int) -> int:
+        map1_calls.append(num)
+        return num * 2 + 1  # Different code = different hash
+
+    def mapper2_fixed(doubled: int) -> int:
+        map2_calls.append(doubled)
+        return doubled * 3
+
+    map1_calls.clear()
+    map2_calls.clear()
+    reset_session_job_state()
+    (
+        dc.read_dataset("nums", session=test_session)
+        .settings(batch_size=2)
+        .map(doubled=mapper1_v2)
+        .map(tripled=mapper2_fixed)
+        .save("results")
+    )
+
+    assert len(map1_calls) == 6  # Reran due to code change
+    assert len(map2_calls) == 6  # Ran all (no partial to continue from)
+    result = dc.read_dataset("results", session=test_session).to_list("tripled")
+    # nums [1,2,3,4,5,6] → x2+1 = [3,5,7,9,11,13] → x3 = [9,15,21,27,33,39]
+    assert sorted(result) == sorted([(i,) for i in [9, 15, 21, 27, 33, 39]])
+
+    # Run 3: Keep both unchanged - both should skip
+    map1_calls.clear()
+    map2_calls.clear()
+    reset_session_job_state()
+    (
+        dc.read_dataset("nums", session=test_session)
+        .settings(batch_size=2)
+        .map(doubled=mapper1_v2)
+        .map(tripled=mapper2_fixed)
+        .save("results")
+    )
+
+    assert len(map1_calls) == 0  # Skipped (checkpoint found)
+    assert len(map2_calls) == 0  # Skipped (checkpoint found)
+    result = dc.read_dataset("results", session=test_session).to_list("tripled")
+    assert sorted(result) == sorted([(i,) for i in [9, 15, 21, 27, 33, 39]])

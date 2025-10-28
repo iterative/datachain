@@ -766,7 +766,7 @@ class UDFStep(Step, ABC):
         assert hash_before
         assert hash_after
 
-        udf_mode = os.getenv("DATACHAIN_UDF_CHECKPOINT_MODE", "safe")
+        udf_mode = os.getenv("DATACHAIN_UDF_CHECKPOINT_MODE", "unsafe")
 
         # Apply partitioning if needed.
         if self.partition_by is not None:
@@ -789,8 +789,11 @@ class UDFStep(Step, ABC):
             # Create checkpoint for current job when skipping
             self.session.catalog.metastore.create_checkpoint(self.job.id, hash_after)
         elif (
-            checkpoint_partial := self._checkpoint_exist(hash_before, partial=True)
-        ) and udf_mode == "unsafe":
+            (checkpoint_partial := self._checkpoint_exist(hash_before, partial=True))
+            and udf_mode == "unsafe"
+            and checkpoint_partial.job_id != self.job.id
+        ):
+            # Only continue from partial if it's from a parent job, not our own
             result = self._continue_udf(
                 checkpoint_partial, hash_before, hash_after, query
             )
@@ -823,7 +826,7 @@ class UDFStep(Step, ABC):
         On success, promotes partial table to shared final table.
         """
         warehouse = self.session.catalog.warehouse
-        udf_mode = os.getenv("DATACHAIN_UDF_CHECKPOINT_MODE", "safe")
+        udf_mode = os.getenv("DATACHAIN_UDF_CHECKPOINT_MODE", "unsafe")
 
         # Create checkpoint with hash_before (marks start of UDF execution)
         # Don't remove existing checkpoints - with shared tables, multiple jobs
@@ -864,6 +867,14 @@ class UDFStep(Step, ABC):
         final_output_table = warehouse.rename_table(
             partial_output_table, final_output_table_name
         )
+
+        # Remove the partial checkpoint since UDF completed successfully
+        # The partial table no longer exists (was promoted to final)
+        partial_checkpoint = self.session.catalog.metastore.find_checkpoint(
+            self.job.id, hash_before, partial=True
+        )
+        if partial_checkpoint:
+            self.session.catalog.metastore.remove_checkpoint(partial_checkpoint)
 
         # Create checkpoint with hash_after (after successful completion)
         self.session.catalog.metastore.create_checkpoint(self.job.id, hash_after)
@@ -924,18 +935,20 @@ class UDFStep(Step, ABC):
         # input rows have been processed (since output doesn't have 1:1 mapping)
         processed_table = None
         if self.is_generator:
+            processed_table_name = UDFStep.processed_table_name(
+                self.job.id, hash_before
+            )
+
             # Create processed table with only sys__id column
             processed_table = warehouse.create_udf_table(
                 [sa.Column("sys__id", sa.Integer, primary_key=True)],
-                name=UDFStep.processed_table_name(self.job.id, hash_before),
+                name=processed_table_name,
             )
 
-            # Create processed table name (similar to partial table but with
-            # _processed suffix)
+            # Copy parent's processed table if it exists
             parent_processed_table_name = UDFStep.processed_table_name(
                 parent_job_id, hash_before
             )
-            # Copy parent's processed table if it exists
             if warehouse.db.has_table(parent_processed_table_name):
                 parent_processed_table = warehouse.get_table(
                     parent_processed_table_name
@@ -965,6 +978,14 @@ class UDFStep(Step, ABC):
         final_output_table = warehouse.rename_table(
             current_partial_table, final_output_table_name
         )
+
+        # Remove the partial checkpoint since UDF completed successfully
+        # The partial table no longer exists (was promoted to final)
+        partial_checkpoint = self.session.catalog.metastore.find_checkpoint(
+            self.job.id, hash_before, partial=True
+        )
+        if partial_checkpoint:
+            self.session.catalog.metastore.remove_checkpoint(partial_checkpoint)
 
         # Create checkpoint with hash_after (after successful completion)
         self.session.catalog.metastore.create_checkpoint(self.job.id, hash_after)
