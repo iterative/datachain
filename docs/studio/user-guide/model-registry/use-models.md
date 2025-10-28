@@ -29,33 +29,21 @@ You can download the files that make up your model directly from DataChain Studi
 Head to the model details page of the model you would like to download and click
 `Access Model`. Here, you find different ways to download your model.
 
-<toggle>
-
-<tab title="CLI (DVC)">
+=== "CLI (DVC)"
 
 Use the `dvc artifacts get` command to download an artifact by name. Learn more
 on the command reference page for `dvc artifacts get`.
 
-</tab>
-
-<tab title="cURL / Python">
+=== "cURL / Python"
 
 Directly call the Studio REST API from your terminal
 using `cURL` or in your `Python` code.
 
-</tab>
-
-<tab title="Direct Download">
+=== "Direct Download"
 
 Here you can generate download links for your model files. After generation,
 these download links are valid for 1 hour. You can click the link to directly
 download the file.
-
-
-</tab>
-
-</toggle>
-
 ## Deploying and publishing models in CI/CD
 
 A popular deployment option is to **use CI/CD pipelines triggered by new Git
