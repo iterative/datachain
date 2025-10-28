@@ -61,13 +61,12 @@ DataChain Studio does not have the concept of an `Owner` role. The user who
 creates the team has the `Admin` role. The privileges of such an admin is the
 same as that of any other collaborator who has been assigned the `Admin` role.
 
-<admon>
+!!! note
 
-If your Git account does not have write access on the Git repository connected
-to a project, you cannot push changes (e.g., new experiments) to the repository
-even if the project belongs to a team where you are an `Editor` or `Admin`.
+    If your Git account does not have write access on the Git repository connected
+    to a project, you cannot push changes (e.g., new experiments) to the repository
+    even if the project belongs to a team where you are an `Editor` or `Admin`.
 
-</admon>
 
 ### Privileges for datasets
 
