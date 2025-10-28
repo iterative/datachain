@@ -373,29 +373,30 @@ def test_udf_signals_continue_from_partial(
 
     Tests with different batch sizes to ensure partial results are correctly handled
     regardless of batch boundaries.
+
+    Simulates real-world scenario: user writes buggy UDF, it fails, then fixes bug
+    and reruns.
     """
     catalog = test_session.catalog
     warehouse = catalog.warehouse
     monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
 
-    # Track which numbers have been processed and which run we're on
     processed_nums = []
-    run_count = {"count": 0}
 
-    def process_with_failure(num) -> int:
-        """Process numbers but fail on num=4 in first run only."""
+    def process_buggy(num) -> int:
+        """Buggy version that fails on num=4."""
         processed_nums.append(num)
-        if num == 4 and run_count["count"] == 0:
+        if num == 4:
             raise Exception(f"Simulated failure on num={num}")
         return num * 10
 
-    # -------------- FIRST RUN (FAILS AFTER FIRST BATCH) -------------------
+    # -------------- FIRST RUN (FAILS WITH BUGGY UDF) -------------------
     reset_session_job_state()
 
     chain = (
         dc.read_dataset("nums", session=test_session)
         .settings(batch_size=batch_size)
-        .map(result=process_with_failure, output=int)
+        .map(result=process_buggy, output=int)
     )
 
     with pytest.raises(Exception, match="Simulated failure"):
@@ -415,14 +416,22 @@ def test_udf_signals_continue_from_partial(
     partial_table = warehouse.get_table(partial_table_name)
     assert warehouse.table_rows_count(partial_table) == expected_partial_count
 
-    # -------------- SECOND RUN (CONTINUE IN UNSAFE MODE) -------------------
+    # -------------- SECOND RUN (FIXED UDF) -------------------
     reset_session_job_state()
 
-    # Clear processed list and increment run count to allow num=4 to succeed
     processed_nums.clear()
-    run_count["count"] += 1
 
-    # Now it should complete successfully
+    def process_fixed(num) -> int:
+        """Fixed version that works correctly."""
+        processed_nums.append(num)
+        return num * 10
+
+    # Now use the fixed UDF - should continue from partial checkpoint
+    chain = (
+        dc.read_dataset("nums", session=test_session)
+        .settings(batch_size=batch_size)
+        .map(result=process_fixed, output=int)
+    )
     chain.save("results")
 
     second_job_id = test_session.get_or_create_job().id
@@ -483,33 +492,33 @@ def test_udf_generator_continue_from_partial(
 
     Tests with different batch sizes to ensure processed table correctly
     tracks inputs only after ALL their outputs have been committed.
+
+    Simulates real-world scenario: user writes buggy generator, it fails, then
+    fixes bug and reruns.
     """
     catalog = test_session.catalog
     warehouse = catalog.warehouse
     monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
 
-    # Track which numbers have been processed and which run we're on
     processed_nums = []
-    run_count = {"count": 0}
 
-    class GeneratorWithFailure(dc.Generator):
-        """Generator yielding 2 outputs per input, fails on num=4 in run 1."""
+    class BuggyGenerator(dc.Generator):
+        """Buggy generator that fails on num=4."""
 
         def process(self, num):
             processed_nums.append(num)
-            if num == 4 and run_count["count"] == 0:
+            if num == 4:
                 raise Exception(f"Simulated failure on num={num}")
-            # Generate 2 outputs per input: the number and its square
             yield num * 10
             yield num * num
 
-    # -------------- FIRST RUN (FAILS ON INPUT 4) -------------------
+    # -------------- FIRST RUN (FAILS WITH BUGGY GENERATOR) -------------------
     reset_session_job_state()
 
     chain = (
         dc.read_dataset("nums", session=test_session)
         .settings(batch_size=batch_size)
-        .gen(value=GeneratorWithFailure(), output=int)
+        .gen(value=BuggyGenerator(), output=int)
     )
 
     with pytest.raises(Exception, match="Simulated failure"):
@@ -536,14 +545,25 @@ def test_udf_generator_continue_from_partial(
     processed_table = warehouse.get_table(processed_table_name)
     assert warehouse.table_rows_count(processed_table) == expected_processed_input_count
 
-    # -------------- SECOND RUN (CONTINUE IN UNSAFE MODE) -------------------
+    # -------------- SECOND RUN (FIXED GENERATOR) -------------------
     reset_session_job_state()
 
-    # Clear processed list and increment run count
     processed_nums.clear()
-    run_count["count"] += 1
 
-    # Now it should complete successfully
+    class FixedGenerator(dc.Generator):
+        """Fixed generator that works correctly."""
+
+        def process(self, num):
+            processed_nums.append(num)
+            yield num * 10
+            yield num * num
+
+    # Now use the fixed generator - should continue from partial checkpoint
+    chain = (
+        dc.read_dataset("nums", session=test_session)
+        .settings(batch_size=batch_size)
+        .gen(value=FixedGenerator(), output=int)
+    )
     chain.save("gen_results")
 
     second_job_id = test_session.get_or_create_job().id
