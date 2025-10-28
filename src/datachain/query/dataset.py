@@ -426,8 +426,10 @@ class UDFStep(Step, ABC):
         """Method that creates a table where temp udf results will be saved"""
 
     def process_input_query(self, query: Select) -> tuple[Select, list["Table"]]:
-        """Apply any necessary processing to the input query"""
-        return query, []
+        """Materialize inputs, ensure sys columns are available, needed for checkpoints,
+        needed for map to work (merge results)"""
+        table = self.catalog.warehouse.create_pre_udf_table(query)
+        return sqlalchemy.select(*table.c), [table]
 
     @abstractmethod
     def create_result_query(
@@ -628,23 +630,18 @@ class UDFStep(Step, ABC):
     def apply(
         self, query_generator: QueryGenerator, temp_tables: list[str]
     ) -> "StepResult":
-        _query = query = query_generator.select()
+        query, tables = self.process_input_query(query_generator.select())
+        _query = query
 
         # Apply partitioning if needed.
         if self.partition_by is not None:
-            _query = query = self.catalog.warehouse._regenerate_system_columns(
-                query_generator.select(),
-                keep_existing_columns=True,
-                regenerate_columns=["sys__id"],
-            )
             partition_tbl = self.create_partitions_table(query)
-            temp_tables.append(partition_tbl.name)
             query = query.outerjoin(
                 partition_tbl,
                 partition_tbl.c.sys__id == query.selected_columns.sys__id,
             ).add_columns(*partition_columns())
+            tables = [*tables, partition_tbl]
 
-        query, tables = self.process_input_query(query)
         temp_tables.extend(t.name for t in tables)
         udf_table = self.create_udf_table(_query)
         temp_tables.append(udf_table.name)
@@ -674,13 +671,6 @@ class UDFSignal(UDFStep):
         ]
 
         return self.catalog.warehouse.create_udf_table(udf_output_columns)
-
-    def process_input_query(self, query: Select) -> tuple[Select, list["Table"]]:
-        if os.getenv("DATACHAIN_DISABLE_QUERY_CACHE", "") not in ("", "0"):
-            return query, []
-        table = self.catalog.warehouse.create_pre_udf_table(query)
-        q: Select = sqlalchemy.select(*table.c)
-        return q, [table]
 
     def create_result_query(
         self, udf_table, query
@@ -1065,7 +1055,7 @@ class SQLJoin(Step):
         q1 = self.get_query(self.query1, temp_tables)
         q2 = self.get_query(self.query2, temp_tables)
 
-        q1_columns = _drop_system_columns(q1.c) if self.full else list(q1.c)
+        q1_columns = _drop_system_columns(q1.c)
         q1_column_names = {c.name for c in q1_columns}
 
         q2_columns = []

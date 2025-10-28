@@ -1697,13 +1697,12 @@ class DataChain:
         query.feature_schema = None
         ds = self._evolve(query=query)
 
+        # Note: merge drops sys signals from both sides, make sure to not include it
+        # in the resulting schema
         signals_schema = self.signals_schema.clone_without_sys_signals()
         right_signals_schema = right_ds.signals_schema.clone_without_sys_signals()
 
         ds.signals_schema = signals_schema.merge(right_signals_schema, rname)
-
-        if not full:
-            ds.signals_schema = SignalSchema({"sys": Sys}) | ds.signals_schema
 
         return ds
 

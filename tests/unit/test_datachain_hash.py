@@ -218,4 +218,4 @@ def test_diff(test_session):
             status_col="diff",
         )
         .hash()
-    ) == "4135f2deffa91702259de50b48076dd2f8cdf3be32c167332840209c137977f9"
+    ) == "8ffac19b12cf96e2916968914d357c4a9c1b81038c43ab5cf97ba1127fb86567"
