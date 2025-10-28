@@ -5,10 +5,10 @@ DataChain Studio.
 
 ## Support
 
-If you need further help, you can send us a message using `Help` on the DVC
-Studio website. You can also [email us](mailto:support@iterative.ai), create a
-support ticket on [GitHub](https://github.com/iterative/studio-support) or join
-the discussion in [Discord](https://discord.com/invite/dvwXA2N).
+If you need further help, you can send us a message using the `Help` option on the DataChain Studio
+website. You can also [email us](mailto:support@datachain.studio), create a
+support ticket on [GitHub](https://github.com/datachain-studio/support), or join
+the discussion in our [community Discord](https://discord.gg/datachainstudio).
 
 ## Projects and experiments
 
