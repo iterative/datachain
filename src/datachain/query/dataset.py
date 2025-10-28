@@ -785,37 +785,36 @@ class UDFStep(Step, ABC):
 
         checkpoint_after = self._checkpoint_exist(hash_after)
         if checkpoint_after:
-            result = self._skip_udf(checkpoint_after, hash_before, query)
-            # Create checkpoint for current job when skipping
-            self.session.catalog.metastore.create_checkpoint(self.job.id, hash_after)
+            # Skip UDF execution by reusing existing output table.
+            output_table = self.session.catalog.warehouse.get_table(
+                UDFStep.output_table_name(checkpoint_after.hash)
+            )
         elif (
             (checkpoint_partial := self._checkpoint_exist(hash_before, partial=True))
             and udf_mode == "unsafe"
             and checkpoint_partial.job_id != self.job.id
         ):
             # Only continue from partial if it's from a parent job, not our own
-            result = self._continue_udf(
+            output_table = self._continue_udf(
                 checkpoint_partial, hash_before, hash_after, query
             )
         else:
-            result = self._run_from_scratch(hash_before, hash_after, query)
+            output_table = self._run_from_scratch(hash_before, hash_after, query)
 
-        return result
+        # After UDF completes successfully, clean up partial checkpoint and
+        # create final one
+        partial_checkpoint = self.session.catalog.metastore.find_checkpoint(
+            self.job.id, hash_before, partial=True
+        )
+        if partial_checkpoint:
+            self.session.catalog.metastore.remove_checkpoint(partial_checkpoint)
 
-    def _skip_udf(self, checkpoint: Checkpoint, hash_before: str, query):
-        """
-        Skip UDF execution by reusing existing shared tables.
-        The checkpoint contains hash_after, which is used for the output table name.
-        """
-        warehouse = self.session.catalog.warehouse
+        # Create final checkpoint for current job
+        self.session.catalog.metastore.create_checkpoint(self.job.id, hash_after)
 
+        # Create result query from output table
         input_table_name = UDFStep.input_table_name(hash_before)
-        output_table_name = UDFStep.output_table_name(checkpoint.hash)
-
-        output_table = warehouse.get_table(output_table_name)
-
         input_query = self.get_input_query(input_table_name, query)
-
         q, cols = self.create_result_query(output_table, input_query)
         return step_result(q, cols)
 
@@ -824,6 +823,7 @@ class UDFStep(Step, ABC):
         Execute UDF from scratch.
         Creates shared input table and job-specific partial output table.
         On success, promotes partial table to shared final table.
+        Returns the final output table.
         """
         warehouse = self.session.catalog.warehouse
         udf_mode = os.getenv("DATACHAIN_UDF_CHECKPOINT_MODE", "unsafe")
@@ -864,23 +864,7 @@ class UDFStep(Step, ABC):
 
         # Promote partial table to final shared table
         final_output_table_name = UDFStep.output_table_name(hash_after)
-        final_output_table = warehouse.rename_table(
-            partial_output_table, final_output_table_name
-        )
-
-        # Remove the partial checkpoint since UDF completed successfully
-        # The partial table no longer exists (was promoted to final)
-        partial_checkpoint = self.session.catalog.metastore.find_checkpoint(
-            self.job.id, hash_before, partial=True
-        )
-        if partial_checkpoint:
-            self.session.catalog.metastore.remove_checkpoint(partial_checkpoint)
-
-        # Create checkpoint with hash_after (after successful completion)
-        self.session.catalog.metastore.create_checkpoint(self.job.id, hash_after)
-
-        q, cols = self.create_result_query(final_output_table, input_query)
-        return step_result(q, cols)
+        return warehouse.rename_table(partial_output_table, final_output_table_name)
 
     def _continue_udf(
         self, checkpoint_before: Checkpoint, hash_before: str, hash_after: str, query
@@ -894,16 +878,19 @@ class UDFStep(Step, ABC):
         3. Calculate unprocessed rows (input - partial output)
         4. Execute UDF only on unprocessed rows
         5. Promote to final shared table on success
+
+        Returns the final output table.
         """
         warehouse = self.session.catalog.warehouse
 
-        # Get parent job ID from the checkpoint
-        parent_job_id = checkpoint_before.job_id
+        # The checkpoint must be from parent job
+        assert self.job.parent_job_id is not None
+        assert checkpoint_before.job_id == self.job.parent_job_id
 
         # Create table names
         input_table_name = UDFStep.input_table_name(hash_before)
         parent_partial_table_name = UDFStep.partial_output_table_name(
-            parent_job_id, hash_before
+            self.job.parent_job_id, hash_before
         )
         current_partial_table_name = UDFStep.partial_output_table_name(
             self.job.id, hash_before
@@ -931,9 +918,54 @@ class UDFStep(Step, ABC):
         current_partial_table = self.create_output_table(current_partial_table_name)
         warehouse.copy_table(current_partial_table, sa.select(parent_partial_table))
 
+        unprocessed_query, processed_table = self.calculate_unprocessed_rows(
+            warehouse.get_table(input_table_name),
+            current_partial_table,
+            hash_before,
+            query,
+        )
+
+        # Execute UDF only on unprocessed rows, appending to partial table
+        # For RowGenerator, also pass processed table to track which inputs
+        # were processed
+        self.populate_udf_output_table(
+            current_partial_table, unprocessed_query, processed_table=processed_table
+        )
+
+        # Promote partial table to final shared table
+        return warehouse.rename_table(current_partial_table, final_output_table_name)
+
+    def calculate_unprocessed_rows(
+        self,
+        input_table: "Table",
+        partial_table: "Table",
+        hash_before: str,
+        original_query,
+    ):
+        """
+        Calculate which input rows haven't been processed yet.
+
+        Works for both UDFSignal and RowGenerator by checking sys__id values.
+        - For UDFSignal: processed_table is the partial output table (which
+          has sys__id)
+        - For RowGenerator: processed_table is a dedicated tracking table with
+          only sys__id
+
+        Args:
+            input_table: The UDF input table
+            partial_table: The UDF partial table
+            hash_before: The value of hash of the input to UDF
+            original_query: The original query for input data
+
+        Returns:
+            A filtered query containing only unprocessed rows
+            A processed table if exists (only for generator)
+        """
+        warehouse = self.session.catalog.warehouse
+
+        processed_table = None
         # For RowGenerator, we need a separate processed table to track which
         # input rows have been processed (since output doesn't have 1:1 mapping)
-        processed_table = None
         if self.is_generator:
             processed_table_name = UDFStep.processed_table_name(
                 self.job.id, hash_before
@@ -947,7 +979,8 @@ class UDFStep(Step, ABC):
 
             # Copy parent's processed table if it exists
             parent_processed_table_name = UDFStep.processed_table_name(
-                parent_job_id, hash_before
+                self.job.parent_job_id,  # type: ignore [arg-type]
+                hash_before,
             )
             if warehouse.db.has_table(parent_processed_table_name):
                 parent_processed_table = warehouse.get_table(
@@ -955,73 +988,19 @@ class UDFStep(Step, ABC):
                 )
                 warehouse.copy_table(processed_table, sa.select(parent_processed_table))
 
-        # Calculate unprocessed input rows
-        # For UDFSignal: use partial output table (has sys__id from input)
-        # For RowGenerator: use processed tracking table
-        if self.is_generator:
-            assert processed_table is not None  # Always created above for generators
             tracking_table = processed_table
         else:
-            tracking_table = current_partial_table
-        unprocessed_query = self.calculate_unprocessed_rows(
-            warehouse.get_table(input_table_name), tracking_table, query
-        )
+            tracking_table = partial_table
 
-        # Execute UDF only on unprocessed rows, appending to partial table
-        # For RowGenerator, also pass processed table to track which inputs
-        # were processed
-        self.populate_udf_output_table(
-            current_partial_table, unprocessed_query, processed_table=processed_table
-        )
-
-        # Promote partial table to final shared table
-        final_output_table = warehouse.rename_table(
-            current_partial_table, final_output_table_name
-        )
-
-        # Remove the partial checkpoint since UDF completed successfully
-        # The partial table no longer exists (was promoted to final)
-        partial_checkpoint = self.session.catalog.metastore.find_checkpoint(
-            self.job.id, hash_before, partial=True
-        )
-        if partial_checkpoint:
-            self.session.catalog.metastore.remove_checkpoint(partial_checkpoint)
-
-        # Create checkpoint with hash_after (after successful completion)
-        self.session.catalog.metastore.create_checkpoint(self.job.id, hash_after)
-
-        input_query = self.get_input_query(input_table_name, query)
-        q, cols = self.create_result_query(final_output_table, input_query)
-        return step_result(q, cols)
-
-    def calculate_unprocessed_rows(
-        self, input_table: "Table", processed_table: "Table", original_query
-    ):
-        """
-        Calculate which input rows haven't been processed yet.
-
-        Works for both UDFSignal and RowGenerator by checking sys__id values.
-        - For UDFSignal: processed_table is the partial output table (which
-          has sys__id)
-        - For RowGenerator: processed_table is a dedicated tracking table with
-          only sys__id
-
-        Args:
-            input_table: The UDF input table
-            processed_table: Table containing sys__id column of processed input rows
-            original_query: The original query for input data
-
-        Returns:
-            A filtered query containing only unprocessed rows
-        """
         # Get sys__id values that have already been processed
-        processed_ids = sa.select(processed_table.c.sys__id).subquery()
+        processed_ids = sa.select(tracking_table.c.sys__id).subquery()
 
         # Filter original query to only include unprocessed rows
         # Use the sys__id column from the query's selected columns, not from input_table
         sys_id_col = original_query.selected_columns.sys__id
-        return original_query.where(
-            sys_id_col.notin_(sa.select(processed_ids.c.sys__id))
+        return (
+            original_query.where(sys_id_col.notin_(sa.select(processed_ids.c.sys__id))),
+            processed_table,
         )
 
 
