@@ -630,23 +630,18 @@ class UDFStep(Step, ABC):
     def apply(
         self, query_generator: QueryGenerator, temp_tables: list[str]
     ) -> "StepResult":
-        _query = query = query_generator.select()
+        query, tables = self.process_input_query(query_generator.select())
+        _query = query
 
         # Apply partitioning if needed.
         if self.partition_by is not None:
-            _query = query = self.catalog.warehouse._regenerate_system_columns(
-                query_generator.select(),
-                keep_existing_columns=True,
-                regenerate_columns=["sys__id"],
-            )
             partition_tbl = self.create_partitions_table(query)
-            temp_tables.append(partition_tbl.name)
             query = query.outerjoin(
                 partition_tbl,
                 partition_tbl.c.sys__id == query.selected_columns.sys__id,
             ).add_columns(*partition_columns())
+            tables = [*tables, partition_tbl]
 
-        query, tables = self.process_input_query(query)
         temp_tables.extend(t.name for t in tables)
         udf_table = self.create_udf_table(_query)
         temp_tables.append(udf_table.name)
