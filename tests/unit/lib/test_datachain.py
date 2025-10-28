@@ -1219,6 +1219,22 @@ def test_vector_of_vectors(test_session):
     assert np.allclose(actual[1], vector[1])
 
 
+def test_persist_restores_sys_signals_after_merge(test_session):
+    left = dc.read_values(ids=[1, 2], session=test_session)
+    right = dc.read_values(ids=[1, 2], extra=["x", "y"], session=test_session)
+
+    merged = left.merge(right, on="ids")
+
+    with pytest.raises(SignalResolvingError):
+        merged.signals_schema.resolve("sys.rand")
+
+    persisted = merged.persist()
+
+    sys_schema = persisted.signals_schema.resolve("sys.id", "sys.rand").values
+    assert sys_schema["sys.id"] is int
+    assert sys_schema["sys.rand"] is int
+
+
 def test_unsupported_output_type(test_session):
     vector = [3.14, 2.72, 1.62]
 

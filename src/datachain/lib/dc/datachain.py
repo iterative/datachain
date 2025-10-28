@@ -577,7 +577,8 @@ class DataChain:
             create=True,
         )
         return self._evolve(
-            query=self._query.save(project=project, feature_schema=schema)
+            query=self._query.save(project=project, feature_schema=schema),
+            signal_schema=self.signals_schema | SignalSchema({"sys": Sys}),
         )
 
     def _calculate_job_hash(self, job_id: str) -> str:
