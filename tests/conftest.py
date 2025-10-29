@@ -133,7 +133,7 @@ def clean_environment(
 def _create_job(metastore: AbstractMetastore) -> str:
     return metastore.create_job(
         "my-job",
-        'import datachain as dc; dc.read_values(num=[1, 2, 3].save("nums")',
+        'import datachain as dc; dc.read_values(num=[1, 2, 3]).save("nums")',
         query_type=JobQueryType.PYTHON,
         status=JobStatus.RUNNING,
     )
