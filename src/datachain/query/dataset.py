@@ -786,8 +786,29 @@ class SQLClause(Step, ABC):
         return tuple(c.get_column() if isinstance(c, Function) else c for c in cols)
 
     @abstractmethod
-    def apply_sql_clause(self, query):
+    def apply_sql_clause(self, query: Any) -> Any:
         pass
+
+
+@frozen
+class RegenerateSystemColumns(Step):
+    catalog: "Catalog"
+
+    def hash_inputs(self) -> str:
+        return hashlib.sha256(b"regenerate_system_columns").hexdigest()
+
+    def apply(
+        self, query_generator: QueryGenerator, temp_tables: list[str]
+    ) -> StepResult:
+        query = query_generator.select()
+        new_query = self.catalog.warehouse._regenerate_system_columns(
+            query, keep_existing_columns=True
+        )
+
+        def q(*columns):
+            return new_query.with_only_columns(*columns)
+
+        return step_result(q, new_query.selected_columns)
 
 
 @frozen
@@ -1487,10 +1508,6 @@ class DatasetQuery:
                 yield from mapper.iterate()
         finally:
             self.cleanup()
-
-    def shuffle(self) -> "Self":
-        # ToDo: implement shaffle based on seed and/or generating random column
-        return self.order_by(C.sys__rand)
 
     def sample(self, n) -> "Self":
         """

@@ -1235,6 +1235,20 @@ def test_persist_restores_sys_signals_after_merge(test_session):
     assert sys_schema["sys.rand"] is int
 
 
+def test_shuffle_after_merge(test_session):
+    left = dc.read_values(ids=[1, 2], session=test_session)
+    right = dc.read_values(ids=[1, 2], extra=["x", "y"], session=test_session)
+
+    shuffled = left.merge(right, on="ids").shuffle()
+
+    sys_schema = shuffled.signals_schema.resolve("sys.id", "sys.rand").values
+    assert sys_schema["sys.id"] is int
+    assert sys_schema["sys.rand"] is int
+
+    rows = set(shuffled.to_list("ids", "extra"))
+    assert rows == {(1, "x"), (2, "y")}
+
+
 def test_unsupported_output_type(test_session):
     vector = [3.14, 2.72, 1.62]
 
