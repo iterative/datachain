@@ -867,12 +867,14 @@ def pseudo_random_ds(test_session):
 
 
 @pytest.fixture()
-def run_datachain_worker(datachain_job_id):
+def run_datachain_worker(monkeypatch):
     if not os.environ.get("DATACHAIN_DISTRIBUTED"):
         pytest.skip("Distributed tests are disabled")
 
     job_id = os.environ.get("DATACHAIN_JOB_ID")
     assert job_id, "DATACHAIN_JOB_ID environment variable is required for this test"
+
+    monkeypatch.delenv("DATACHAIN_DISTRIBUTED_DISABLED", raising=False)
 
     # This worker can take several tasks in parallel, as it's very handy
     # for testing, where we don't want [yet] to constrain the number of
