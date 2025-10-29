@@ -1844,7 +1844,7 @@ class AbstractDBMetastore(AbstractMetastore):
             Column("hash", Text, nullable=False),
             Column("partial", Boolean, default=False),
             Column("created_at", DateTime(timezone=True), nullable=False),
-            UniqueConstraint("job_id", "hash"),
+            UniqueConstraint("job_id", "hash", "partial"),
         ]
 
     @cached_property
@@ -1903,7 +1903,9 @@ class AbstractDBMetastore(AbstractMetastore):
 
         # Use on_conflict_do_nothing to handle race conditions
         if hasattr(query, "on_conflict_do_nothing"):
-            query = query.on_conflict_do_nothing(index_elements=["job_id", "hash"])
+            query = query.on_conflict_do_nothing(
+                index_elements=["job_id", "hash", "partial"]
+            )
 
         self.db.execute(query, conn=conn)
 

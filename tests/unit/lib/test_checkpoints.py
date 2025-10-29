@@ -406,10 +406,10 @@ def test_udf_signals_continue_from_partial(
 
     checkpoints = list(catalog.metastore.list_checkpoints(first_job_id))
     assert len(checkpoints) == 1
-    hash_before = checkpoints[0].hash
+    hash_input = checkpoints[0].hash
 
     # Verify partial output table exists
-    partial_table_name = UDFStep.partial_output_table_name(first_job_id, hash_before)
+    partial_table_name = UDFStep.partial_output_table_name(first_job_id, hash_input)
     assert warehouse.db.has_table(partial_table_name)
 
     # Verify partial table has expected number of rows based on batch_size
@@ -528,10 +528,10 @@ def test_udf_generator_continue_from_partial(
 
     checkpoints = list(catalog.metastore.list_checkpoints(first_job_id))
     assert len(checkpoints) == 1
-    hash_before = checkpoints[0].hash
+    hash_input = checkpoints[0].hash
 
     # Verify partial output table exists
-    partial_table_name = UDFStep.partial_output_table_name(first_job_id, hash_before)
+    partial_table_name = UDFStep.partial_output_table_name(first_job_id, hash_input)
     assert warehouse.db.has_table(partial_table_name)
 
     # Verify partial table has expected number of outputs
@@ -540,7 +540,7 @@ def test_udf_generator_continue_from_partial(
 
     # Verify processed table exists and tracks fully processed inputs
     # An input is marked as processed only after ALL outputs committed
-    processed_table_name = UDFStep.processed_table_name(first_job_id, hash_before)
+    processed_table_name = UDFStep.processed_table_name(first_job_id, hash_input)
     assert warehouse.db.has_table(processed_table_name)
     processed_table = warehouse.get_table(processed_table_name)
     assert warehouse.table_rows_count(processed_table) == expected_processed_input_count
@@ -636,11 +636,11 @@ def test_generator_yielding_nothing(test_session, monkeypatch, nums_dataset):
     first_checkpoints = list(
         test_session.catalog.metastore.list_checkpoints(first_job_id)
     )
-    hash_before = first_checkpoints[0].hash
+    hash_input = first_checkpoints[0].hash
 
     # Verify processed table tracks inputs that yielded nothing
     warehouse = test_session.catalog.warehouse
-    processed_table_name = UDFStep.processed_table_name(first_job_id, hash_before)
+    processed_table_name = UDFStep.processed_table_name(first_job_id, hash_input)
     assert warehouse.db.has_table(processed_table_name)
     processed_table = warehouse.get_table(processed_table_name)
     processed_count = warehouse.table_rows_count(processed_table)

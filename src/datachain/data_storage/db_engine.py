@@ -80,12 +80,19 @@ class DatabaseEngine(ABC, Serializable):
     ) -> Iterator[tuple[Any, ...]]: ...
 
     def get_table(self, name: str) -> "Table":
+        from datachain.error import TableMissingError
+
         table = self.metadata.tables.get(name)
         if table is None:
-            sa.Table(name, self.metadata, autoload_with=self.engine)
-            # ^^^ This table may not be correctly initialised on some dialects
-            # Grab it from metadata instead.
-            table = self.metadata.tables[name]
+            try:
+                sa.Table(name, self.metadata, autoload_with=self.engine)
+                # ^^^ This table may not be correctly initialised on some dialects
+                # Grab it from metadata instead.
+                table = self.metadata.tables.get(name)
+                if table is None:
+                    raise TableMissingError(f"Table '{name}' not found")
+            except (KeyError, sa.exc.NoSuchTableError) as e:
+                raise TableMissingError(f"Table '{name}' not found") from e
         return table
 
     @abstractmethod

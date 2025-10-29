@@ -361,14 +361,14 @@ def test_udf_generator_continue_parallel(test_session_tmpfile, monkeypatch):
     first_job_id = test_session.get_or_create_job().id
     checkpoints = list(catalog.metastore.list_checkpoints(first_job_id))
     assert len(checkpoints) == 1
-    hash_before = checkpoints[0].hash
+    hash_input = checkpoints[0].hash
 
     # Verify partial output table exists
-    partial_table_name = UDFStep.partial_output_table_name(first_job_id, hash_before)
+    partial_table_name = UDFStep.partial_output_table_name(first_job_id, hash_input)
     assert warehouse.db.has_table(partial_table_name)
 
     # Verify processed table exists and has tracked some inputs
-    processed_table_name = UDFStep.processed_table_name(first_job_id, hash_before)
+    processed_table_name = UDFStep.processed_table_name(first_job_id, hash_input)
     assert warehouse.db.has_table(processed_table_name)
     processed_table = warehouse.get_table(processed_table_name)
     processed_count_first = warehouse.table_rows_count(processed_table)
