@@ -21,6 +21,10 @@ def nums_dataset(test_session):
     return dc.read_values(num=[1, 2, 3], session=test_session).save("nums")
 
 
+@pytest.mark.skipif(
+    "os.environ.get('DATACHAIN_DISTRIBUTED')",
+    reason="Checkpoints test skipped in distributed mode",
+)
 @pytest.mark.parametrize("reset_checkpoints", [True, False])
 @pytest.mark.parametrize("with_delta", [True, False])
 @pytest.mark.parametrize("use_datachain_job_id_env", [True, False])
@@ -84,6 +88,10 @@ def test_checkpoints(
     assert len(list(catalog.metastore.list_checkpoints(second_job_id))) == 3
 
 
+@pytest.mark.skipif(
+    "os.environ.get('DATACHAIN_DISTRIBUTED')",
+    reason="Checkpoints test skipped in distributed mode",
+)
 @pytest.mark.parametrize("reset_checkpoints", [True, False])
 def test_checkpoints_modified_chains(
     test_session, monkeypatch, nums_dataset, reset_checkpoints
@@ -115,6 +123,10 @@ def test_checkpoints_modified_chains(
     assert len(list(catalog.metastore.list_checkpoints(second_job_id))) == 3
 
 
+@pytest.mark.skipif(
+    "os.environ.get('DATACHAIN_DISTRIBUTED')",
+    reason="Checkpoints test skipped in distributed mode",
+)
 @pytest.mark.parametrize("reset_checkpoints", [True, False])
 def test_checkpoints_multiple_runs(
     test_session, monkeypatch, nums_dataset, reset_checkpoints
@@ -180,6 +192,10 @@ def test_checkpoints_multiple_runs(
     assert len(list(catalog.metastore.list_checkpoints(fourth_job_id))) == 3
 
 
+@pytest.mark.skipif(
+    "os.environ.get('DATACHAIN_DISTRIBUTED')",
+    reason="Checkpoints test skipped in distributed mode",
+)
 def test_checkpoints_check_valid_chain_is_returned(
     test_session,
     monkeypatch,
