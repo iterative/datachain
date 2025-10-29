@@ -899,7 +899,12 @@ def run_datachain_worker(monkeypatch):
         ]
         queues.append(queue_name)
         print(f"Starting worker with command: {' '.join(worker_cmd)}")
-        workers.append(subprocess.Popen(worker_cmd, shell=False))  # noqa: S603
+        worker_proc = subprocess.Popen(  # noqa: S603
+            worker_cmd,
+            env=os.environ,
+            shell=False,
+        )
+        workers.append(worker_proc)
     try:
         from datachain_worker.utils.celery import celery_app
 
@@ -913,6 +918,9 @@ def run_datachain_worker(monkeypatch):
 
         if attempts == 10:
             raise RuntimeError("Celery worker(s) did not start in time")
+
+        monkeypatch.setenv("DATACHAIN_STEP_ID", "1")
+        monkeypatch.setenv("UDF_RUNNER_QUEUE_NAME_LIST", ",".join(queues))
 
         yield workers
     finally:
