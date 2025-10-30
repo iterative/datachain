@@ -103,7 +103,8 @@ jobs:
           DATACHAIN_VENV_DIR: /tmp/local/datachain_venv/python${{ matrix.pyv }}/default
         run: |
           virtualenv -p "$(which python"${PYTHON_VERSION}")" "${DATACHAIN_VENV_DIR}"
-          uv pip install -p "${DATACHAIN_VENV_DIR}/bin/python" -r requirements-worker-venv.txt
+          uv pip install -p "${DATACHAIN_VENV_DIR}/bin/python" -r ./backend/requirements-worker-venv.txt
+          uv pip install -p "${DATACHAIN_VENV_DIR}/bin/python" ./backend/datachain_server[tests] ./backend/datachain[tests]
 
       - name: Run tests
         # Generate `.test_durations` file with `pytest --store-durations --durations-path ../.github/.test_durations ...`
