@@ -127,7 +127,7 @@ jobs:
           $pip_bin install -U pip wheel setuptools \
             --cache-dir="$pip_cache_dir"
 
-          $pip_bin wheel /app/datachain_server \
+          $pip_bin wheel ./backend/datachain_server \
             --wheel-dir="$pip_wheel_dir" \
             --cache-dir="$pip_cache_dir"
 
