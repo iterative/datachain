@@ -22,6 +22,22 @@ def nums_dataset(test_session):
     return dc.read_values(num=[1, 2, 3, 4, 5, 6], session=test_session).save("nums")
 
 
+def _count_table(warehouse, table_name) -> int:
+    assert warehouse.db.has_table(table_name)
+    table = warehouse.get_table(table_name)
+    return warehouse.table_rows_count(table)
+
+
+def _count_partial(warehouse, job_id, _hash) -> int:
+    table_name = UDFStep.partial_output_table_name(job_id, _hash)
+    return _count_table(warehouse, table_name)
+
+
+def _count_processed(warehouse, job_id, _hash):
+    table_name = UDFStep.processed_table_name(job_id, _hash)
+    return _count_table(warehouse, table_name)
+
+
 @pytest.mark.parametrize("reset_checkpoints", [True, False])
 @pytest.mark.parametrize("with_delta", [True, False])
 @pytest.mark.parametrize("use_datachain_job_id_env", [True, False])
@@ -397,17 +413,15 @@ def test_udf_signals_continue_from_partial(
             raise Exception(f"Simulated failure on num={num}")
         return num * 10
 
+    chain = dc.read_dataset("nums", session=test_session).settings(
+        batch_size=batch_size
+    )
+
     # -------------- FIRST RUN (FAILS WITH BUGGY UDF) -------------------
     reset_session_job_state()
 
-    chain = (
-        dc.read_dataset("nums", session=test_session)
-        .settings(batch_size=batch_size)
-        .map(result=process_buggy, output=int)
-    )
-
     with pytest.raises(Exception, match="Simulated failure"):
-        chain.save("results")
+        chain.map(result=process_buggy, output=int).save("results")
 
     first_job_id = test_session.get_or_create_job().id
 
@@ -415,13 +429,8 @@ def test_udf_signals_continue_from_partial(
     assert len(checkpoints) == 1
     hash_input = checkpoints[0].hash
 
-    # Verify partial output table exists
-    partial_table_name = UDFStep.partial_output_table_name(first_job_id, hash_input)
-    assert warehouse.db.has_table(partial_table_name)
-
     # Verify partial table has expected number of rows based on batch_size
-    partial_table = warehouse.get_table(partial_table_name)
-    assert warehouse.table_rows_count(partial_table) == expected_partial_count
+    assert _count_partial(warehouse, first_job_id, hash_input) == expected_partial_count
 
     # -------------- SECOND RUN (FIXED UDF) -------------------
     reset_session_job_state()
@@ -434,12 +443,7 @@ def test_udf_signals_continue_from_partial(
         return num * 10
 
     # Now use the fixed UDF - should continue from partial checkpoint
-    chain = (
-        dc.read_dataset("nums", session=test_session)
-        .settings(batch_size=batch_size)
-        .map(result=process_fixed, output=int)
-    )
-    chain.save("results")
+    chain.map(result=process_fixed, output=int).save("results")
 
     second_job_id = test_session.get_or_create_job().id
     checkpoints = sorted(
@@ -470,8 +474,7 @@ def test_udf_signals_continue_from_partial(
 
 
 @pytest.mark.parametrize(
-    "batch_size,expected_partial_output_count,"
-    "expected_processed_input_count,expected_unprocessed",
+    "batch_size,expected_partial_count,expected_processed_count,expected_unprocessed",
     [
         # batch_size=2: Small batches ensure multiple commits before failure
         #   Input 1 yields [10, 1] → batch 1 commits (2 outputs)
@@ -489,8 +492,8 @@ def test_udf_generator_continue_from_partial(
     monkeypatch,
     nums_dataset,
     batch_size,
-    expected_partial_output_count,
-    expected_processed_input_count,
+    expected_partial_count,
+    expected_processed_count,
     expected_unprocessed,
 ):
     """Test continuing RowGenerator from partial output in unsafe mode.
@@ -520,17 +523,15 @@ def test_udf_generator_continue_from_partial(
             yield num * 10
             yield num * num
 
+    chain = dc.read_dataset("nums", session=test_session).settings(
+        batch_size=batch_size
+    )
+
     # -------------- FIRST RUN (FAILS WITH BUGGY GENERATOR) -------------------
     reset_session_job_state()
 
-    chain = (
-        dc.read_dataset("nums", session=test_session)
-        .settings(batch_size=batch_size)
-        .gen(value=BuggyGenerator(), output=int)
-    )
-
     with pytest.raises(Exception, match="Simulated failure"):
-        chain.save("gen_results")
+        chain.gen(value=BuggyGenerator(), output=int).save("gen_results")
 
     first_job_id = test_session.get_or_create_job().id
 
@@ -538,20 +539,15 @@ def test_udf_generator_continue_from_partial(
     assert len(checkpoints) == 1
     hash_input = checkpoints[0].hash
 
-    # Verify partial output table exists
-    partial_table_name = UDFStep.partial_output_table_name(first_job_id, hash_input)
-    assert warehouse.db.has_table(partial_table_name)
-
     # Verify partial table has expected number of outputs
-    partial_table = warehouse.get_table(partial_table_name)
-    assert warehouse.table_rows_count(partial_table) == expected_partial_output_count
+    assert _count_partial(warehouse, first_job_id, hash_input) == expected_partial_count
 
-    # Verify processed table exists and tracks fully processed inputs
     # An input is marked as processed only after ALL outputs committed
-    processed_table_name = UDFStep.processed_table_name(first_job_id, hash_input)
-    assert warehouse.db.has_table(processed_table_name)
-    processed_table = warehouse.get_table(processed_table_name)
-    assert warehouse.table_rows_count(processed_table) == expected_processed_input_count
+    # Verify processed table exists and tracks fully processed inputs
+    assert (
+        _count_processed(warehouse, first_job_id, hash_input)
+        == expected_processed_count
+    )
 
     # -------------- SECOND RUN (FIXED GENERATOR) -------------------
     reset_session_job_state()
@@ -567,12 +563,7 @@ def test_udf_generator_continue_from_partial(
             yield num * num
 
     # Now use the fixed generator - should continue from partial checkpoint
-    chain = (
-        dc.read_dataset("nums", session=test_session)
-        .settings(batch_size=batch_size)
-        .gen(value=FixedGenerator(), output=int)
-    )
-    chain.save("gen_results")
+    chain.gen(value=FixedGenerator(), output=int).save("gen_results")
 
     second_job_id = test_session.get_or_create_job().id
     checkpoints = sorted(
@@ -619,6 +610,7 @@ def test_udf_generator_continue_from_partial(
 )
 def test_generator_yielding_nothing(test_session, monkeypatch, nums_dataset):
     """Test that generator correctly handles inputs that yield zero outputs."""
+    warehouse = test_session.catalog.warehouse
     processed = []
 
     class SelectiveGenerator(dc.Generator):
@@ -647,13 +639,8 @@ def test_generator_yielding_nothing(test_session, monkeypatch, nums_dataset):
     hash_input = first_checkpoints[0].hash
 
     # Verify processed table tracks inputs that yielded nothing
-    warehouse = test_session.catalog.warehouse
-    processed_table_name = UDFStep.processed_table_name(first_job_id, hash_input)
-    assert warehouse.db.has_table(processed_table_name)
-    processed_table = warehouse.get_table(processed_table_name)
-    processed_count = warehouse.table_rows_count(processed_table)
     # Inputs 1,2 were processed (1 yielded nothing, 2 yielded one output)
-    assert processed_count == 2
+    assert _count_processed(warehouse, first_job_id, hash_input) == 2
 
     # Second run - should skip already processed inputs
     reset_session_job_state()
@@ -729,6 +716,8 @@ def test_udf_code_change_triggers_rerun(test_session, monkeypatch, nums_dataset)
     map1_calls = []
     map2_calls = []
 
+    chain = dc.read_dataset("nums", session=test_session).settings(batch_size=2)
+
     # Run 1: map1 succeeds, map2 fails
     def mapper1_v1(num: int) -> int:
         map1_calls.append(num)
@@ -742,13 +731,7 @@ def test_udf_code_change_triggers_rerun(test_session, monkeypatch, nums_dataset)
 
     reset_session_job_state()
     with pytest.raises(Exception, match="Map2 failure"):
-        (
-            dc.read_dataset("nums", session=test_session)
-            .settings(batch_size=2)
-            .map(doubled=mapper1_v1)
-            .map(tripled=mapper2_failing)
-            .save("results")
-        )
+        (chain.map(doubled=mapper1_v1).map(tripled=mapper2_failing).save("results"))
 
     assert len(map1_calls) == 6  # All processed
     assert len(map2_calls) == 4  # Failed at 4th
@@ -765,13 +748,7 @@ def test_udf_code_change_triggers_rerun(test_session, monkeypatch, nums_dataset)
     map1_calls.clear()
     map2_calls.clear()
     reset_session_job_state()
-    (
-        dc.read_dataset("nums", session=test_session)
-        .settings(batch_size=2)
-        .map(doubled=mapper1_v2)
-        .map(tripled=mapper2_fixed)
-        .save("results")
-    )
+    (chain.map(doubled=mapper1_v2).map(tripled=mapper2_fixed).save("results"))
 
     assert len(map1_calls) == 6  # Reran due to code change
     assert len(map2_calls) == 6  # Ran all (no partial to continue from)
@@ -783,13 +760,7 @@ def test_udf_code_change_triggers_rerun(test_session, monkeypatch, nums_dataset)
     map1_calls.clear()
     map2_calls.clear()
     reset_session_job_state()
-    (
-        dc.read_dataset("nums", session=test_session)
-        .settings(batch_size=2)
-        .map(doubled=mapper1_v2)
-        .map(tripled=mapper2_fixed)
-        .save("results")
-    )
+    (chain.map(doubled=mapper1_v2).map(tripled=mapper2_fixed).save("results"))
 
     assert len(map1_calls) == 0  # Skipped (checkpoint found)
     assert len(map2_calls) == 0  # Skipped (checkpoint found)
