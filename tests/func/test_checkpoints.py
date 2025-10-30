@@ -25,8 +25,6 @@ def test_checkpoints_parallel(test_session_tmpfile, monkeypatch):
 
     dc.read_values(num=list(range(1000)), session=test_session).save("nums")
 
-    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
-
     chain = dc.read_dataset("nums", session=test_session).settings(parallel=True)
 
     # -------------- FIRST RUN -------------------
@@ -360,8 +358,6 @@ def test_udf_generator_continue_parallel(test_session_tmpfile, monkeypatch):
     test_session = test_session_tmpfile
     catalog = test_session.catalog
     warehouse = catalog.warehouse
-
-    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
 
     # Track which numbers have been processed
     processed_nums = []

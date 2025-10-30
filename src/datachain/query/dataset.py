@@ -722,7 +722,7 @@ class UDFStep(Step, ABC):
         Returns the Checkpoint object if found, None otherwise.
         Checks current job first, then parent job if it exists.
         """
-        checkpoints_reset = env2bool("DATACHAIN_CHECKPOINTS_RESET", undefined=True)
+        checkpoints_reset = env2bool("DATACHAIN_CHECKPOINTS_RESET", undefined=False)
 
         # Check in current job first
         if checkpoint := self.metastore.find_checkpoint(

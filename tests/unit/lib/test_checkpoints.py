@@ -185,7 +185,6 @@ def test_checkpoints_check_valid_chain_is_returned(
     monkeypatch,
     nums_dataset,
 ):
-    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
     chain = dc.read_dataset("nums", session=test_session)
 
     # -------------- FIRST RUN -------------------
@@ -268,8 +267,6 @@ def test_udf_checkpoints_cross_job_reuse(
 def test_udf_checkpoints_multiple_calls_same_job(
     test_session, monkeypatch, nums_dataset
 ):
-    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
-
     # Track how many times the mapper is called
     call_count = {"count": 0}
 
@@ -305,10 +302,9 @@ def test_udf_checkpoints_multiple_calls_same_job(
     assert call_count["count"] == 0, "Mapper should NOT be called on to_list()"
 
 
-def test_udf_shared_tables_naming(test_session, monkeypatch, nums_dataset):
+def test_udf_tables_naming(test_session, monkeypatch, nums_dataset):
     catalog = test_session.catalog
     warehouse = catalog.warehouse
-    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
 
     # Record initial UDF tables (from nums_dataset fixture which uses read_values
     # internally)
@@ -330,9 +326,7 @@ def test_udf_shared_tables_naming(test_session, monkeypatch, nums_dataset):
     chain.count()
     first_job_id = test_session.get_or_create_job().id
 
-    # Get checkpoints from first run to construct expected table names
-    checkpoints = list(catalog.metastore.list_checkpoints(first_job_id))
-    assert len(checkpoints) == 1
+    assert len(list(catalog.metastore.list_checkpoints(first_job_id))) == 1
 
     # Construct expected job-specific table names (include job_id in names)
     hash_input = "21560e6493eb726c1f04e58ce846ba691ee357f4921920c18d5ad841cbb57acb"
@@ -394,8 +388,6 @@ def test_udf_signals_continue_from_partial(
     """
     catalog = test_session.catalog
     warehouse = catalog.warehouse
-    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
-
     processed_nums = []
 
     def process_buggy(num) -> int:
@@ -516,8 +508,6 @@ def test_udf_generator_continue_from_partial(
     """
     catalog = test_session.catalog
     warehouse = catalog.warehouse
-    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
-
     processed_nums = []
 
     class BuggyGenerator(dc.Generator):
@@ -629,8 +619,6 @@ def test_udf_generator_continue_from_partial(
 )
 def test_generator_yielding_nothing(test_session, monkeypatch, nums_dataset):
     """Test that generator correctly handles inputs that yield zero outputs."""
-    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
-
     processed = []
 
     class SelectiveGenerator(dc.Generator):
@@ -685,8 +673,6 @@ def test_multiple_udf_chain_continue(test_session, monkeypatch, nums_dataset):
     When mapper fails, only mapper's partial table exists. On retry, mapper
     completes and gen runs from scratch.
     """
-    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
-
     map_processed = []
     gen_processed = []
 
@@ -740,9 +726,6 @@ def test_multiple_udf_chain_continue(test_session, monkeypatch, nums_dataset):
 
 def test_udf_code_change_triggers_rerun(test_session, monkeypatch, nums_dataset):
     """Test that changing UDF code (hash) triggers rerun from scratch."""
-    monkeypatch.setenv("DATACHAIN_CHECKPOINTS_RESET", str(False))
-    monkeypatch.setenv("DATACHAIN_UDF_CHECKPOINT_MODE", "unsafe")
-
     map1_calls = []
     map2_calls = []
 
@@ -812,3 +795,105 @@ def test_udf_code_change_triggers_rerun(test_session, monkeypatch, nums_dataset)
     assert len(map2_calls) == 0  # Skipped (checkpoint found)
     result = dc.read_dataset("results", session=test_session).to_list("tripled")
     assert sorted(result) == sorted([(i,) for i in [9, 15, 21, 27, 33, 39]])
+
+
+def test_udf_generator_safe_mode_no_partial_continue(
+    test_session, monkeypatch, nums_dataset
+):
+    """Test that in safe mode (unsafe=False), we don't continue from partial
+    checkpoints.
+
+    When DATACHAIN_UDF_CHECKPOINT_MODE is not "unsafe":
+    - No processed table is created for RowGenerator
+    - Failed jobs don't create partial checkpoints that can be continued from
+    - Rerunning always starts from scratch
+    """
+    catalog = test_session.catalog
+    warehouse = catalog.warehouse
+    monkeypatch.setenv("DATACHAIN_UDF_CHECKPOINT_MODE", "safe")
+
+    processed_nums = []
+
+    class BuggyGenerator(dc.Generator):
+        """Buggy generator that fails on num=4."""
+
+        def process(self, num):
+            processed_nums.append(num)
+            if num == 4:
+                raise Exception(f"Simulated failure on num={num}")
+            yield num * 10
+            yield num * num
+
+    # -------------- FIRST RUN (FAILS WITH BUGGY GENERATOR) -------------------
+    reset_session_job_state()
+
+    chain = (
+        dc.read_dataset("nums", session=test_session)
+        .settings(batch_size=2)
+        .gen(value=BuggyGenerator(), output=int)
+    )
+
+    with pytest.raises(Exception, match="Simulated failure"):
+        chain.save("gen_results")
+
+    first_job_id = test_session.get_or_create_job().id
+
+    checkpoints = list(catalog.metastore.list_checkpoints(first_job_id))
+    assert len(checkpoints) == 1
+    hash_input = checkpoints[0].hash
+
+    # Verify partial output table exists (partial outputs are still created)
+    partial_table_name = UDFStep.partial_output_table_name(first_job_id, hash_input)
+    assert warehouse.db.has_table(partial_table_name)
+
+    # KEY DIFFERENCE: In safe mode, no processed table should be created
+    processed_table_name = UDFStep.processed_table_name(first_job_id, hash_input)
+    assert not warehouse.db.has_table(processed_table_name)
+
+    # -------------- SECOND RUN (FIXED GENERATOR) -------------------
+    reset_session_job_state()
+
+    processed_nums.clear()
+
+    class FixedGenerator(dc.Generator):
+        """Fixed generator that works correctly."""
+
+        def process(self, num):
+            processed_nums.append(num)
+            yield num * 10
+            yield num * num
+
+    chain = (
+        dc.read_dataset("nums", session=test_session)
+        .settings(batch_size=2)
+        .gen(value=FixedGenerator(), output=int)
+    )
+
+    chain.save("gen_results")
+
+    # KEY DIFFERENCE: In safe mode, ALL inputs are processed again (not continuing
+    # from partial)
+    # Even though some were processed successfully in first run, we start from scratch
+    assert sorted(processed_nums) == sorted([1, 2, 3, 4, 5, 6])
+
+    # Verify final results are correct
+    result = (
+        dc.read_dataset("gen_results", session=test_session)
+        .order_by("value")
+        .to_list("value")
+    )
+    expected = [
+        (1,),
+        (10,),  # num=1: 1 (1²), 10 (1x10)
+        (4,),
+        (20,),  # num=2: 4 (2²), 20 (2x10)
+        (9,),
+        (30,),  # num=3: 9 (3²), 30 (3x10)
+        (16,),
+        (40,),  # num=4: 16 (4²), 40 (4x10)
+        (25,),
+        (50,),  # num=5: 25 (5²), 50 (5x10)
+        (36,),
+        (60,),  # num=6: 36 (6²), 60 (6x10)
+    ]
+    assert sorted(result) == sorted(expected)
