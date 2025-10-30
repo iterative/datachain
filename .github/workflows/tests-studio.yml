@@ -100,7 +100,7 @@ jobs:
       - name: Initialize datachain venv
         env:
           PYTHON_VERSION: ${{ matrix.pyv }}
-          DATACHAIN_VENV_DIR: /opt/datachain_venv/python${{ matrix.pyv }}
+          DATACHAIN_VENV_DIR: /tmp/local/datachain_venv/python${{ matrix.pyv }}
         run: |
           virtualenv -p "$(which python"${PYTHON_VERSION}")" "${DATACHAIN_VENV_DIR}"
 
