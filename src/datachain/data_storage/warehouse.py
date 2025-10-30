@@ -18,6 +18,7 @@ from datachain.data_storage.schema import convert_rows_custom_column_types
 from datachain.data_storage.serializer import Serializable
 from datachain.dataset import DatasetRecord, StorageURI
 from datachain.lib.file import File
+from datachain.lib.model_store import ModelStore
 from datachain.lib.signal_schema import SignalSchema
 from datachain.node import DirType, DirTypeGroup, Node, NodeWithPath, get_path
 from datachain.query.batch import RowsOutput
@@ -76,6 +77,29 @@ class AbstractWarehouse(ABC, Serializable):
     def cleanup_for_tests(self):
         """Cleanup for tests."""
 
+    def _to_jsonable(self, obj: Any) -> Any:
+        """Recursively convert Python/Pydantic structures into JSON-serializable
+        objects.
+        """
+
+        if ModelStore.is_pydantic(type(obj)):
+            return obj.model_dump()
+
+        if isinstance(obj, dict):
+            out: dict[str, Any] = {}
+            for k, v in obj.items():
+                if not isinstance(k, str):
+                    key_str = json.dumps(self._to_jsonable(k), ensure_ascii=False)
+                else:
+                    key_str = k
+                out[key_str] = self._to_jsonable(v)
+            return out
+
+        if isinstance(obj, (list, tuple, set)):
+            return [self._to_jsonable(i) for i in obj]
+
+        return obj
+
     def convert_type(  # noqa: PLR0911
         self,
         val: Any,
@@ -122,11 +146,13 @@ class AbstractWarehouse(ABC, Serializable):
             if col_python_type is dict or col_type_name == "JSON":
                 if value_type is str:
                     return val
-                if value_type in (dict, list):
-                    return json.dumps(val, ensure_ascii=False)
-                raise ValueError(
-                    f"Cannot convert value {val!r} with type {value_type} to JSON"
-                )
+                try:
+                    json_ready = self._to_jsonable(val)
+                    return json.dumps(json_ready, ensure_ascii=False)
+                except Exception as e:
+                    raise ValueError(
+                        f"Cannot convert value {val!r} with type {value_type} to JSON"
+                    ) from e
 
             if isinstance(val, col_python_type):
                 return val

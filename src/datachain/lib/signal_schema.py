@@ -1,6 +1,5 @@
 import copy
 import hashlib
-import json
 import logging
 import math
 import types
@@ -14,9 +13,7 @@ from typing import (
     TYPE_CHECKING,
     Annotated,
     Any,
-    Dict,  # type: ignore[UP035]
     Final,
-    List,  # type: ignore[UP035]
     Literal,
     Optional,
     Union,
@@ -24,6 +21,7 @@ from typing import (
     get_origin,
 )
 
+import ujson as json
 from pydantic import BaseModel, Field, ValidationError, create_model
 from sqlalchemy import ColumnElement
 from typing_extensions import Literal as LiteralEx
@@ -569,8 +567,10 @@ class SignalSchema:
         pos = 0
         for fr_cls in self.values.values():
             if (fr := ModelStore.to_pydantic(fr_cls)) is None:
-                res.append(row[pos])
+                value = row[pos]
                 pos += 1
+                converted = self._convert_feature_value(fr_cls, value, catalog, cache)
+                res.append(converted)
             else:
                 json, pos = unflatten_to_json_pos(fr, row, pos)  # type: ignore[union-attr]
                 try:
@@ -584,6 +584,72 @@ class SignalSchema:
                         raise
                 res.append(obj)
         return res
+
+    def _convert_feature_value(
+        self,
+        annotation: DataType,
+        value: Any,
+        catalog: "Catalog",
+        cache: bool,
+    ) -> Any:
+        """Convert raw DB value into declared annotation if needed."""
+        if value is None:
+            return None
+
+        result = value
+        origin = get_origin(annotation)
+
+        if origin in (Union, types.UnionType):
+            non_none_args = [
+                arg for arg in get_args(annotation) if arg is not type(None)
+            ]
+            if len(non_none_args) == 1:
+                annotation = non_none_args[0]
+                origin = get_origin(annotation)
+            else:
+                return result
+
+        if ModelStore.is_pydantic(annotation):
+            if isinstance(value, annotation):
+                obj = value
+            elif isinstance(value, Mapping):
+                obj = annotation(**value)
+            else:
+                return result
+            assert isinstance(obj, BaseModel)
+            SignalSchema._set_file_stream(obj, catalog, cache)
+            result = obj
+        elif origin is list:
+            args = get_args(annotation)
+            if args and isinstance(value, (list, tuple)):
+                item_type = args[0]
+                result = [
+                    self._convert_feature_value(item_type, item, catalog, cache)
+                    if item is not None
+                    else None
+                    for item in value
+                ]
+        elif origin is dict:
+            args = get_args(annotation)
+            if len(args) == 2 and isinstance(value, dict):
+                key_type, val_type = args
+                result = {}
+                for key, val in value.items():
+                    if key_type is str:
+                        converted_key = key
+                    else:
+                        loaded_key = json.loads(key)
+                        converted_key = self._convert_feature_value(
+                            key_type, loaded_key, catalog, cache
+                        )
+                    converted_val = (
+                        self._convert_feature_value(val_type, val, catalog, cache)
+                        if val_type is not Any
+                        else val
+                    )
+                    result[converted_key] = converted_val
+
+        return result
 
     @staticmethod
     def _set_file_stream(
@@ -898,13 +964,13 @@ class SignalSchema:
             args = get_args(type_)
             type_str = SignalSchema._type_to_str(args[0], subtypes)
             return f"Optional[{type_str}]"
-        if origin in (list, List):  # noqa: UP006
+        if origin is list:
             args = get_args(type_)
             if len(args) == 0:
                 return "list"
             type_str = SignalSchema._type_to_str(args[0], subtypes)
             return f"list[{type_str}]"
-        if origin in (dict, Dict):  # noqa: UP006
+        if origin is dict:
             args = get_args(type_)
             if len(args) == 0:
                 return "dict"
