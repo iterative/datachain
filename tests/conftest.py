@@ -902,7 +902,6 @@ def run_datachain_worker(monkeypatch):
         worker_proc = subprocess.Popen(  # noqa: S603
             worker_cmd,
             env=os.environ,
-            cwd=os.environ.get("DATACHAIN_WORKER_CWD"),
             shell=False,
         )
         workers.append(worker_proc)

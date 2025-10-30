@@ -108,10 +108,38 @@ jobs:
       - name: Install dependencies
         run: uv pip install --system ./backend/datachain_server[tests] ./backend/datachain[tests]
 
+      - name: Initialize datachain venv
+        env:
+          PYTHON_VERSION: ${{ matrix.pyv }}
+          DATACHAIN_VENV_DIR: /opt/datachain_venv
+        run: |
+          virtualenv -p "$(which python"${PYTHON_VERSION}")" "${DATACHAIN_VENV_DIR}/python${PYTHON_VERSION}"
+
+          pip_cache_dir="${DATACHAIN_VENV_DIR}/python${PYTHON_VERSION}/.cache/pip"
+          pip_wheel_dir="${pip_cache_dir}/wheels"
+          pip_bin="${DATACHAIN_VENV_DIR}/python${PYTHON_VERSION}/bin/pip"
+          mkdir -p "$pip_cache_dir"
+          mkdir -p "$pip_wheel_dir"
+
+          uv_cache_dir="${DATACHAIN_VENV_DIR}/python${PYTHON_VERSION}/.cache/uv"
+          mkdir -p "$uv_cache_dir"
+
+          $pip_bin install -U pip wheel setuptools \
+            --cache-dir="$pip_cache_dir"
+
+          $pip_bin wheel /app/datachain_server \
+            --wheel-dir="$pip_wheel_dir" \
+            --cache-dir="$pip_cache_dir"
+
+          uv venv "${DATACHAIN_VENV_DIR}/python${PYTHON_VERSION}/default" --python "$PYTHON_VERSION"
+          uv pip install -r requirements-worker-venv.txt \
+            --find-links="$pip_wheel_dir" \
+            --cache-dir="${DATACHAIN_VENV_DIR}/python${PYTHON_VERSION}/.cache/uv" \
+            -p "${DATACHAIN_VENV_DIR}/python${PYTHON_VERSION}/default/bin/python"
+
       - name: Run tests
         # Generate `.test_durations` file with `pytest --store-durations --durations-path ../.github/.test_durations ...`
         run: >
-          DATACHAIN_WORKER_CWD="$(pwd)/.."
           PYTHONPATH="$(pwd)/..:${PYTHONPATH}"
           pytest
           --config-file=pyproject.toml -rs
