@@ -76,16 +76,12 @@ def test_cleanup_checkpoints_with_ttl(test_session, monkeypatch, nums_dataset):
     assert len(checkpoints_before) == 4
     assert all(c.partial is False for c in checkpoints_before)
 
-    # Verify UDF tables exist
-    # Tables are now shared (no job_id) and named udf_{hash}_input and udf_{hash}_output
-    udf_tables = []
-    for checkpoint in checkpoints_before:
-        table_prefix = f"udf_{checkpoint.hash}"
-        matching_tables = warehouse.db.list_tables(prefix=table_prefix)
-        udf_tables.extend(matching_tables)
+    # Verify UDF tables exist by checking all tables with udf_ prefix
+    # Note: Due to checkpoint skipping, some jobs may reuse parent tables
+    all_udf_tables_before = warehouse.db.list_tables(prefix="udf_")
 
-    # At least some UDF tables should exist
-    assert len(udf_tables) > 0
+    # At least some UDF tables should exist from the operations
+    assert len(all_udf_tables_before) > 0
 
     # Modify checkpoint created_at to be older than TTL (4 hours by default)
     ch = metastore._checkpoints
@@ -97,27 +93,25 @@ def test_cleanup_checkpoints_with_ttl(test_session, monkeypatch, nums_dataset):
             .values(created_at=old_time)
         )
 
-    # Run cleanup_checkpoints
+    # Run cleanup_checkpoints with default TTL (4 hours)
     catalog.cleanup_checkpoints()
 
     # Verify checkpoints were removed
     checkpoints_after = list(metastore.list_checkpoints(job_id))
     assert len(checkpoints_after) == 0
 
-    # Verify UDF tables were removed
-    for table_name in udf_tables:
-        assert not warehouse.db.has_table(table_name)
+    # Verify job-specific UDF tables were removed
+    job_id_sanitized = job_id.replace("-", "")
+    udf_tables_after = warehouse.db.list_tables(prefix=f"udf_{job_id_sanitized}_")
+    assert len(udf_tables_after) == 0
 
 
 def test_cleanup_checkpoints_with_custom_ttl(test_session, monkeypatch, nums_dataset):
-    """Test that cleanup_checkpoints respects custom TTL from environment variable."""
+    """Test that cleanup_checkpoints respects custom TTL parameter."""
     from datetime import datetime, timedelta, timezone
 
     catalog = test_session.catalog
     metastore = catalog.metastore
-
-    # Set custom TTL to 1 hour
-    monkeypatch.setenv("CHECKPOINT_TTL", "3600")
 
     # Create some checkpoints
     reset_session_job_state()
@@ -129,7 +123,7 @@ def test_cleanup_checkpoints_with_custom_ttl(test_session, monkeypatch, nums_dat
     assert len(checkpoints) == 2
     assert all(c.partial is False for c in checkpoints)
 
-    # Modify all checkpoints to be 2 hours old (older than custom TTL)
+    # Modify all checkpoints to be 2 hours old
     ch = metastore._checkpoints
     old_time = datetime.now(timezone.utc) - timedelta(hours=2)
     for checkpoint in checkpoints:
@@ -139,17 +133,16 @@ def test_cleanup_checkpoints_with_custom_ttl(test_session, monkeypatch, nums_dat
             .values(created_at=old_time)
         )
 
-    # Run cleanup with custom TTL
-    catalog.cleanup_checkpoints()
+    # Run cleanup with custom TTL of 1 hour (3600 seconds)
+    # Checkpoints are 2 hours old, so they should be removed
+    catalog.cleanup_checkpoints(ttl_seconds=3600)
 
     # Verify checkpoints were removed
     assert len(list(metastore.list_checkpoints(job_id))) == 0
 
 
-def test_cleanup_checkpoints_for_specific_job(test_session, monkeypatch, nums_dataset):
-    """Test that cleanup_checkpoints can target a specific job."""
-    from datetime import datetime, timedelta, timezone
-
+def test_clean_job_checkpoints(test_session, monkeypatch, nums_dataset):
+    """Test that clean_job_checkpoints removes all checkpoints for a specific job."""
     catalog = test_session.catalog
     metastore = catalog.metastore
 
@@ -158,6 +151,7 @@ def test_cleanup_checkpoints_for_specific_job(test_session, monkeypatch, nums_da
     chain = dc.read_dataset("nums", session=test_session)
     chain.map(doubled=lambda num: num * 2, output=int).save("nums_doubled")
     first_job_id = test_session.get_or_create_job().id
+    first_job = metastore.get_job(first_job_id)
 
     reset_session_job_state()
     chain.map(tripled=lambda num: num * 3, output=int).save("nums_tripled")
@@ -169,18 +163,8 @@ def test_cleanup_checkpoints_for_specific_job(test_session, monkeypatch, nums_da
     assert len(first_checkpoints) == 2
     assert len(second_checkpoints) == 2
 
-    # Make both checkpoints old
-    ch = metastore._checkpoints
-    old_time = datetime.now(timezone.utc) - timedelta(hours=5)
-    for checkpoint in first_checkpoints + second_checkpoints:
-        metastore.db.execute(
-            metastore._checkpoints.update()
-            .where(ch.c.id == checkpoint.id)
-            .values(created_at=old_time)
-        )
-
-    # Clean up only first job's checkpoints
-    catalog.cleanup_checkpoints(job_id=first_job_id)
+    # Clean up only first job's checkpoints using clean_job_checkpoints
+    catalog.clean_job_checkpoints(first_job)
 
     # Verify only first job's checkpoints were removed
     assert len(list(metastore.list_checkpoints(first_job_id))) == 0
@@ -212,106 +196,157 @@ def test_cleanup_checkpoints_no_old_checkpoints(test_session, nums_dataset):
     assert checkpoint_ids_before == checkpoint_ids_after
 
 
-def test_cleanup_checkpoints_created_after(test_session, nums_dataset):
-    """Test that cleanup_checkpoints can invalidate checkpoints after a certain time."""
-    import time
-    from datetime import datetime, timezone
+def test_cleanup_checkpoints_preserves_with_active_descendants(
+    test_session, nums_dataset
+):
+    """
+    Test that outdated parent checkpoints are preserved when descendants have
+    active checkpoints.
+    """
+    from datetime import datetime, timedelta, timezone
 
     catalog = test_session.catalog
     metastore = catalog.metastore
-    warehouse = catalog.warehouse
 
-    # Create first checkpoint
+    # Create parent job with checkpoints
     reset_session_job_state()
     chain = dc.read_dataset("nums", session=test_session)
+    chain.map(doubled=lambda num: num * 2, output=int).save("nums_doubled")
+    parent_job_id = test_session.get_or_create_job().id
+
+    # Create child job (will have parent_job_id set) with more recent checkpoints
+    reset_session_job_state()
+    chain.map(tripled=lambda num: num * 3, output=int).save("nums_tripled")
+    child_job_id = test_session.get_or_create_job().id
+
+    # Verify parent job is set correctly
+    child_job = metastore.get_job(child_job_id)
+    assert child_job.parent_job_id == parent_job_id
+
+    # Make parent checkpoints old (outdated)
+    parent_checkpoints = list(metastore.list_checkpoints(parent_job_id))
+    ch = metastore._checkpoints
+    old_time = datetime.now(timezone.utc) - timedelta(hours=5)
+    for checkpoint in parent_checkpoints:
+        metastore.db.execute(
+            metastore._checkpoints.update()
+            .where(ch.c.id == checkpoint.id)
+            .values(created_at=old_time)
+        )
+
+    # Child checkpoints remain recent (within TTL)
+    child_checkpoints = list(metastore.list_checkpoints(child_job_id))
+    assert len(child_checkpoints) > 0
+
+    # Run cleanup with default TTL (4 hours)
+    catalog.cleanup_checkpoints()
+
+    # Verify parent checkpoints were NOT removed (child still needs them)
+    parent_after = list(metastore.list_checkpoints(parent_job_id))
+    assert len(parent_after) == len(parent_checkpoints)
+
+    # Child checkpoints should still be there
+    child_after = list(metastore.list_checkpoints(child_job_id))
+    assert len(child_after) == len(child_checkpoints)
+
+
+def test_cleanup_checkpoints_partial_job_cleanup(test_session, nums_dataset):
+    """Test that only outdated checkpoints are removed, not all checkpoints in a job."""
+    from datetime import datetime, timedelta, timezone
+
+    catalog = test_session.catalog
+    metastore = catalog.metastore
+
+    # Create a job with multiple checkpoints at different times
+    reset_session_job_state()
+    chain = dc.read_dataset("nums", session=test_session)
+
+    # First checkpoint
     chain.map(doubled=lambda num: num * 2, output=int).save("nums_doubled")
     job_id = test_session.get_or_create_job().id
 
-    # Get the first set of checkpoints
     first_checkpoints = list(metastore.list_checkpoints(job_id))
     assert len(first_checkpoints) == 2
 
-    # Sleep a tiny bit to ensure different timestamps
-    time.sleep(0.01)
+    # Make first checkpoints old (outdated)
+    ch = metastore._checkpoints
+    old_time = datetime.now(timezone.utc) - timedelta(hours=5)
+    for checkpoint in first_checkpoints:
+        metastore.db.execute(
+            metastore._checkpoints.update()
+            .where(ch.c.id == checkpoint.id)
+            .values(created_at=old_time)
+        )
 
-    # Record the cutoff time
-    cutoff_time = datetime.now(timezone.utc)
-
-    # Sleep again to ensure next checkpoints are after cutoff
-    time.sleep(0.01)
-
-    # Create second checkpoint (simulating re-run with code changes)
+    # Create more checkpoints in the same job (recent, within TTL)
     chain.map(tripled=lambda num: num * 3, output=int).save("nums_tripled")
 
-    # Verify we now have more checkpoints
     all_checkpoints = list(metastore.list_checkpoints(job_id))
-    assert len(all_checkpoints) == 4
+    assert len(all_checkpoints) == 4  # 2 old + 2 new
 
-    # Get UDF tables before cleanup
-    # Tables are now shared (no job_id), so just count all UDF tables
-    all_udf_tables_before = warehouse.db.list_tables(prefix="udf_")
-    assert len(all_udf_tables_before) > 0
+    # Run cleanup with default TTL (4 hours)
+    catalog.cleanup_checkpoints()
 
-    # Clean up checkpoints created after the cutoff time
-    catalog.cleanup_checkpoints(job_id=job_id, created_after=cutoff_time)
-
-    # Verify only first checkpoints remain
+    # Verify only outdated checkpoints were removed
     remaining_checkpoints = list(metastore.list_checkpoints(job_id))
-    assert len(remaining_checkpoints) == 2
+    assert len(remaining_checkpoints) == 2  # Only recent ones remain
 
-    # Verify the remaining checkpoints are the first ones
-    remaining_ids = {cp.id for cp in remaining_checkpoints}
+    # Verify the remaining are the new ones (not in first_checkpoints)
     first_ids = {cp.id for cp in first_checkpoints}
-    assert remaining_ids == first_ids
-
-    # Verify UDF tables for removed checkpoints are gone
-    all_udf_tables_after = warehouse.db.list_tables(prefix=f"udf_{job_id}_")
-    # Should have fewer tables now
-    assert len(all_udf_tables_after) < len(all_udf_tables_before)
+    remaining_ids = {cp.id for cp in remaining_checkpoints}
+    assert first_ids.isdisjoint(remaining_ids), "Old checkpoints should be gone"
 
 
-def test_cleanup_checkpoints_created_after_with_multiple_jobs(
-    test_session, nums_dataset
-):
-    """Test created_after with specific job_id doesn't affect other jobs."""
-    import time
-    from datetime import datetime, timezone
+def test_cleanup_checkpoints_branch_pruning(test_session, nums_dataset):
+    """
+    Test that entire outdated job lineages are cleaned in one pass (branch pruning).
+    """
+    from datetime import datetime, timedelta, timezone
 
     catalog = test_session.catalog
     metastore = catalog.metastore
 
-    # Create checkpoints for first job
+    # Create a lineage: root -> child -> grandchild
     reset_session_job_state()
     chain = dc.read_dataset("nums", session=test_session)
     chain.map(doubled=lambda num: num * 2, output=int).save("nums_doubled")
-    first_job_id = test_session.get_or_create_job().id
+    root_job_id = test_session.get_or_create_job().id
 
-    time.sleep(0.01)
-    cutoff_time = datetime.now(timezone.utc)
-    time.sleep(0.01)
-
-    # Create more checkpoints for first job
+    reset_session_job_state()
     chain.map(tripled=lambda num: num * 3, output=int).save("nums_tripled")
+    child_job_id = test_session.get_or_create_job().id
 
-    # Create checkpoints for second job (after cutoff)
     reset_session_job_state()
     chain.map(quadrupled=lambda num: num * 4, output=int).save("nums_quadrupled")
-    second_job_id = test_session.get_or_create_job().id
+    grandchild_job_id = test_session.get_or_create_job().id
 
-    # Verify initial state
-    first_job_checkpoints = list(metastore.list_checkpoints(first_job_id))
-    second_job_checkpoints = list(metastore.list_checkpoints(second_job_id))
-    assert len(first_job_checkpoints) == 4
-    assert len(second_job_checkpoints) == 2
+    # Verify lineage
+    child_job = metastore.get_job(child_job_id)
+    grandchild_job = metastore.get_job(grandchild_job_id)
+    assert child_job.parent_job_id == root_job_id
+    assert grandchild_job.parent_job_id == child_job_id
 
-    # Clean up only first job's checkpoints created after cutoff
-    catalog.cleanup_checkpoints(job_id=first_job_id, created_after=cutoff_time)
+    # Make ALL checkpoints outdated (older than TTL)
+    all_job_ids = [root_job_id, child_job_id, grandchild_job_id]
+    ch = metastore._checkpoints
+    old_time = datetime.now(timezone.utc) - timedelta(hours=5)
 
-    first_job_after = list(metastore.list_checkpoints(first_job_id))
-    assert len(first_job_after) == 2
+    for job_id in all_job_ids:
+        checkpoints = list(metastore.list_checkpoints(job_id))
+        for checkpoint in checkpoints:
+            metastore.db.execute(
+                metastore._checkpoints.update()
+                .where(ch.c.id == checkpoint.id)
+                .values(created_at=old_time)
+            )
 
-    second_job_after = list(metastore.list_checkpoints(second_job_id))
-    assert len(second_job_after) == 2
+    # Run cleanup once
+    catalog.cleanup_checkpoints()
+
+    # Verify ALL jobs were cleaned in single pass (branch pruning)
+    for job_id in all_job_ids:
+        remaining = list(metastore.list_checkpoints(job_id))
+        assert len(remaining) == 0, f"Job {job_id} should have been cleaned"
 
 
 def test_udf_generator_continue_parallel(test_session_tmpfile, monkeypatch):

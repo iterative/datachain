@@ -334,20 +334,35 @@ def test_udf_shared_tables_naming(test_session, monkeypatch, nums_dataset):
     checkpoints = list(catalog.metastore.list_checkpoints(first_job_id))
     assert len(checkpoints) == 1
 
-    # Construct expected shared table names (no job_id in names)
-    expected_udf_tables = sorted(
+    # Construct expected job-specific table names (include job_id in names)
+    hash_input = "21560e6493eb726c1f04e58ce846ba691ee357f4921920c18d5ad841cbb57acb"
+    hash_output = "233b788c955915319d648ddc92b8a23547794e7efc5df97ba45d6e6928717e14"
+    expected_first_run_tables = sorted(
         [
-            "udf_21560e6493eb726c1f04e58ce846ba691ee357f4921920c18d5ad841cbb57acb_input",
-            "udf_233b788c955915319d648ddc92b8a23547794e7efc5df97ba45d6e6928717e14_output",
+            f"udf_{first_job_id}_{hash_input}_input",
+            f"udf_{first_job_id}_{hash_output}_output",
         ]
     )
 
-    assert get_udf_tables() == expected_udf_tables
+    assert get_udf_tables() == expected_first_run_tables
 
     # -------------- SECOND RUN -------------------
     reset_session_job_state()
     chain.count()
-    assert get_udf_tables() == expected_udf_tables
+    second_job_id = test_session.get_or_create_job().id
+
+    # Second run should:
+    # - Reuse first job's input table (found via ancestor search)
+    # - Create its own output table (copied from first job)
+    expected_all_tables = sorted(
+        [
+            f"udf_{first_job_id}_{hash_input}_input",  # Shared input
+            f"udf_{first_job_id}_{hash_output}_output",  # First job output
+            f"udf_{second_job_id}_{hash_output}_output",  # Second job output
+        ]
+    )
+
+    assert get_udf_tables() == expected_all_tables
 
 
 @pytest.mark.parametrize(
@@ -446,7 +461,9 @@ def test_udf_signals_continue_from_partial(
     assert all(c.partial is False for c in checkpoints)
     # Verify the map() UDF output table exists (checkpoints[0])
     # nums dataset checkpoint (checkpoints[1]) is from skipped/reused generation
-    assert warehouse.db.has_table(UDFStep.output_table_name(checkpoints[0].hash))
+    assert warehouse.db.has_table(
+        UDFStep.output_table_name(second_job_id, checkpoints[0].hash)
+    )
 
     # Verify all rows were processed
     assert (
@@ -456,7 +473,8 @@ def test_udf_signals_continue_from_partial(
     ) == [(10,), (20,), (30,), (40,), (50,), (60,)]
 
     # Verify only unprocessed rows were processed in second run
-    assert processed_nums == expected_unprocessed
+    # Use sorted() because parallel execution order is non-deterministic
+    assert sorted(processed_nums) == sorted(expected_unprocessed)
 
 
 @pytest.mark.parametrize(
@@ -574,7 +592,9 @@ def test_udf_generator_continue_from_partial(
     assert len(checkpoints) == 2
     assert all(c.partial is False for c in checkpoints)
     # Verify gen() UDF output table exists (checkpoints[0])
-    assert warehouse.db.has_table(UDFStep.output_table_name(checkpoints[0].hash))
+    assert warehouse.db.has_table(
+        UDFStep.output_table_name(second_job_id, checkpoints[0].hash)
+    )
 
     # Verify all outputs were generated
     # 6 inputs x 2 outputs each = 12 total outputs

@@ -48,6 +48,7 @@ from datachain.error import (
     QueryScriptCancelError,
     QueryScriptRunError,
 )
+from datachain.job import Job
 from datachain.lib.listing import get_listing
 from datachain.node import DirType, Node, NodeWithPath
 from datachain.nodes_thread_pool import NodesThreadPool
@@ -61,7 +62,6 @@ from .dependency import build_dependency_hierarchy, populate_nested_dependencies
 if TYPE_CHECKING:
     from datachain.data_storage import AbstractMetastore, AbstractWarehouse
     from datachain.dataset import DatasetListVersion
-    from datachain.job import Job
     from datachain.lib.listing_info import ListingInfo
     from datachain.listing import Listing
 
@@ -2044,8 +2044,10 @@ class Catalog:
 
     def _remove_checkpoint(self, checkpoint: Checkpoint) -> None:
         """
-        Remove a checkpoint and its associated UDF tables.
-        Internal helper method for checkpoint cleanup operations.
+        Remove a checkpoint and its associated job-specific UDF tables.
+
+        Since tables are now job-scoped, this removes only the tables
+        belonging to this specific checkpoint's job.
 
         Args:
             checkpoint: The checkpoint object to remove.
@@ -2053,61 +2055,86 @@ class Catalog:
         # Remove the checkpoint from metastore first
         self.metastore.remove_checkpoint(checkpoint)
 
-        # Check if any other checkpoint references the same hash
-        # If so, don't remove the shared UDF tables
-        all_checkpoints = list(self.metastore.list_checkpoints())
-        hash_still_referenced = any(
-            cp.hash == checkpoint.hash for cp in all_checkpoints
-        )
+        # Remove job-specific tables for this checkpoint
+        # Table patterns: udf_{job_id}_{hash}_{suffix}
+        # where suffix can be: input, output, output_partial, processed
+        job_id_sanitized = checkpoint.job_id.replace("-", "")
+        table_prefix = f"udf_{job_id_sanitized}_{checkpoint.hash}_"
+        matching_tables = self.warehouse.db.list_tables(prefix=table_prefix)
 
-        if not hash_still_referenced:
-            # No other checkpoint uses this hash, safe to clean up shared tables
-            # Shared table prefix pattern: udf_{hash}_
-            table_prefix = f"udf_{checkpoint.hash}_"
-            matching_tables = self.warehouse.db.list_tables(prefix=table_prefix)
-            if matching_tables:
-                self.warehouse.cleanup_tables(matching_tables)
+        if matching_tables:
+            self.warehouse.cleanup_tables(matching_tables)
 
-        # Also clean up any job-specific partial tables
-        # Partial table pattern: udf_{job_id}_{hash}_*_partial
-        partial_prefix = f"udf_{checkpoint.job_id}_{checkpoint.hash}_"
-        partial_tables = self.warehouse.db.list_tables(prefix=partial_prefix)
-        if partial_tables:
-            self.warehouse.cleanup_tables(partial_tables)
-
-    def cleanup_checkpoints(
-        self, job_id: str | None = None, created_after: datetime | None = None
-    ) -> None:
+    def cleanup_checkpoints(self, ttl_seconds: int | None = None) -> None:
         """
-        Clean up checkpoints and their associated UDF tables.
+        Clean up outdated checkpoints and their associated UDF tables.
 
-        Removes checkpoints based on either TTL or creation time criteria.
-        Also removes corresponding UDF-related tables if they exist.
+        Uses optimized branch pruning: removes outdated checkpoints if no
+        descendants have active (non-outdated) checkpoints that depend on them.
+
+        This prevents accumulation of checkpoints while ensuring that ancestor
+        tables are preserved when descendants still need them.
 
         Args:
-            job_id: Optional job ID to clean up checkpoints for specific job only.
-                   If None, cleans up all old checkpoints.
-            created_after: If provided, removes all checkpoints created after this
-                          datetime (overrides TTL). Useful for invalidating checkpoints
-                          after a certain point when code changes in re-runs.
-                          If None, uses TTL-based cleanup.
+            ttl_seconds: Time-to-live in seconds. Checkpoints older than this
+                        are considered outdated. If None, uses CHECKPOINT_TTL
+                        environment variable or default.
         """
-
-        checkpoints = list(self.metastore.list_checkpoints(job_id))
-
-        # Filter checkpoints based on created_after or TTL
-        if created_after is not None:
-            checkpoints_to_remove = [
-                cp for cp in checkpoints if cp.created_at > created_after
-            ]
-        else:
+        if ttl_seconds is None:
             ttl_seconds = int(os.environ.get("CHECKPOINT_TTL", str(TTL_INT)))
-            ttl_threshold = datetime.now(timezone.utc) - timedelta(seconds=ttl_seconds)
 
-            checkpoints_to_remove = [
-                cp for cp in checkpoints if cp.created_at < ttl_threshold
-            ]
+        ttl_threshold = datetime.now(timezone.utc) - timedelta(seconds=ttl_seconds)
 
-        # Remove each checkpoint and its associated UDF tables
-        for checkpoint in checkpoints_to_remove:
+        # Cache descendant check results per job_id to avoid redundant checks
+        has_active_descendants_cache: dict[str, bool] = {}
+
+        # For each outdated checkpoint, check if it's safe to remove
+        for checkpoint in self.metastore.list_checkpoints(created_before=ttl_threshold):
+            # Check once per job_id if descendants have active checkpoints (cached)
+            if checkpoint.job_id not in has_active_descendants_cache:
+                has_active_descendants_cache[checkpoint.job_id] = (
+                    self._has_active_descendant_checkpoints(
+                        checkpoint.job_id, ttl_threshold
+                    )
+                )
+
+            # If no active descendants, remove the checkpoint
+            if not has_active_descendants_cache[checkpoint.job_id]:
+                self._remove_checkpoint(checkpoint)
+
+    def clean_job_checkpoints(self, job: Job) -> None:
+        """
+        Clean all checkpoints and associated tables for a specific job.
+
+        This should only be called after verifying that no descendants
+        depend on this job's tables (i.e., no active descendant checkpoints).
+
+        Args:
+            job: The job whose checkpoints should be cleaned.
+        """
+        checkpoints = list(self.metastore.list_checkpoints(job.id))
+
+        for checkpoint in checkpoints:
             self._remove_checkpoint(checkpoint)
+
+    def _has_active_descendant_checkpoints(
+        self, job_id: str, ttl_threshold: datetime
+    ) -> bool:
+        """
+        Check if any descendant jobs have non-outdated checkpoints.
+
+        This is used to determine if a job's checkpoints can be safely removed.
+        If descendants have active checkpoints, they may be using this job's
+        input tables, so we must preserve them.
+
+        Args:
+            job_id: The job ID to check descendants for.
+            ttl_threshold: Checkpoints created before this are considered outdated.
+
+        Returns:
+            True if any descendant has active (non-outdated) checkpoints.
+        """
+        return any(
+            list(self.metastore.list_checkpoints(desc_id, created_after=ttl_threshold))
+            for desc_id in self.metastore.get_descendant_job_ids(job_id)
+        )
