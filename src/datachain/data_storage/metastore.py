@@ -21,6 +21,7 @@ from sqlalchemy import (
     Table,
     Text,
     UniqueConstraint,
+    cast,
     desc,
     literal,
     select,
@@ -1801,7 +1802,9 @@ class AbstractDBMetastore(AbstractMetastore):
                 self._jobs.c.parent_job_id.label("parent_job_id"),
             ).select_from(
                 self._jobs.join(
-                    ancestors_cte, self._jobs.c.id == ancestors_cte.c.parent_job_id
+                    ancestors_cte,
+                    self._jobs.c.id
+                    == cast(ancestors_cte.c.parent_job_id, self._jobs.c.id.type),
                 )
             )
         )
@@ -1833,7 +1836,8 @@ class AbstractDBMetastore(AbstractMetastore):
             ).select_from(
                 self._jobs.join(
                     descendants_cte,
-                    self._jobs.c.parent_job_id == descendants_cte.c.id,
+                    self._jobs.c.parent_job_id
+                    == cast(descendants_cte.c.id, self._jobs.c.id.type),
                 )
             )
         )
