@@ -111,6 +111,7 @@ jobs:
       - name: Run tests
         # Generate `.test_durations` file with `pytest --store-durations --durations-path ../.github/.test_durations ...`
         run: >
+          DATACHAIN_WORKER_CWD="$(pwd)/.."
           PYTHONPATH="$(pwd)/..:${PYTHONPATH}"
           pytest
           --config-file=pyproject.toml -rs
