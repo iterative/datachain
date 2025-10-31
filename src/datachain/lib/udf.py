@@ -514,29 +514,48 @@ class Generator(UDFBase):
     ) -> Iterator[Iterable[UDFResult]]:
         self.setup()
 
-        def _prepare_rows(udf_inputs) -> "abc.Generator[Sequence[Any], None, None]":
+        def _prepare_rows(
+            udf_inputs,
+        ) -> "abc.Generator[tuple[int, Sequence[Any]], None, None]":
             with safe_closing(udf_inputs):
                 for row in udf_inputs:
-                    yield self._prepare_row(
+                    row_id, *prepared_row = self._prepare_row_and_id(
                         row, udf_fields, catalog, cache, download_cb
                     )
+                    yield (row_id, prepared_row)
 
-        def _process_row(row):
+        def _process_row(row_id, row):
+            # TODO: Fix limitation where inputs yielding nothing are not tracked in
+            # processed table. Currently, if process() yields nothing for an input,
+            # that input's sys__id is never added to the processed table, causing it
+            # to be re-processed on checkpoint recovery. Solution: yield a marker row
+            # with _input_sys_id when process() yields nothing, then filter these
+            # marker rows before inserting to output table.
             with safe_closing(self.process_safe(row)) as result_objs:
                 for result_obj in result_objs:
                     udf_output = self._flatten_row(result_obj)
-                    yield dict(zip(self.signal_names, udf_output, strict=False))
+                    # Include _input_sys_id to track which input generated this output
+                    yield (
+                        {"_input_sys_id": row_id}
+                        | dict(zip(self.signal_names, udf_output, strict=False))
+                    )
 
-        prepared_inputs = _prepare_rows(udf_inputs)
-        prepared_inputs = _prefetch_inputs(
-            prepared_inputs,
+        # Prepare inputs and extract row_id for tracking
+        prepared_inputs_with_id = list(_prepare_rows(udf_inputs))
+
+        # Prefetch only the row data (not the IDs)
+        prefetched_rows = _prefetch_inputs(
+            [row for _, row in prepared_inputs_with_id],
             self.prefetch,
             download_cb=download_cb,
             remove_prefetched=bool(self.prefetch) and not cache,
         )
-        with closing(prepared_inputs):
-            for row in prepared_inputs:
-                yield _process_row(row)
+
+        # Recombine row_ids with prefetched rows and process
+        row_ids = [row_id for row_id, _ in prepared_inputs_with_id]
+        with closing(prefetched_rows):
+            for row_id, row in zip(row_ids, prefetched_rows, strict=False):
+                yield _process_row(row_id, row)
                 processed_cb.relative_update(1)
 
         self.teardown()

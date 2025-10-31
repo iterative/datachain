@@ -21,6 +21,7 @@ from sqlalchemy import (
     Table,
     Text,
     UniqueConstraint,
+    cast,
     desc,
     literal,
     select,
@@ -423,6 +424,20 @@ class AbstractMetastore(ABC, Serializable):
         """Returns the job with the given ID."""
 
     @abstractmethod
+    def get_ancestor_job_ids(self, job_id: str, conn=None) -> list[str]:
+        """
+        Returns list of ancestor job IDs in order from parent to root.
+        Uses recursive CTE to get all ancestors in a single query.
+        """
+
+    @abstractmethod
+    def get_descendant_job_ids(self, job_id: str, conn=None) -> list[str]:
+        """
+        Returns list of descendant job IDs (children, grandchildren, etc.).
+        Uses recursive CTE to get all descendants in a single query.
+        """
+
+    @abstractmethod
     def update_job(
         self,
         job_id: str,
@@ -457,8 +472,24 @@ class AbstractMetastore(ABC, Serializable):
     #
 
     @abstractmethod
-    def list_checkpoints(self, job_id: str, conn=None) -> Iterator[Checkpoint]:
-        """Returns all checkpoints related to some job"""
+    def list_checkpoints(
+        self,
+        job_id: str | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+        conn=None,
+    ) -> Iterator[Checkpoint]:
+        """
+        List checkpoints by job id, or all checkpoints if job_id is None.
+
+        Args:
+            job_id: Filter by job ID. If None, lists all checkpoints.
+            created_after: Filter by creation date. If provided, only returns
+                          checkpoints created after this timestamp.
+            created_before: Filter by creation date. If provided, only returns
+                           checkpoints created before this timestamp.
+            conn: Database connection to use.
+        """
 
     @abstractmethod
     def get_last_checkpoint(self, job_id: str, conn=None) -> Checkpoint | None:
@@ -484,6 +515,12 @@ class AbstractMetastore(ABC, Serializable):
         conn: Any | None = None,
     ) -> Checkpoint:
         """Creates new checkpoint"""
+
+    @abstractmethod
+    def remove_checkpoint(
+        self, checkpoint: Checkpoint, conn: Any | None = None
+    ) -> None:
+        """Removes a checkpoint by checkpoint object"""
 
 
 class AbstractDBMetastore(AbstractMetastore):
@@ -1746,6 +1783,73 @@ class AbstractDBMetastore(AbstractMetastore):
             return None
         return self._parse_job(results[0])
 
+    def get_ancestor_job_ids(self, job_id: str, conn=None) -> list[str]:
+        # Use recursive CTE to walk up the parent chain
+        # Format: WITH RECURSIVE ancestors(id, parent_job_id) AS (...)
+        ancestors_cte = (
+            select(
+                self._jobs.c.id.label("id"),
+                self._jobs.c.parent_job_id.label("parent_job_id"),
+            )
+            .where(self._jobs.c.id == job_id)
+            .cte(name="ancestors", recursive=True)
+        )
+
+        # Recursive part: join with parent jobs
+        ancestors_recursive = ancestors_cte.union_all(
+            select(
+                self._jobs.c.id.label("id"),
+                self._jobs.c.parent_job_id.label("parent_job_id"),
+            ).select_from(
+                self._jobs.join(
+                    ancestors_cte,
+                    self._jobs.c.id
+                    == cast(ancestors_cte.c.parent_job_id, self._jobs.c.id.type),
+                )
+            )
+        )
+
+        # Select all ancestor IDs except the starting job itself
+        query = select(ancestors_recursive.c.id).where(
+            ancestors_recursive.c.id != job_id
+        )
+
+        results = list(self.db.execute(query, conn=conn))
+        return [row[0] for row in results]
+
+    def get_descendant_job_ids(self, job_id: str, conn=None) -> list[str]:
+        # Use recursive CTE to walk down the child chain
+        descendants_cte = (
+            select(
+                self._jobs.c.id.label("id"),
+                self._jobs.c.parent_job_id.label("parent_job_id"),
+            )
+            .where(self._jobs.c.id == job_id)
+            .cte(name="descendants", recursive=True)
+        )
+
+        # Recursive part: join with child jobs
+        descendants_recursive = descendants_cte.union_all(
+            select(
+                self._jobs.c.id.label("id"),
+                self._jobs.c.parent_job_id.label("parent_job_id"),
+            ).select_from(
+                self._jobs.join(
+                    descendants_cte,
+                    self._jobs.c.parent_job_id
+                    == cast(descendants_cte.c.id, self._jobs.c.id.type),
+                )
+            )
+        )
+
+        # Select all descendant IDs except the starting job itself
+        query = select(descendants_recursive.c.id).where(
+            descendants_recursive.c.id != job_id
+        )
+
+        results = list(self.db.execute(query, conn=conn))
+        return [row[0] for row in results]
+
     def update_job(
         self,
         job_id: str,
@@ -1833,7 +1937,7 @@ class AbstractDBMetastore(AbstractMetastore):
             Column("hash", Text, nullable=False),
             Column("partial", Boolean, default=False),
             Column("created_at", DateTime(timezone=True), nullable=False),
-            UniqueConstraint("job_id", "hash"),
+            UniqueConstraint("job_id", "hash", "partial"),
         ]
 
     @cached_property
@@ -1872,24 +1976,48 @@ class AbstractDBMetastore(AbstractMetastore):
         conn: Any | None = None,
     ) -> Checkpoint:
         """
-        Creates a new job query step.
+        Creates a new checkpoint or returns existing one if already exists.
+        This is idempotent - calling it multiple times with the same job_id and hash
+        will not create duplicates.
         """
-        checkpoint_id = str(uuid4())
-        self.db.execute(
-            self._checkpoints_insert().values(
-                id=checkpoint_id,
-                job_id=job_id,
-                hash=_hash,
-                partial=partial,
-                created_at=datetime.now(timezone.utc),
-            ),
-            conn=conn,
-        )
-        return self.get_checkpoint_by_id(checkpoint_id)
+        # First check if checkpoint already exists
+        existing = self.find_checkpoint(job_id, _hash, partial=partial, conn=conn)
+        if existing:
+            return existing
 
-    def list_checkpoints(self, job_id: str, conn=None) -> Iterator[Checkpoint]:
-        """List checkpoints by job id."""
-        query = self._checkpoints_query().where(self._checkpoints.c.job_id == job_id)
+        checkpoint_id = str(uuid4())
+        query = self._checkpoints_insert().values(
+            id=checkpoint_id,
+            job_id=job_id,
+            hash=_hash,
+            partial=partial,
+            created_at=datetime.now(timezone.utc),
+        )
+
+        # Use on_conflict_do_nothing to handle race conditions
+        if hasattr(query, "on_conflict_do_nothing"):
+            query = query.on_conflict_do_nothing(
+                index_elements=["job_id", "hash", "partial"]
+            )
+
+        self.db.execute(query, conn=conn)
+
+        return self.find_checkpoint(job_id, _hash, partial=partial, conn=conn)  # type: ignore[return-value]
+
+    def list_checkpoints(
+        self,
+        job_id: str | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+        conn=None,
+    ) -> Iterator[Checkpoint]:
+        query = self._checkpoints_query()
+        if job_id is not None:
+            query = query.where(self._checkpoints.c.job_id == job_id)
+        if created_after is not None:
+            query = query.where(self._checkpoints.c.created_at >= created_after)
+        if created_before is not None:
+            query = query.where(self._checkpoints.c.created_at < created_before)
         rows = list(self.db.execute(query, conn=conn))
 
         yield from [self.checkpoint_class.parse(*r) for r in rows]
@@ -1929,3 +2057,13 @@ class AbstractDBMetastore(AbstractMetastore):
         if not rows:
             return None
         return self.checkpoint_class.parse(*rows[0])
+
+    def remove_checkpoint(
+        self, checkpoint: Checkpoint, conn: Any | None = None
+    ) -> None:
+        """Removes a checkpoint by checkpoint object"""
+        ch = self._checkpoints
+        self.db.execute(
+            self._checkpoints_delete().where(ch.c.id == checkpoint.id),
+            conn=conn,
+        )

@@ -51,7 +51,8 @@ def test_dataset_insert_batch_size(test_session, warehouse):
         wraps=warehouse.db.executemany,
     ) as mock_executemany:
         dc.read_values(value=list(range(100)), session=test_session).save("values")
-        assert mock_executemany.call_count == 2  # 1 for read_values, 1 for save
+        # 1 for input table, 1 for read_values, 1 for save
+        assert mock_executemany.call_count == 3
         mock_executemany.reset_mock()
 
         # Mapper
@@ -73,7 +74,7 @@ def test_dataset_insert_batch_size(test_session, warehouse):
         # Generator
 
         dc.read_dataset("values", session=test_session).gen(x2=udf_gen).save("large")
-        assert mock_executemany.call_count == 1
+        assert mock_executemany.call_count == 2  # 1 for input table, 1 for output
         mock_executemany.reset_mock()
 
         chain = (
@@ -82,6 +83,8 @@ def test_dataset_insert_batch_size(test_session, warehouse):
             .gen(x2=udf_gen)
             .save("large")
         )
-        assert mock_executemany.call_count == 20
+        assert (
+            mock_executemany.call_count == 40
+        )  # 20 for outputs + 20 for processed_table tracking
         mock_executemany.reset_mock()
         assert set(chain.to_values("x2")) == set(range(200))
