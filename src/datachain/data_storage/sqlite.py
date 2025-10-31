@@ -681,9 +681,9 @@ class SQLiteWarehouse(AbstractWarehouse):
         columns: Sequence["sqlalchemy.Column"] = (),
         if_not_exists: bool = True,
     ) -> Table:
-        # Check if table already exists in metadata
-        if name in self.db.metadata.tables:
-            table = self.db.metadata.tables[name]
+        # Check if table already exists in DB
+        if self.db.has_table(name):
+            table = self.db.get_table(name)
         else:
             table = self.schema.dataset_row_cls.new_table(
                 name,
