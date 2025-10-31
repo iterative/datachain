@@ -553,14 +553,8 @@ def test_udf_parallel_exec_error(cloud_test_catalog_tmpfile):
         .map(name_len_error, params=["file.path"], output={"name_len": int})
     )
 
-    if os.environ.get("DATACHAIN_DISTRIBUTED"):
-        # in distributed mode we expect DataChainError with the error message
-        with pytest.raises(DataChainError, match="Test Error!"):
-            chain.show()
-    else:
-        # while in local mode we expect RuntimeError with the error message
-        with pytest.raises(RuntimeError, match="UDF Execution Failed!"):
-            chain.show()
+    with pytest.raises(RuntimeError, match="UDF Execution Failed!"):
+        chain.show()
 
 
 @pytest.mark.parametrize(
@@ -736,12 +730,8 @@ def test_udf_parallel_interrupt(cloud_test_catalog_tmpfile, capfd):
         .settings(parallel=True)
         .map(name_len_interrupt, params=["file.path"], output={"name_len": int})
     )
-    if os.environ.get("DATACHAIN_DISTRIBUTED"):
-        with pytest.raises(KeyboardInterrupt):
-            chain.show()
-    else:
-        with pytest.raises(RuntimeError, match="UDF Execution Failed!"):
-            chain.show()
+    with pytest.raises(RuntimeError, match="UDF Execution Failed!"):
+        chain.show()
     captured = capfd.readouterr()
     assert "semaphore" not in captured.err
 
@@ -874,7 +864,7 @@ def test_udf_distributed_interrupt(
         .settings(parallel=parallel, workers=workers)
         .map(name_len_interrupt, params=["file.path"], output={"name_len": int})
     )
-    with pytest.raises(KeyboardInterrupt):
+    with pytest.raises(Exception, match="UDF task failed with exit code"):
         chain.show()
     captured = capfd.readouterr()
     assert "semaphore" not in captured.err

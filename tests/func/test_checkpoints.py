@@ -11,6 +11,10 @@ def mock_is_script_run(monkeypatch):
     monkeypatch.setattr("datachain.query.session.is_script_run", lambda: True)
 
 
+@pytest.mark.skipif(
+    "os.environ.get('DATACHAIN_DISTRIBUTED')",
+    reason="Checkpoints test skipped in distributed mode",
+)
 def test_checkpoints_parallel(test_session_tmpfile, monkeypatch):
     def mapper_fail(num) -> int:
         raise Exception("Error")
