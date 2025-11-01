@@ -268,12 +268,26 @@ class UDFBase(AbstractUDF):
         raise NotImplementedError
 
     def _flatten_row(self, row):
-        if len(self.output.values) > 1 and not isinstance(row, BaseModel):
+        """Normalize a single UDF result into a tuple matching the output schema.
+
+        Rules:
+        - If there are multiple output signals (>1), flatten iterables (except
+          Pydantic models) into a flat tuple of values.
+        - If there is a single output signal (==1), always wrap the entire
+          object as a single tuple element, even if it is itself a tuple/list.
+          This prevents accidental unpacking of container outputs (e.g., when a
+          user returns a tuple for a list-typed output), ensuring it is treated
+          as the single signal value.
+        """
+        n_outputs = len(self.output.values)
+        if n_outputs > 1 and not isinstance(row, BaseModel):
             flat = []
             for obj in row:
                 flat.extend(self._obj_to_list(obj))
             return tuple(flat)
-        return row if isinstance(row, tuple) else tuple(self._obj_to_list(row))
+
+        # Single-signal case: keep containers intact by wrapping as a single item
+        return (row,)
 
     @staticmethod
     def _obj_to_list(obj):

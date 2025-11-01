@@ -5,6 +5,7 @@ import random
 import string
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Generator, Iterable, Iterator, Sequence
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Union, cast
 from urllib.parse import urlparse
 
@@ -82,8 +83,13 @@ class AbstractWarehouse(ABC, Serializable):
         objects.
         """
 
+        # Normalize datetime values to ISO strings
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+
         if ModelStore.is_pydantic(type(obj)):
-            return obj.model_dump()
+            # Convert to plain dict and recursively normalize nested values
+            return self._to_jsonable(obj.model_dump())
 
         if isinstance(obj, dict):
             out: dict[str, Any] = {}
