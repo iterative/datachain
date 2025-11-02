@@ -984,7 +984,7 @@ class AbstractWarehouse(ABC, Serializable):
             *self.dataset_row_cls.sys_columns(),
             *columns,
         )
-        self.db.create_table(tbl, if_not_exists=True)
+        self.db.create_table(tbl, if_not_exists=True, kind="udf")
         return tbl
 
     @abstractmethod

@@ -327,7 +327,13 @@ class SQLiteDatabaseEngine(DatabaseEngine):
         query = "SELECT name FROM sqlite_master WHERE type='table';"
         return [r[0] for r in self.execute_str(query).fetchall()]
 
-    def create_table(self, table: "Table", if_not_exists: bool = True) -> None:
+    def create_table(
+        self,
+        table: "Table",
+        if_not_exists: bool = True,
+        *,
+        kind: str | None = None,
+    ) -> None:
         self.execute(CreateTable(table, if_not_exists=if_not_exists))
 
     def drop_table(self, table: "Table", if_exists: bool = False) -> None:
