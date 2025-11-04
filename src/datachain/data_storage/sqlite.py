@@ -715,19 +715,36 @@ class SQLiteWarehouse(AbstractWarehouse):
         rows: Iterable[dict[str, Any]],
         batch_size: int = INSERT_BATCH_SIZE,
         batch_callback: Callable[[list[dict[str, Any]]], None] | None = None,
+        tracking_field: str | None = None,
     ) -> None:
         for row_chunk in batched(rows, batch_size):
+            # Convert tuple to list for modification
+            row_list = list(row_chunk)
+
+            # Extract and remove tracking field if specified
+            tracking_values = None
+            if tracking_field:
+                tracking_values = [row.pop(tracking_field, None) for row in row_list]
+
             with self.db.transaction() as conn:
                 # transactions speeds up inserts significantly as there is no separate
                 # transaction created for each insert row
                 self.db.executemany(
-                    table.insert().values({f: bindparam(f) for f in row_chunk[0]}),
-                    row_chunk,
+                    table.insert().values({f: bindparam(f) for f in row_list[0]}),
+                    row_list,
                     conn=conn,
                 )
-            # After transaction commits, call callback with the chunk that was inserted
+
+            # After transaction commits, restore tracking field and call callback
+            # Only restore if value is not None (avoid adding field to rows that didn't
+            # have it)
+            if tracking_field and tracking_values:
+                for row, val in zip(row_list, tracking_values, strict=True):
+                    if val is not None:
+                        row[tracking_field] = val
+
             if batch_callback:
-                batch_callback(list(row_chunk))
+                batch_callback(row_list)
 
     def insert_dataset_rows(self, df, dataset: DatasetRecord, version: str) -> int:
         dr = self.dataset_rows(dataset, version)

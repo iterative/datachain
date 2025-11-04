@@ -1815,7 +1815,7 @@ class AbstractDBMetastore(AbstractMetastore):
         )
 
         results = list(self.db.execute(query, conn=conn))
-        return [row[0] for row in results]
+        return [str(row[0]) for row in results]
 
     def get_descendant_job_ids(self, job_id: str, conn=None) -> list[str]:
         # Use recursive CTE to walk down the child chain
@@ -1836,8 +1836,8 @@ class AbstractDBMetastore(AbstractMetastore):
             ).select_from(
                 self._jobs.join(
                     descendants_cte,
-                    self._jobs.c.parent_job_id
-                    == cast(descendants_cte.c.id, self._jobs.c.id.type),
+                    cast(self._jobs.c.parent_job_id, self._jobs.c.id.type)
+                    == descendants_cte.c.id,
                 )
             )
         )
@@ -1848,7 +1848,7 @@ class AbstractDBMetastore(AbstractMetastore):
         )
 
         results = list(self.db.execute(query, conn=conn))
-        return [row[0] for row in results]
+        return [str(row[0]) for row in results]
 
     def update_job(
         self,

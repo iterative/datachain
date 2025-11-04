@@ -376,61 +376,61 @@ def process_udf_outputs(
     # Optimization: Compute row types once, rather than for every row.
     udf_col_types = get_col_types(warehouse, udf.output)
 
-    # Track processed input sys__ids for RowGenerator
-    # batch_processed_sys_ids: sys__ids in current batch that haven't been inserted yet
-    # all_processed_sys_ids: all sys__ids we've inserted so far (to avoid duplicates)
-    batch_processed_sys_ids: set[int] = set()
+    # Track which input sys__ids we've already written to processed table
     all_processed_sys_ids: set[int] = set()
 
     def _batch_callback(batch: list[dict[str, Any]]) -> None:
         """Called after each batch of outputs is inserted.
 
-        Inserts the corresponding input sys__ids into the processed table.
+        Extracts input sys__ids from the actual inserted batch and writes them
+        to the processed table.
         """
-        if processed_table is not None and batch_processed_sys_ids:
-            # Only insert sys__ids that we haven't already inserted
-            new_sys_ids = batch_processed_sys_ids - all_processed_sys_ids
-            if new_sys_ids:
-                warehouse.insert_rows(
-                    processed_table,
-                    ({"sys__id": sys_id} for sys_id in sorted(new_sys_ids)),
-                    batch_size=batch_size,
-                    batch_callback=None,
-                )
-                warehouse.insert_rows_done(processed_table)
-                all_processed_sys_ids.update(new_sys_ids)
-            batch_processed_sys_ids.clear()
+        if processed_table is None:
+            return
+
+        # Extract sys__ids from ACTUAL inserted rows (tracking_field preserved in
+        # callback)
+        sys_ids = {row["_input_sys_id"] for row in batch if "_input_sys_id" in row}
+
+        # Only insert sys__ids that we haven't already inserted
+        new_sys_ids = sys_ids - all_processed_sys_ids
+        if new_sys_ids:
+            warehouse.insert_rows(
+                processed_table,
+                ({"sys__id": sys_id} for sys_id in sorted(new_sys_ids)),
+                batch_size=batch_size,
+                batch_callback=None,
+            )
+            warehouse.insert_rows_done(processed_table)
+            all_processed_sys_ids.update(new_sys_ids)
 
     def _insert_rows():
         for udf_output in udf_results:
             if not udf_output:
                 continue
 
-            # Track the input sys__id for this batch of outputs (from one input)
-            current_input_sys_id = None
-
             with safe_closing(udf_output):
                 for row in udf_output:
                     cb.relative_update()
-
-                    # For RowGenerator, extract and track the input sys__id
-                    # Always remove _input_sys_id as it's only for internal tracking
-                    if "_input_sys_id" in row:
-                        current_input_sys_id = row.pop("_input_sys_id")
-
+                    # Remove _input_sys_id if no processed_table (not needed for
+                    # tracking)
+                    # Otherwise keep it - warehouse will handle it via tracking_field
+                    if processed_table is None and "_input_sys_id" in row:
+                        row.pop("_input_sys_id")
                     yield adjust_outputs(warehouse, row, udf_col_types)
 
-            # After processing all outputs from this input, mark it as processed
-            if processed_table is not None and current_input_sys_id is not None:
-                batch_processed_sys_ids.add(current_input_sys_id)
-
-    warehouse.insert_rows(
-        udf_table,
-        _insert_rows(),
-        batch_size=batch_size,
-        batch_callback=_batch_callback if processed_table is not None else None,
-    )
-    warehouse.insert_rows_done(udf_table)
+    try:
+        warehouse.insert_rows(
+            udf_table,
+            _insert_rows(),
+            batch_size=batch_size,
+            batch_callback=_batch_callback if processed_table is not None else None,
+            tracking_field="_input_sys_id" if processed_table is not None else None,
+        )
+    finally:
+        # Always flush the buffer even if an exception occurs
+        # This ensures partial results are visible for checkpoint continuation
+        warehouse.insert_rows_done(udf_table)
 
 
 def get_download_callback(suffix: str = "", **kwargs) -> CombinedDownloadCallback:
@@ -496,8 +496,26 @@ class UDFStep(Step, ABC):
         """
         if os.getenv("DATACHAIN_DISABLE_QUERY_CACHE", "") not in ("", "0"):
             return original_query
+
+        # Table was created from original_query by create_pre_udf_table,
+        # so they should have the same columns. However, get_table() reflects
+        # the table with database-specific types (e.g ClickHouse types) instead of
+        # SQLTypes.
+        # To preserve SQLTypes for proper type conversion, we build a query using
+        # column references with types from the original query.
         table = self.warehouse.db.get_table(input_table_name)
-        return sqlalchemy.select(*table.c)
+
+        # Create a mapping of column names to SQLTypes from original query
+        orig_col_types = {col.name: col.type for col in original_query.selected_columns}
+
+        # Build select using all columns from table, with SQLTypes where available
+        select_columns: list[ColumnClause] = []
+        for table_col in table.c:
+            # Use SQLType from original query if available, otherwise use table's type
+            col_type = orig_col_types.get(table_col.name, table_col.type)
+            select_columns.append(sqlalchemy.column(table_col.name, col_type))
+
+        return sqlalchemy.select(*select_columns).select_from(table)
 
     def create_processed_table(
         self, checkpoint: Checkpoint, copy_from_parent: bool = False
@@ -881,8 +899,8 @@ class UDFStep(Step, ABC):
         Returns tuple of (output_table, input_table).
         """
         if checkpoint.job_id == self.job.id:
-            # Same job - just use the existing table directly
-            output_table = self.warehouse.get_table(
+            # Same job - recreate output table object
+            output_table = self.create_output_table(
                 UDFStep.output_table_name(checkpoint.job_id, checkpoint.hash)
             )
         else:
