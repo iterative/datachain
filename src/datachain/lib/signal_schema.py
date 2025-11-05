@@ -4,7 +4,7 @@ import logging
 import math
 import types
 import warnings
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from inspect import isclass
@@ -82,6 +82,55 @@ class SetupError(SignalSchemaError):
         super().__init__(f"cannot setup value '{name}': {msg}")
 
 
+def generate_merge_root_mapping(
+    left_names: Iterable[str],
+    right_names: Sequence[str],
+    *,
+    extract_root: Callable[[str], str],
+    prefix: str,
+) -> dict[str, str]:
+    """Compute root renames for schema merges.
+
+    Returns a mapping from each right-side root to the target root name while
+    preserving the order in which right-side roots first appear. The mapping
+    avoids collisions with roots already present on the left side and among
+    the right-side roots themselves. When a conflict is detected, the
+    ``prefix`` string is used to derive candidate root names until a unique
+    one is found.
+    """
+
+    existing_roots = {extract_root(name) for name in left_names}
+
+    right_root_order: list[str] = []
+    right_roots: set[str] = set()
+    for name in right_names:
+        root = extract_root(name)
+        if root not in right_roots:
+            right_roots.add(root)
+            right_root_order.append(root)
+
+    used_roots = set(existing_roots)
+    root_mapping: dict[str, str] = {}
+
+    for root in right_root_order:
+        if root not in used_roots:
+            root_mapping[root] = root
+            used_roots.add(root)
+            continue
+
+        suffix = 0
+        while True:
+            base = prefix if root in prefix else f"{prefix}{root}"
+            candidate_root = base if suffix == 0 else f"{base}_{suffix}"
+            if candidate_root not in used_roots and candidate_root not in right_roots:
+                root_mapping[root] = candidate_root
+                used_roots.add(candidate_root)
+                break
+            suffix += 1
+
+    return root_mapping
+
+
 class SignalResolvingTypeError(SignalResolvingError):
     def __init__(self, method: str, field):
         super().__init__(
@@ -140,7 +189,7 @@ def create_feature_model(
         **{
             field_name: anno if isinstance(anno, tuple) else (anno, None)
             for field_name, anno in fields.items()
-        },
+        },  # type: ignore[arg-type]
     )
 
 
@@ -840,12 +889,30 @@ class SignalSchema:
         right_schema: "SignalSchema",
         rname: str,
     ) -> "SignalSchema":
-        schema_right = {
-            rname + key if key in self.values else key: type_
-            for key, type_ in right_schema.values.items()
-        }
+        merged_values = dict(self.values)
 
-        return SignalSchema(self.values | schema_right)
+        right_names = list(right_schema.values.keys())
+        root_mapping = generate_merge_root_mapping(
+            self.values.keys(),
+            right_names,
+            extract_root=self._extract_root,
+            prefix=rname,
+        )
+
+        for key, type_ in right_schema.values.items():
+            root = self._extract_root(key)
+            tail = key.partition(".")[2]
+            mapped_root = root_mapping[root]
+            new_name = mapped_root if not tail else f"{mapped_root}.{tail}"
+            merged_values[new_name] = type_
+
+        return SignalSchema(merged_values)
+
+    @staticmethod
+    def _extract_root(name: str) -> str:
+        if "." in name:
+            return name.split(".", 1)[0]
+        return name
 
     def append(self, right: "SignalSchema") -> "SignalSchema":
         missing_schema = {
@@ -865,7 +932,7 @@ class SignalSchema:
         return create_model(
             name,
             __base__=(DataModel,),  # type: ignore[call-overload]
-            **fields,
+            **fields,  # type: ignore[arg-type]
         )
 
     @staticmethod
