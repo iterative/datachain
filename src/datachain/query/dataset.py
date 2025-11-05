@@ -39,11 +39,11 @@ from datachain.error import DatasetNotFoundError, QueryScriptCancelError
 from datachain.func.base import Function
 from datachain.hash_utils import hash_column_elements
 from datachain.lib.listing import is_listing_dataset, listing_dataset_expired
-from datachain.lib.signal_schema import SignalSchema
+from datachain.lib.signal_schema import SignalSchema, generate_merge_root_mapping
 from datachain.lib.udf import UDFAdapter, _get_cache
 from datachain.progress import CombinedDownloadCallback, TqdmCombinedDownloadCallback
 from datachain.project import Project
-from datachain.query.schema import C, UDFParamSpec, normalize_param
+from datachain.query.schema import DEFAULT_DELIMITER, C, UDFParamSpec, normalize_param
 from datachain.query.session import Session
 from datachain.query.udf import UdfInfo
 from datachain.sql.functions.random import rand
@@ -61,7 +61,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from typing import Concatenate
 
-    from sqlalchemy.sql.elements import ClauseElement
+    from sqlalchemy.sql.elements import ClauseElement, KeyedColumnElement
     from sqlalchemy.sql.schema import Table
     from sqlalchemy.sql.selectable import GenerativeSelect
     from typing_extensions import ParamSpec, Self
@@ -1001,6 +1001,17 @@ class SQLJoin(Step):
     full: bool
     rname: str
 
+    @staticmethod
+    def _split_db_name(name: str) -> tuple[str, str]:
+        if DEFAULT_DELIMITER in name:
+            head, tail = name.split(DEFAULT_DELIMITER, 1)
+            return head, tail
+        return name, ""
+
+    @classmethod
+    def _root_name(cls, name: str) -> str:
+        return cls._split_db_name(name)[0]
+
     def hash_inputs(self) -> str:
         predicates = (
             ensure_sequence(self.predicates) if self.predicates is not None else []
@@ -1077,21 +1088,38 @@ class SQLJoin(Step):
         q2 = self.get_query(self.query2, temp_tables)
 
         q1_columns = _drop_system_columns(q1.c)
-        q1_column_names = {c.name for c in q1_columns}
-
-        q2_columns = []
-        for c in q2.c:
-            if c.name.startswith("sys__"):
+        existing_column_names = {c.name for c in q1_columns}
+        right_columns: list[KeyedColumnElement[Any]] = []
+        right_column_names: list[str] = []
+        for column in q2.c:
+            if column.name.startswith("sys__"):
                 continue
+            right_columns.append(column)
+            right_column_names.append(column.name)
 
-            if c.name in q1_column_names:
-                new_name = self.rname.format(name=c.name)
-                new_name_idx = 0
-                while new_name in q1_column_names:
-                    new_name_idx += 1
-                    new_name = self.rname.format(name=f"{c.name}_{new_name_idx}")
-                c = c.label(new_name)
-            q2_columns.append(c)
+        root_mapping = generate_merge_root_mapping(
+            existing_column_names,
+            right_column_names,
+            extract_root=self._root_name,
+            prefix=self.rname,
+        )
+
+        q2_columns: list[KeyedColumnElement[Any]] = []
+        for column in right_columns:
+            original_name = column.name
+            column_root, column_tail = self._split_db_name(original_name)
+            mapped_root = root_mapping[column_root]
+
+            new_name = (
+                mapped_root
+                if not column_tail
+                else DEFAULT_DELIMITER.join([mapped_root, column_tail])
+            )
+
+            if new_name != original_name:
+                column = column.label(new_name)
+
+            q2_columns.append(column)
 
         res_columns = q1_columns + q2_columns
         predicates = (
@@ -1266,8 +1294,10 @@ class DatasetQuery:
         if version:
             self.version = version
 
-        namespace_name = namespace_name or self.catalog.metastore.default_namespace_name
-        project_name = project_name or self.catalog.metastore.default_project_name
+        if namespace_name is None:
+            namespace_name = self.catalog.metastore.default_namespace_name
+        if project_name is None:
+            project_name = self.catalog.metastore.default_project_name
 
         if is_listing_dataset(name) and not version:
             # not setting query step yet as listing dataset might not exist at
@@ -1712,7 +1742,7 @@ class DatasetQuery:
         predicates: JoinPredicateType | Sequence[JoinPredicateType],
         inner=False,
         full=False,
-        rname="{name}_right",
+        rname="right_",
     ) -> "Self":
         left = self.clone(new_table=False)
         if self.table.name == dataset_query.table.name:

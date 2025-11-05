@@ -531,6 +531,59 @@ def test_merge():
     assert signals["f"] is MyType1
 
 
+def test_merge_nested_key_without_collision():
+    left = SignalSchema({"item.score": float})
+    right = SignalSchema({"metadata.score": float})
+
+    merged = left.merge(right, "right_")
+
+    assert merged.values["item.score"] is float
+    assert merged.values["metadata.score"] is float
+    assert "right_metadata.score" not in merged.values
+
+
+def test_merge_applies_suffix_when_prefixed_name_exists():
+    left = SignalSchema(
+        {
+            "item.score": float,
+            "right_item.score": float,
+        }
+    )
+    right = SignalSchema(
+        {
+            "item.confidence": int,
+            "item.score": int,
+        }
+    )
+
+    merged = left.merge(right, "right_")
+
+    assert merged.values["item.score"] is float
+    assert merged.values["right_item.score"] is float
+    assert merged.values["right_item_1.score"] is int
+    assert merged.values["right_item_1.confidence"] is int
+
+
+def test_merge_rename_collides_with_existing_column():
+    left = SignalSchema(
+        {
+            "item.score": float,
+        }
+    )
+    right = SignalSchema(
+        {
+            "item.score": int,
+            "right_item.score": str,
+        }
+    )
+
+    merged = left.merge(right, "right_")
+
+    assert merged.values["item.score"] is float
+    assert merged.values["right_item.score"] is str
+    assert merged.values["right_item_1.score"] is int
+
+
 def test_select_custom_type_backward_compatibility():
     schema = SignalSchema.deserialize(
         {
