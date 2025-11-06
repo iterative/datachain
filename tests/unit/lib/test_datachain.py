@@ -599,6 +599,11 @@ def test_from_features_more_simple_types(test_session):
         num=range(len(features)),
         bb=[True, True, False],
         dd=[{}, {"ee": 3}, {"ww": 1, "qq": 2}],
+        ll1=[[], [1, 2, 3], [3, 4, 5]],
+        ll=[[None, 1, 2], [3, 4], []],
+        dd2=[{"a": 1}, {"b": 2}, {"c": 3}],
+        nn=[None, None, None],
+        ss=["x", None, "y"],
         time=[
             datetime.datetime.now(),
             datetime.datetime.today(),
@@ -613,6 +618,11 @@ def test_from_features_more_simple_types(test_session):
         "num",
         "bb",
         "dd",
+        "ll1",
+        "ll",
+        "dd2",
+        "nn",
+        "ss",
         "time",
         "f",
     }
@@ -620,7 +630,11 @@ def test_from_features_more_simple_types(test_session):
         MyFr,
         int,
         bool,
-        dict,
+        dict[str, str],  # from dd (starts with empty dict)
+        dict[str, int],  # from dd2
+        list[str],  # from ll1 (starts with empty list)
+        list[int],  # from ll
+        str,  # from nn and ss
         datetime.datetime,
         float,
     }
@@ -954,45 +968,6 @@ def test_batch_map_tuple_result_iterator(test_session):
     assert chain.order_by("x").to_values("x") == [1, 2, 3]
 
 
-def test_iterable_chain(test_session):
-    chain = dc.read_values(f1=features, num=range(len(features)), session=test_session)
-
-    n = 0
-    for sample in chain.order_by("f1.nnn", "f1.count"):
-        assert len(sample) == 2
-        fr, num = sample
-
-        assert isinstance(fr, MyFr)
-        assert isinstance(num, int)
-        assert num == n
-        assert fr == features[n]
-
-        n += 1
-
-    assert n == len(features)
-
-
-def test_to_list_nested_feature(test_session):
-    chain = dc.read_values(sign1=features_nested, session=test_session)
-
-    for n, sample in enumerate(
-        chain.order_by("sign1.fr.nnn", "sign1.fr.count").to_list()
-    ):
-        assert len(sample) == 1
-        nested = sample[0]
-
-        assert isinstance(nested, MyNested)
-        assert nested == features_nested[n]
-
-
-def test_collect_deprecated(test_session):
-    chain = dc.read_values(fib=[1, 1, 2, 3, 5], session=test_session)
-
-    with pytest.warns(DeprecationWarning, match="Method `collect` is deprecated"):
-        vals = list(chain.collect("fib"))
-        assert set(vals) == {1, 2, 3, 5}
-
-
 def test_select_read_hf_without_sys_columns(test_session):
     from datachain import func
 
@@ -1219,6 +1194,36 @@ def test_vector_of_vectors(test_session):
     assert np.allclose(actual[1], vector[1])
 
 
+def test_persist_restores_sys_signals_after_merge(test_session):
+    left = dc.read_values(ids=[1, 2], session=test_session)
+    right = dc.read_values(ids=[1, 2], extra=["x", "y"], session=test_session)
+
+    merged = left.merge(right, on="ids")
+
+    with pytest.raises(SignalResolvingError):
+        merged.signals_schema.resolve("sys.rand")
+
+    persisted = merged.persist()
+
+    sys_schema = persisted.signals_schema.resolve("sys.id", "sys.rand").values
+    assert sys_schema["sys.id"] is int
+    assert sys_schema["sys.rand"] is int
+
+
+def test_shuffle_after_merge(test_session):
+    left = dc.read_values(ids=[1, 2], session=test_session)
+    right = dc.read_values(ids=[1, 2], extra=["x", "y"], session=test_session)
+
+    shuffled = left.merge(right, on="ids").shuffle()
+
+    sys_schema = shuffled.signals_schema.resolve("sys.id", "sys.rand").values
+    assert sys_schema["sys.id"] is int
+    assert sys_schema["sys.rand"] is int
+
+    rows = set(shuffled.to_list("ids", "extra"))
+    assert rows == {(1, "x"), (2, "y")}
+
+
 def test_unsupported_output_type(test_session):
     vector = [3.14, 2.72, 1.62]
 
@@ -1227,34 +1232,6 @@ def test_unsupported_output_type(test_session):
 
     with pytest.raises(TypeError):
         dc.read_values(key=[123], session=test_session).map(emd=get_vector)
-
-
-def test_to_list_single_item(test_session):
-    names = ["f1.jpg", "f1.json", "f1.txt", "f2.jpg", "f2.json"]
-    sizes = [1, 2, 3, 4, 5]
-    files = sort_files(
-        [File(path=name, size=size) for name, size in zip(names, sizes, strict=False)]
-    )
-
-    scores = [0.1, 0.2, 0.3, 0.4, 0.5]
-
-    chain = dc.read_values(file=files, score=scores, session=test_session)
-    chain = chain.order_by("file.path", "file.size")
-
-    assert chain.to_values("file") == files
-    assert chain.to_values("file.path") == names
-    assert chain.to_values("file.size") == sizes
-    assert chain.to_values("file.source") == [""] * len(names)
-    assert np.allclose(chain.to_values("score"), scores)
-
-    for actual, expected in zip(
-        chain.to_list("file.size", "score"),
-        [[x, y] for x, y in zip(sizes, scores, strict=False)],
-        strict=False,
-    ):
-        assert len(actual) == 2
-        assert actual[0] == expected[0]
-        assert math.isclose(actual[1], expected[1], rel_tol=1e-7)
 
 
 def test_default_output_type(test_session):

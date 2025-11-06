@@ -51,7 +51,11 @@ from datachain.lib.udf_signature import UdfSignature
 from datachain.lib.utils import DataChainColumnError, DataChainParamsError
 from datachain.project import Project
 from datachain.query import Session
-from datachain.query.dataset import DatasetQuery, PartitionByType
+from datachain.query.dataset import (
+    DatasetQuery,
+    PartitionByType,
+    RegenerateSystemColumns,
+)
 from datachain.query.schema import DEFAULT_DELIMITER, Column
 from datachain.sql.functions import path as pathfunc
 from datachain.utils import batched_it, env2bool, inside_notebook, row_to_nested_dict
@@ -607,7 +611,8 @@ class DataChain:
             create=True,
         )
         return self._evolve(
-            query=self._query.save(project=project, feature_schema=schema)
+            query=self._query.save(project=project, feature_schema=schema),
+            signal_schema=self.signals_schema | SignalSchema({"sys": Sys}),
         )
 
     def save(  # type: ignore[override]
@@ -1703,11 +1708,7 @@ class DataChain:
             )
 
         query = self._query.join(
-            right_ds._query,
-            sqlalchemy.and_(*ops),
-            inner,
-            full,
-            rname + "{name}",
+            right_ds._query, sqlalchemy.and_(*ops), inner, full, rname
         )
         query.feature_schema = None
         ds = self._evolve(query=query)
@@ -2756,8 +2757,20 @@ class DataChain:
         )
 
     def shuffle(self) -> "Self":
-        """Shuffle the rows of the chain deterministically."""
-        return self.order_by("sys.rand")
+        """Shuffle rows with a best-effort deterministic ordering.
+
+        This produces repeatable shuffles. Merge and union operations can
+        lead to non-deterministic results. Use order by or save a dataset
+        afterward to guarantee the same result.
+        """
+        query = self._query.clone(new_table=False)
+        query.steps.append(RegenerateSystemColumns(self._query.catalog))
+
+        chain = self._evolve(
+            query=query,
+            signal_schema=SignalSchema({"sys": Sys}) | self.signals_schema,
+        )
+        return chain.order_by("sys.rand")
 
     def sample(self, n: int) -> "Self":
         """Return a random sample from the chain.

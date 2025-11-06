@@ -129,7 +129,13 @@ class DatabaseEngine(ABC, Serializable):
         return [table for table in all_tables if table.startswith(prefix)]
 
     @abstractmethod
-    def create_table(self, table: "Table", if_not_exists: bool = True) -> None: ...
+    def create_table(
+        self,
+        table: "Table",
+        if_not_exists: bool = True,
+        *,
+        kind: str | None = None,
+    ) -> None: ...
 
     @abstractmethod
     def drop_table(self, table: "Table", if_exists: bool = False) -> None: ...
