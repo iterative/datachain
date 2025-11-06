@@ -220,12 +220,12 @@ def cleanup_udf_tables(warehouse):
 def warehouse(metastore):
     if os.environ.get("DATACHAIN_WAREHOUSE"):
         _warehouse = get_warehouse()
-        yield _warehouse
         try:
             check_temp_tables_cleaned_up(_warehouse)
         finally:
             cleanup_udf_tables(_warehouse)
             _warehouse.cleanup_for_tests()
+        yield _warehouse
     else:
         _warehouse = SQLiteWarehouse(db_file=":memory:")
         yield _warehouse
@@ -280,12 +280,12 @@ def metastore_tmpfile(tmp_path):
 def warehouse_tmpfile(tmp_path, metastore_tmpfile):
     if os.environ.get("DATACHAIN_WAREHOUSE"):
         _warehouse = get_warehouse()
-        yield _warehouse
         try:
             check_temp_tables_cleaned_up(_warehouse)
         finally:
             cleanup_udf_tables(_warehouse)
             _warehouse.cleanup_for_tests()
+        yield _warehouse
     else:
         _warehouse = SQLiteWarehouse(db_file=tmp_path / "test.db")
         yield _warehouse

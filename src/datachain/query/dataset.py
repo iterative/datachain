@@ -840,14 +840,16 @@ class UDFStep(Step, ABC):
 
         udf_mode = os.getenv("DATACHAIN_UDF_CHECKPOINT_MODE", "unsafe")
 
-        # Apply partitioning if needed.
+        # If partition_by is set, we need to create input table first to ensure
+        # consistent sys__id
         if self.partition_by is not None:
-            # TODO checkpoints
-            _query = query = self.warehouse._regenerate_system_columns(
-                query_generator.select(),
-                keep_existing_columns=True,
-                regenerate_columns=["sys__id"],
-            )
+            # Create input table first so partition table can reference the
+            # same sys__id values
+            input_table = self.get_or_create_input_table(query, hash_input)
+
+            # Now query from the input table for partition creation
+            query = sa.select(input_table)
+
             partition_tbl = self.create_partitions_table(query)
             temp_tables.append(partition_tbl.name)
             query = query.outerjoin(
@@ -914,7 +916,6 @@ class UDFStep(Step, ABC):
             output_table = self.create_output_table(current_output_table_name)
             self.warehouse.copy_table(output_table, sa.select(existing_output_table))
 
-        # Get or create input table for result query
         input_table = self.get_or_create_input_table(query, hash_input)
 
         return output_table, input_table
@@ -948,7 +949,11 @@ class UDFStep(Step, ABC):
             checkpoint, copy_from_parent=False
         )
 
-        input_query = self.get_input_query(input_table.name, query)
+        if self.partition_by is not None:
+            # input table is created before and correct input query is already generated
+            input_query = query
+        else:
+            input_query = self.get_input_query(input_table.name, query)
 
         # Run UDF to populate partial output table
         self.populate_udf_output_table(
