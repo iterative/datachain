@@ -1265,7 +1265,11 @@ class RegenerateSystemColumns(Step):
         return hashlib.sha256(b"regenerate_system_columns").hexdigest()
 
     def apply(
-        self, query_generator: QueryGenerator, temp_tables: list[str]
+        self,
+        query_generator: QueryGenerator,
+        temp_tables: list[str],
+        *args,
+        **kwargs,
     ) -> StepResult:
         query = query_generator.select()
         new_query = self.catalog.warehouse._regenerate_system_columns(
