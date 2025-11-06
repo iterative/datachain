@@ -501,19 +501,27 @@ class UDFStep(Step, ABC):
         # so they should have the same columns. However, get_table() reflects
         # the table with database-specific types (e.g ClickHouse types) instead of
         # SQLTypes.
-        # To preserve SQLTypes for proper type conversion, we build a query using
-        # column references with types from the original query.
+        # To preserve SQLTypes for proper type conversion while keeping columns bound
+        # to the table (to avoid ambiguous column names), we use type_coerce.
         table = self.warehouse.db.get_table(input_table_name)
 
         # Create a mapping of column names to SQLTypes from original query
         orig_col_types = {col.name: col.type for col in original_query.selected_columns}
 
-        # Build select using all columns from table, with SQLTypes where available
-        select_columns: list[ColumnClause] = []
+        # Build select using bound columns from table, with type coercion for SQLTypes
+        select_columns = []
         for table_col in table.c:
-            # Use SQLType from original query if available, otherwise use table's type
-            col_type = orig_col_types.get(table_col.name, table_col.type)
-            select_columns.append(sqlalchemy.column(table_col.name, col_type))
+            if table_col.name in orig_col_types:
+                # Use type_coerce to preserve SQLType while keeping column bound
+                # to table. Use label() to preserve the column name
+                select_columns.append(
+                    sqlalchemy.type_coerce(
+                        table_col, orig_col_types[table_col.name]
+                    ).label(table_col.name)
+                )
+            else:
+                # Column not in original query (e.g., sys columns), use as-is
+                select_columns.append(table_col)
 
         return sqlalchemy.select(*select_columns).select_from(table)
 
@@ -848,7 +856,8 @@ class UDFStep(Step, ABC):
             input_table = self.get_or_create_input_table(query, hash_input)
 
             # Now query from the input table for partition creation
-            query = sa.select(input_table)
+            # Use get_input_query to preserve SQLTypes from original query
+            query = self.get_input_query(input_table.name, query)
 
             partition_tbl = self.create_partitions_table(query)
             temp_tables.append(partition_tbl.name)
@@ -856,6 +865,9 @@ class UDFStep(Step, ABC):
                 partition_tbl,
                 partition_tbl.c.sys__id == query.selected_columns.sys__id,
             ).add_columns(*partition_columns())
+
+            # always run from scratch as Aggregator checkpoints are not implemented yet
+            udf_mode = "safe"
 
         if ch := self._checkpoint_exist(hash_output):
             # Skip UDF execution by reusing existing output table
