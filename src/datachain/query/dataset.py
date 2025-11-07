@@ -846,7 +846,7 @@ class UDFStep(Step, ABC):
         assert hash_input
         assert hash_output
 
-        udf_mode = os.getenv("DATACHAIN_UDF_CHECKPOINT_MODE", "unsafe")
+        udf_reset = env2bool("DATACHAIN_UDF_RESET", undefined=False)
 
         # If partition_by is set, we need to create input table first to ensure
         # consistent sys__id
@@ -867,14 +867,14 @@ class UDFStep(Step, ABC):
             ).add_columns(*partition_columns())
 
             # always run from scratch as Aggregator checkpoints are not implemented yet
-            udf_mode = "safe"
+            udf_reset = True
 
         if ch := self._checkpoint_exist(hash_output):
             # Skip UDF execution by reusing existing output table
             output_table, input_table = self._skip_udf(ch, hash_input, query)
         elif (
             (ch_partial := self._checkpoint_exist(hash_input, partial=True))
-            and udf_mode == "unsafe"
+            and not udf_reset
             and ch_partial.job_id != self.job.id
         ):
             # Only continue from partial if it's from a parent job, not our own
@@ -887,11 +887,17 @@ class UDFStep(Step, ABC):
             )
 
         # After UDF completes successfully, clean up partial checkpoint and
-        # create final one
+        # processed table
         if ch_partial := self.metastore.find_checkpoint(
             self.job.id, hash_input, partial=True
         ):
             self.metastore.remove_checkpoint(ch_partial)
+
+            # Clean up processed table if it exists
+            # (input table is kept for reuse by child jobs via ancestor search)
+            processed_table_name = UDFStep.processed_table_name(self.job.id, hash_input)
+            if self.warehouse.db.has_table(processed_table_name):
+                temp_tables.append(processed_table_name)
 
         # Create final checkpoint for current job
         self.metastore.create_checkpoint(self.job.id, hash_output)
@@ -1194,9 +1200,10 @@ class RowGenerator(UDFStep):
             copy_from_parent: If True, copy data from parent's processed table
             (for continue)
         """
-        # Only create processed table in unsafe mode (when using partial checkpoints)
-        udf_mode = os.getenv("DATACHAIN_UDF_CHECKPOINT_MODE", "unsafe")
-        if udf_mode != "unsafe":
+        # Only create processed table when not resetting (when using partial
+        # checkpoints)
+        udf_reset = env2bool("DATACHAIN_UDF_RESET", undefined=False)
+        if udf_reset:
             return None
 
         processed_table_name = UDFStep.processed_table_name(

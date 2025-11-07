@@ -370,6 +370,8 @@ def test_udf_tables_naming(test_session, monkeypatch):
     assert len(list(catalog.metastore.list_checkpoints(first_job_id))) == 1
 
     # Construct expected job-specific table names (include job_id in names)
+    # After UDF completion, processed table is cleaned up,
+    # input and output tables remain
     hash_input = "213263c3715396a437cc0fdcb94e908b67993490c56485c1b2180ae3d9e14780"
     hash_output = "12a892fbed5f7d557d5fc7f048f3356dda97e7f903a3f998318202a4400e3f16"
     expected_first_run_tables = sorted(
@@ -906,17 +908,17 @@ def test_udf_code_change_triggers_rerun(test_session, monkeypatch, nums_dataset)
 def test_udf_generator_safe_mode_no_partial_continue(
     test_session, monkeypatch, nums_dataset
 ):
-    """Test that in safe mode (unsafe=False), we don't continue from partial
+    """Test that when DATACHAIN_UDF_RESET=True, we don't continue from partial
     checkpoints.
 
-    When DATACHAIN_UDF_CHECKPOINT_MODE is not "unsafe":
+    When DATACHAIN_UDF_RESET is True:
     - No processed table is created for RowGenerator
     - Failed jobs don't create partial checkpoints that can be continued from
     - Rerunning always starts from scratch
     """
     catalog = test_session.catalog
     warehouse = catalog.warehouse
-    monkeypatch.setenv("DATACHAIN_UDF_CHECKPOINT_MODE", "safe")
+    monkeypatch.setenv("DATACHAIN_UDF_RESET", "true")
 
     processed_nums = []
 
