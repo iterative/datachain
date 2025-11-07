@@ -417,7 +417,7 @@ def test_udf_signals_continue_from_partial(
     batch_size,
     fail_after_count,
 ):
-    """Test continuing UDF execution from partial output table in unsafe mode.
+    """Test continuing UDF execution from partial output table.
 
     Tests with different batch sizes to ensure partial results are correctly handled
     regardless of batch boundaries. Uses counter-based failure to avoid dependency
@@ -521,7 +521,7 @@ def test_udf_generator_continue_from_partial(
     batch_size,
     fail_after_count,
 ):
-    """Test continuing RowGenerator from partial output in unsafe mode.
+    """Test continuing RowGenerator from partial output.
 
     RowGenerator differs from UDFSignal because:
     - One input can generate multiple outputs (2 outputs per input)
@@ -905,9 +905,7 @@ def test_udf_code_change_triggers_rerun(test_session, monkeypatch, nums_dataset)
     assert sorted(result) == sorted([(i,) for i in [9, 15, 21, 27, 33, 39]])
 
 
-def test_udf_generator_safe_mode_no_partial_continue(
-    test_session, monkeypatch, nums_dataset
-):
+def test_udf_generator_reset_udf(test_session, monkeypatch, nums_dataset):
     """Test that when DATACHAIN_UDF_RESET=True, we don't continue from partial
     checkpoints.
 
