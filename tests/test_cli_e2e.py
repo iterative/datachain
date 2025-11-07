@@ -156,14 +156,13 @@ E2E_STEPS = (
         "command": ("datachain", "dataset", "ls"),
         "expected": "",
     },
+    {
+        "command": ("datachain", "gc"),
+        "expected": (
+            "Cleaning up outdated checkpoints.\nNo temporary tables to clean up.\n"
+        ),
+    },
 )
-# TODO return  garbage collect test when we fix garbage collecting with UDF checkpoints
-"""
-{
-    "command": ("datachain", "gc"),
-    "expected": "Nothing to clean up.\n",
-},
-"""
 
 
 E2E_STEPS_LOCAL = (
