@@ -1826,19 +1826,35 @@ class DatasetQuery:
         assert self.list_ds_name
         return self.list_ds_name
 
+    @property
+    def job(self) -> Job:
+        """
+        Get existing job if running in SaaS, or creating new one if running locally
+        """
+        return self.session.get_or_create_job()
+
+    @property
+    def _last_checkpoint_hash(self) -> str | None:
+        last_checkpoint = self.catalog.metastore.get_last_checkpoint(self.job.id)
+        return last_checkpoint.hash if last_checkpoint else None
+
     def __iter__(self):
         return iter(self.db_results())
 
     def __or__(self, other):
         return self.union(other)
 
-    def hash(self, start_hash: str | None = None) -> str:
+    def hash(self, in_job: bool = False) -> str:
         """
         Calculates hash of this class taking into account hash of starting step
         and hashes of each following steps. Ordering is important.
+
+        Args:
+            in_job: If True, includes the last checkpoint hash from the job context.
         """
         hasher = hashlib.sha256()
 
+        start_hash = self._last_checkpoint_hash if in_job else None
         if start_hash:
             hasher.update(start_hash.encode("utf-8"))
 
@@ -1901,12 +1917,13 @@ class DatasetQuery:
             # at this point we know what is our starting listing dataset name
             self._set_starting_step(listing_ds)  # type: ignore [arg-type]
 
-    def apply_steps(self, start_hash: str | None = None) -> QueryGenerator:
+    def apply_steps(self) -> QueryGenerator:
         """
         Apply the steps in the query and return the resulting
         sqlalchemy.SelectBase.
         """
         hasher = hashlib.sha256()
+        start_hash = self._last_checkpoint_hash
         if start_hash:
             hasher.update(start_hash.encode("utf-8"))
 
@@ -2428,7 +2445,6 @@ class DatasetQuery:
         description: str | None = None,
         attrs: list[str] | None = None,
         update_version: str | None = "patch",
-        start_hash: str | None = None,
         **kwargs,
     ) -> "Self":
         """Save the query as a dataset."""
@@ -2453,7 +2469,7 @@ class DatasetQuery:
             name = self.session.generate_temp_dataset_name()
 
         try:
-            query = self.apply_steps(start_hash)
+            query = self.apply_steps()
 
             columns = [
                 c if isinstance(c, Column) else Column(c.name, c.type)

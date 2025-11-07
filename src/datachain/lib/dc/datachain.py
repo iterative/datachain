@@ -228,8 +228,7 @@ class DataChain:
             name: Optional dataset name to include in hash (for save operations).
             in_job: If True, includes the last checkpoint hash from the job context.
         """
-        start_hash = self._last_checkpoint_hash if in_job else None
-        base_hash = self._query.hash(start_hash=start_hash)
+        base_hash = self._query.hash(in_job=in_job)
 
         if name:
             import hashlib
@@ -310,14 +309,6 @@ class DataChain:
         Get existing job if running in SaaS, or creating new one if running locally
         """
         return self.session.get_or_create_job()
-
-    @property
-    def _last_checkpoint_hash(self) -> str | None:
-        last_checkpoint = self.session.catalog.metastore.get_last_checkpoint(
-            self.job.id
-        )
-
-        return last_checkpoint.hash if last_checkpoint else None
 
     @property
     def name(self) -> str | None:
@@ -680,7 +671,6 @@ class DataChain:
                     feature_schema=schema,
                     update_version=update_version,
                     job_id=self.job.id,
-                    start_hash=self._last_checkpoint_hash,
                     **kwargs,
                 )
             )
