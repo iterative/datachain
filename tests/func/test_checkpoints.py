@@ -16,6 +16,10 @@ def nums_dataset(test_session):
     return dc.read_values(num=[1, 2, 3], session=test_session).save("nums")
 
 
+@pytest.mark.skipif(
+    "os.environ.get('DATACHAIN_DISTRIBUTED')",
+    reason="Checkpoints test skipped in distributed mode",
+)
 def test_checkpoints_parallel(test_session_tmpfile, monkeypatch):
     def mapper_fail(num) -> int:
         raise Exception("Error")
