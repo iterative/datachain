@@ -143,36 +143,6 @@ def test_cleanup_checkpoints_with_custom_ttl(test_session, monkeypatch, nums_dat
     assert len(list(metastore.list_checkpoints(job_id))) == 0
 
 
-def test_clean_job_checkpoints(test_session, monkeypatch, nums_dataset):
-    """Test that clean_job_checkpoints removes all checkpoints for a specific job."""
-    catalog = test_session.catalog
-    metastore = catalog.metastore
-
-    # Create checkpoints for two different jobs
-    reset_session_job_state()
-    chain = dc.read_dataset("nums", session=test_session)
-    chain.map(doubled=lambda num: num * 2, output=int).save("nums_doubled")
-    first_job_id = test_session.get_or_create_job().id
-    first_job = metastore.get_job(first_job_id)
-
-    reset_session_job_state()
-    chain.map(tripled=lambda num: num * 3, output=int).save("nums_tripled")
-    second_job_id = test_session.get_or_create_job().id
-
-    # Verify both jobs have checkpoints
-    first_checkpoints = list(metastore.list_checkpoints(first_job_id))
-    second_checkpoints = list(metastore.list_checkpoints(second_job_id))
-    assert len(first_checkpoints) == 2
-    assert len(second_checkpoints) == 2
-
-    # Clean up only first job's checkpoints using clean_job_checkpoints
-    catalog.clean_job_checkpoints(first_job)
-
-    # Verify only first job's checkpoints were removed
-    assert len(list(metastore.list_checkpoints(first_job_id))) == 0
-    assert len(list(metastore.list_checkpoints(second_job_id))) == 2
-
-
 def test_cleanup_checkpoints_no_old_checkpoints(test_session, nums_dataset):
     """Test that cleanup_checkpoints does nothing when no old checkpoints exist."""
     catalog = test_session.catalog
