@@ -18,6 +18,9 @@ def garbage_collect(catalog: "Catalog"):
         print(f"Garbage collecting {len(temp_tables)} temporary tables.")
         catalog.cleanup_tables(temp_tables)
 
+    print("Cleaning up outdated checkpoints.")
+    catalog.cleanup_checkpoints()
+
     if not has_tables:
         print("No temporary tables to clean up.")
 
