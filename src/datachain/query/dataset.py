@@ -530,7 +530,7 @@ class UDFStep(Step, ABC):
     ) -> "Table | None":
         """
         Create a processed table for tracking which input rows have been processed.
-        Only needed for RowGenerator in unsafe mode.
+        Only needed for RowGenerator.
         Returns None for UDFSignal (which uses partial output table for tracking).
 
         Args:
@@ -750,13 +750,6 @@ class UDFStep(Step, ABC):
         """
         checkpoints_reset = env2bool("DATACHAIN_CHECKPOINTS_RESET", undefined=False)
 
-        # Check in current job first
-        if checkpoint := self.metastore.find_checkpoint(
-            self.job.id, _hash, partial=partial
-        ):
-            return checkpoint
-
-        # Then check in parent job if exists and reset is not enabled
         if (
             self.job.parent_job_id
             and not checkpoints_reset

@@ -899,7 +899,8 @@ class SQLiteWarehouse(AbstractWarehouse):
 
         table = self.create_udf_table(columns, name=name)
 
-        # Only populate if table was just created (not if it already existed)
+        # Only populate if table was just created (not if it already existed) to
+        # avoid inserting duplicates
         if not table_exists:
             with tqdm(desc="Preparing", unit=" rows", leave=False) as pbar:
                 self.copy_table(table, query, progress_cb=pbar.update)
