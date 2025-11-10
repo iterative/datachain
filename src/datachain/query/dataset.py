@@ -777,22 +777,22 @@ class UDFStep(Step, ABC):
 
     @staticmethod
     def input_table_name(job_id: str, _hash: str) -> str:
-        """Job-specific input table name (includes job_id)."""
+        """Job-specific input table name."""
         return f"udf_{job_id}_{_hash}_input"
 
     @staticmethod
     def output_table_name(job_id: str, _hash: str) -> str:
-        """Job-specific final output table name (includes job_id)."""
+        """Job-specific final output table name."""
         return f"udf_{job_id}_{_hash}_output"
 
     @staticmethod
     def partial_output_table_name(job_id: str, _hash: str) -> str:
-        """Job-specific partial output table name (includes job_id)."""
+        """Job-specific partial output table name."""
         return f"udf_{job_id}_{_hash}_output_partial"
 
     @staticmethod
     def processed_table_name(job_id: str, _hash: str) -> str:
-        """Job-specific processed tracking table name (includes job_id)."""
+        """Job-specific processed tracking table name."""
         return f"udf_{job_id}_{_hash}_processed"
 
     def get_or_create_input_table(self, query: Select, _hash: str) -> "Table":
@@ -954,7 +954,7 @@ class UDFStep(Step, ABC):
             UDFStep.partial_output_table_name(self.job.id, checkpoint.hash)
         )
 
-        # Create processed table if needed (for RowGenerator in unsafe mode)
+        # Create processed table if needed (for RowGenerator)
         # Don't copy from parent - we're starting from scratch
         processed_table = self.create_processed_table(
             checkpoint, copy_from_parent=False
@@ -1019,7 +1019,7 @@ class UDFStep(Step, ABC):
         )
         self.warehouse.copy_table(partial_table, sa.select(parent_partial_table))
 
-        # Create processed table if needed (for RowGenerator in unsafe mode)
+        # Create processed table if needed (for RowGenerator)
         # Copy from parent - we're continuing where parent left off
         processed_table = self.create_processed_table(checkpoint, copy_from_parent=True)
 
@@ -1186,27 +1186,15 @@ class RowGenerator(UDFStep):
         For RowGenerator, this is needed because one input can generate multiple
         outputs, so we can't use the output table for tracking.
 
-        Only creates the table in unsafe mode where partial checkpoints are used.
-
         Args:
             checkpoint: The checkpoint containing hash for table naming
             copy_from_parent: If True, copy data from parent's processed table
             (for continue)
         """
-        # Only create processed table when not resetting (when using partial
-        # checkpoints)
-        udf_reset = env2bool("DATACHAIN_UDF_RESET", undefined=False)
-        if udf_reset:
-            return None
-
-        processed_table_name = UDFStep.processed_table_name(
-            self.job.id, checkpoint.hash
-        )
-
         # Create processed table with only sys__id column
         processed_table = self.warehouse.create_udf_table(
             [sa.Column("sys__id", sa.Integer, primary_key=True)],
-            name=processed_table_name,
+            name=UDFStep.processed_table_name(self.job.id, checkpoint.hash),
         )
 
         # Copy parent's processed table if requested (when continuing from partial)

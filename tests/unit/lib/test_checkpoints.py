@@ -952,9 +952,9 @@ def test_udf_generator_reset_udf(test_session, monkeypatch, nums_dataset):
     partial_table_name = UDFStep.partial_output_table_name(first_job_id, hash_input)
     assert warehouse.db.has_table(partial_table_name)
 
-    # KEY DIFFERENCE: In safe mode, no processed table should be created
+    # Verify processed table exists (processed tables are still created)
     processed_table_name = UDFStep.processed_table_name(first_job_id, hash_input)
-    assert not warehouse.db.has_table(processed_table_name)
+    assert warehouse.db.has_table(processed_table_name)
 
     # -------------- SECOND RUN (FIXED GENERATOR) -------------------
     reset_session_job_state()
