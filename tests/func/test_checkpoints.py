@@ -21,14 +21,15 @@ def nums_dataset(test_session):
     return dc.read_values(num=[1, 2, 3], session=test_session).save("nums")
 
 
-def get_partial_tables(
-    test_session, generator=True
-) -> tuple[Table, Table, Table | None]:
-    """Helper function that returns all partial udf tables that are left when UDF
-    fails. Assumes this is first run so there is only one checkpoint"""
+def get_partial_tables(test_session, generator=True) -> tuple[Table, Table]:
+    """Helper function that returns partial udf tables left when UDF fails.
+
+    Returns input_table and partial_output_table.
+    Note: processed_table is no longer created - sys__input_id in partial_output_table
+    tracks which inputs have been processed.
+    """
     catalog = test_session.catalog
     warehouse = catalog.warehouse
-    tables = []
     job_id = test_session.get_or_create_job().id
     checkpoints = list(catalog.metastore.list_checkpoints(job_id))
     assert len(checkpoints) == 1
@@ -37,21 +38,14 @@ def get_partial_tables(
     # input table name
     input_table_name = UDFStep.input_table_name(job_id, hash_input)
     assert warehouse.db.has_table(input_table_name)
-    tables.append(warehouse.get_table(input_table_name))
+    input_table = warehouse.get_table(input_table_name)
 
     # partial output table name
     partial_table_name = UDFStep.partial_output_table_name(job_id, hash_input)
     assert warehouse.db.has_table(partial_table_name)
-    tables.append(warehouse.get_table(partial_table_name))
+    partial_output_table = warehouse.get_table(partial_table_name)
 
-    if generator:
-        processed_table_name = UDFStep.processed_table_name(job_id, hash_input)
-        assert warehouse.db.has_table(processed_table_name)
-        tables.append(warehouse.get_table(processed_table_name))
-    else:
-        tables.append(None)
-
-    return tuple(tables)
+    return input_table, partial_output_table
 
 
 @pytest.mark.skipif(
@@ -145,12 +139,16 @@ def test_udf_generator_continue_parallel(test_session_tmpfile, monkeypatch):
     # Verify partial output table exists
     partial_table_name = UDFStep.partial_output_table_name(first_job_id, hash_input)
     assert warehouse.db.has_table(partial_table_name)
+    partial_output_table = warehouse.get_table(partial_table_name)
 
-    # Verify processed table exists and has tracked some inputs
-    processed_table_name = UDFStep.processed_table_name(first_job_id, hash_input)
-    assert warehouse.db.has_table(processed_table_name)
-    processed_table = warehouse.get_table(processed_table_name)
-    processed_count_first = warehouse.table_rows_count(processed_table)
+    # Verify sys__input_id has tracked some inputs
+    processed_count_first = len(
+        list(
+            warehouse.db.execute(
+                sa.select(sa.distinct(partial_output_table.c.sys__input_id))
+            )
+        )
+    )
     assert processed_count_first > 0, "Some inputs should be tracked"
 
     # -------------- SECOND RUN (CONTINUE) -------------------
@@ -214,13 +212,18 @@ def test_processed_table(test_session_tmpfile, parallel):
         # Yield the number multiplied by 10
         yield num * 10
 
-    # Create dataset with 10 numbers
+    # Create dataset with 100 numbers
     dc.read_values(num=list(range(1, 100)), session=test_session).save("nums")
 
     reset_session_job_state()
 
     # Build chain with optional parallel setting
-    chain = dc.read_dataset("nums", session=test_session).settings(batch_size=2)
+    # ORDER BY ensures num=7 is encountered predictably (after processing 1-6)
+    chain = (
+        dc.read_dataset("nums", session=test_session)
+        .order_by("num")
+        .settings(batch_size=2)
+    )
     if parallel is not None:
         chain = chain.settings(parallel=parallel)
 
@@ -228,10 +231,11 @@ def test_processed_table(test_session_tmpfile, parallel):
     with pytest.raises(Exception):  # noqa: B017
         chain.gen(result=gen_numbers, output=int).save("results")
 
-    _, _, processed_table = get_partial_tables(test_session)
+    _, partial_output_table = get_partial_tables(test_session)
 
-    # Get all sys__ids from processed table
-    query = processed_table.select()
+    # Get distinct sys__input_id from partial output table to see which inputs were
+    # processed
+    query = sa.select(sa.distinct(partial_output_table.c.sys__input_id))
     processed_sys_ids = [row[0] for row in warehouse.db.execute(query)]
 
     # Verify no duplicates - this is the critical check for race conditions
@@ -274,13 +278,15 @@ def test_processed_table_data_integrity(test_session_tmpfile, parallel):
     with pytest.raises(RuntimeError):
         chain.save("results")
 
-    input_table, partial_output_table, processed_table = get_partial_tables(
-        test_session, generator=True
-    )
+    input_table, partial_output_table = get_partial_tables(test_session)
 
-    # Get sys__ids from processed table
+    # Get distinct sys__input_id from partial output table to see which inputs were
+    # processed
     processed_sys_ids = [
-        row[0] for row in warehouse.db.execute(processed_table.select())
+        row[0]
+        for row in warehouse.db.execute(
+            sa.select(sa.distinct(partial_output_table.c.sys__input_id))
+        )
     ]
     # Build mapping: sys__id -> input_value from input table
     input_data = {

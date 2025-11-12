@@ -36,8 +36,35 @@ def _count_partial(warehouse, job_id, _hash) -> int:
 
 
 def _count_processed(warehouse, job_id, _hash):
-    table_name = UDFStep.processed_table_name(job_id, _hash)
-    return _count_table(warehouse, table_name)
+    """Count distinct input sys__ids from partial output table.
+
+    For generators: counts distinct sys__input_id values (non-NULL)
+    For mappers: counts all rows (1:1 mapping, sys__input_id is NULL)
+    """
+    import sqlalchemy as sa
+
+    partial_table_name = UDFStep.partial_output_table_name(job_id, _hash)
+    if not warehouse.db.has_table(partial_table_name):
+        return 0
+    partial_table = warehouse.get_table(partial_table_name)
+
+    # Mappers have sys__input_id column but all values are NULL
+    # Generators have sys__input_id populated with actual input sys__ids
+    if "sys__input_id" in [c.name for c in partial_table.columns]:
+        # Check if any values are non-NULL (generator)
+        result = list(
+            warehouse.db.execute(
+                sa.select(sa.distinct(partial_table.c.sys__input_id)).where(
+                    partial_table.c.sys__input_id.isnot(None)
+                )
+            )
+        )
+        # If we found non-NULL values, it's a generator
+        if result:
+            return len(result)
+
+    # Mapper: count all rows (1:1 mapping)
+    return warehouse.table_rows_count(partial_table)
 
 
 @pytest.mark.skipif(
@@ -952,9 +979,10 @@ def test_udf_generator_reset_udf(test_session, monkeypatch, nums_dataset):
     partial_table_name = UDFStep.partial_output_table_name(first_job_id, hash_input)
     assert warehouse.db.has_table(partial_table_name)
 
-    # Verify processed table exists (processed tables are still created)
-    processed_table_name = UDFStep.processed_table_name(first_job_id, hash_input)
-    assert warehouse.db.has_table(processed_table_name)
+    # Verify sys__input_id column exists in partial table (for tracking processed
+    # inputs)
+    partial_table = warehouse.get_table(partial_table_name)
+    assert "sys__input_id" in [c.name for c in partial_table.columns]
 
     # -------------- SECOND RUN (FIXED GENERATOR) -------------------
     reset_session_job_state()

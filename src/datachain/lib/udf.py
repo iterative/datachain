@@ -529,14 +529,14 @@ class Generator(UDFBase):
             # processed table. Currently, if process() yields nothing for an input,
             # that input's sys__id is never added to the processed table, causing it
             # to be re-processed on checkpoint recovery. Solution: yield a marker row
-            # with _input_sys_id when process() yields nothing, then filter these
+            # with sys__input_id when process() yields nothing, then filter these
             # marker rows before inserting to output table.
             with safe_closing(self.process_safe(row)) as result_objs:
                 for result_obj in result_objs:
                     udf_output = self._flatten_row(result_obj)
-                    # Include _input_sys_id to track which input generated this output
+                    # Include sys__input_id to track which input generated this output
                     yield (
-                        {"_input_sys_id": row_id}
+                        {"sys__input_id": row_id}
                         | dict(zip(self.signal_names, udf_output, strict=False))
                     )
 
