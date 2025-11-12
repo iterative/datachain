@@ -756,6 +756,35 @@ class SignalSchema:
 
         return signals  # type: ignore[return-value]
 
+    def user_signals(
+        self,
+        *,
+        include_hidden: bool = True,
+        include_sys: bool = False,
+    ) -> list[str]:
+        return [
+            ".".join(path)
+            for path, _, has_subtree, _ in self.get_flat_tree(
+                include_hidden=include_hidden, include_sys=include_sys
+            )
+            if not has_subtree
+        ]
+
+    def compare_signals(
+        self,
+        other: "SignalSchema",
+        *,
+        include_hidden: bool = True,
+        include_sys: bool = False,
+    ) -> tuple[set[str], set[str]]:
+        left = set(
+            self.user_signals(include_hidden=include_hidden, include_sys=include_sys)
+        )
+        right = set(
+            other.user_signals(include_hidden=include_hidden, include_sys=include_sys)
+        )
+        return left - right, right - left
+
     def resolve(self, *names: str) -> "SignalSchema":
         schema = {}
         for field in names:
@@ -945,16 +974,25 @@ class SignalSchema:
         }
 
     def get_flat_tree(
-        self, include_hidden: bool = True
+        self,
+        include_hidden: bool = True,
+        include_sys: bool = True,
     ) -> Iterator[tuple[list[str], DataType, bool, int]]:
-        yield from self._get_flat_tree(self.tree, [], 0, include_hidden)
+        yield from self._get_flat_tree(self.tree, [], 0, include_hidden, include_sys)
 
     def _get_flat_tree(
-        self, tree: dict, prefix: list[str], depth: int, include_hidden: bool
+        self,
+        tree: dict,
+        prefix: list[str],
+        depth: int,
+        include_hidden: bool,
+        include_sys: bool,
     ) -> Iterator[tuple[list[str], DataType, bool, int]]:
         for name, (type_, substree) in tree.items():
             suffix = name.split(".")
             new_prefix = prefix + suffix
+            if not include_sys and new_prefix and new_prefix[0] == "sys":
+                continue
             hidden_fields = getattr(type_, "_hidden_fields", None)
             if hidden_fields and substree and not include_hidden:
                 substree = {
@@ -967,7 +1005,7 @@ class SignalSchema:
             yield new_prefix, type_, has_subtree, depth
             if substree is not None:
                 yield from self._get_flat_tree(
-                    substree, new_prefix, depth + 1, include_hidden
+                    substree, new_prefix, depth + 1, include_hidden, include_sys
                 )
 
     def print_tree(self, indent: int = 2, start_at: int = 0, file: IO | None = None):
