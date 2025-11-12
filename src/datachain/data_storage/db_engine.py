@@ -135,7 +135,9 @@ class DatabaseEngine(ABC, Serializable):
         if_not_exists: bool = True,
         *,
         kind: str | None = None,
-    ) -> None: ...
+    ) -> bool:
+        """Create table and return True if created, False if already existed."""
+        ...
 
     @abstractmethod
     def drop_table(self, table: "Table", if_exists: bool = False) -> None: ...

@@ -333,8 +333,11 @@ class SQLiteDatabaseEngine(DatabaseEngine):
         if_not_exists: bool = True,
         *,
         kind: str | None = None,
-    ) -> None:
+    ) -> bool:
+        """Create table and return True if created, False if already existed."""
+        table_existed = self.has_table(table.name)
         self.execute(CreateTable(table, if_not_exists=if_not_exists))
+        return not table_existed
 
     def drop_table(self, table: "Table", if_exists: bool = False) -> None:
         self.execute(DropTable(table, if_exists=if_exists))
@@ -894,14 +897,11 @@ class SQLiteWarehouse(AbstractWarehouse):
         """
         columns = [sqlalchemy.Column(c.name, c.type) for c in query.selected_columns]
 
-        # Check if table already exists (for shared UDF tables)
-        table_exists = self.db.has_table(name)
-
-        table = self.create_udf_table(columns, name=name)
+        table, created = self.create_udf_table(columns, name=name)
 
         # Only populate if table was just created (not if it already existed) to
         # avoid inserting duplicates
-        if not table_exists:
+        if created:
             with tqdm(desc="Preparing", unit=" rows", leave=False) as pbar:
                 self.copy_table(table, query, progress_cb=pbar.update)
 

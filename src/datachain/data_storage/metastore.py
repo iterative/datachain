@@ -1925,9 +1925,6 @@ class AbstractDBMetastore(AbstractMetastore):
         will not create duplicates.
         """
         # First check if checkpoint already exists
-        if existing := self.find_checkpoint(job_id, _hash, partial=partial, conn=conn):
-            return existing
-
         query = self._checkpoints_insert().values(
             id=str(uuid4()),
             job_id=job_id,
