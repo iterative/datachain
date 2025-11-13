@@ -55,6 +55,7 @@ from datachain.query.dataset import (
     DatasetQuery,
     PartitionByType,
     RegenerateSystemColumns,
+    UnionSchemaMismatchError,
 )
 from datachain.query.schema import DEFAULT_DELIMITER, Column
 from datachain.sql.functions import path as pathfunc
@@ -1719,7 +1720,16 @@ class DataChain:
         Parameters:
             other: chain whose rows will be added to `self`.
         """
-        self.signals_schema = self.signals_schema.clone_without_sys_signals()
+        self_schema = self.signals_schema
+        other_schema = other.signals_schema
+        missing_left, missing_right = self_schema.compare_signals(other_schema)
+        if missing_left or missing_right:
+            raise UnionSchemaMismatchError.from_column_sets(
+                missing_left,
+                missing_right,
+            )
+
+        self.signals_schema = self_schema.clone_without_sys_signals()
         return self._evolve(query=self._query.union(other._query))
 
     def subtract(  # type: ignore[override]

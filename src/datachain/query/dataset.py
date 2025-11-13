@@ -1624,6 +1624,27 @@ class SQLGroupBy(SQLClause):
         return sqlalchemy.select(*unique_cols).select_from(subquery).group_by(*group_by)
 
 
+class UnionSchemaMismatchError(ValueError):
+    """Union input columns mismatch."""
+
+    @classmethod
+    def from_column_sets(
+        cls,
+        missing_left: set[str],
+        missing_right: set[str],
+    ) -> "UnionSchemaMismatchError":
+        def _describe(cols: set[str], side: str) -> str:
+            return f"{', '.join(sorted(cols))} only present in {side}"
+
+        parts = []
+        if missing_left:
+            parts.append(_describe(missing_left, "left"))
+        if missing_right:
+            parts.append(_describe(missing_right, "right"))
+
+        return cls(f"Cannot perform union. {'. '.join(parts)}")
+
+
 def _validate_columns(
     left_columns: Iterable[ColumnElement], right_columns: Iterable[ColumnElement]
 ) -> set[str]:
@@ -1633,27 +1654,10 @@ def _validate_columns(
     if left_names == right_names:
         return left_names
 
-    missing_right = left_names - right_names
-    missing_left = right_names - left_names
-
-    def _prepare_msg_part(missing_columns: set[str], side: str) -> str:
-        return f"{', '.join(sorted(missing_columns))} only present in {side}"
-
-    msg_parts = [
-        _prepare_msg_part(missing_columns, found_side)
-        for missing_columns, found_side in zip(
-            [
-                missing_right,
-                missing_left,
-            ],
-            ["left", "right"],
-            strict=False,
-        )
-        if missing_columns
-    ]
-    msg = f"Cannot perform union. {'. '.join(msg_parts)}"
-
-    raise ValueError(msg)
+    raise UnionSchemaMismatchError.from_column_sets(
+        left_names - right_names,
+        right_names - left_names,
+    )
 
 
 def _order_columns(
