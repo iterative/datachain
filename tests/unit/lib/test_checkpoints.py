@@ -356,11 +356,13 @@ def test_udf_tables_naming(test_session, monkeypatch):
     # Construct expected job-specific table names (include job_id in names)
     # After UDF completion, processed table is cleaned up,
     # input and output tables remain
-    hash_input = "213263c3715396a437cc0fdcb94e908b67993490c56485c1b2180ae3d9e14780"
+    # Note: Input table uses partial_hash (hash_input + output_schema_hash),
+    # not just hash_input, to detect schema changes
+    partial_hash = "241cc841b9bd4ba9dca17183ce467b413de6a176e94c14929fd37da94e2445be"
     hash_output = "12a892fbed5f7d557d5fc7f048f3356dda97e7f903a3f998318202a4400e3f16"
     expected_first_run_tables = sorted(
         [
-            f"udf_{first_job_id}_{hash_input}_input",
+            f"udf_{first_job_id}_{partial_hash}_input",
             f"udf_{first_job_id}_{hash_output}_output",
         ]
     )
@@ -377,7 +379,7 @@ def test_udf_tables_naming(test_session, monkeypatch):
     # - Create its own output table (copied from first job)
     expected_all_tables = sorted(
         [
-            f"udf_{first_job_id}_{hash_input}_input",  # Shared input
+            f"udf_{first_job_id}_{partial_hash}_input",  # Shared input
             f"udf_{first_job_id}_{hash_output}_output",  # First job output
             f"udf_{second_job_id}_{hash_output}_output",  # Second job output
         ]

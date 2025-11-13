@@ -66,6 +66,10 @@ class UDFAdapter:
     def hash(self) -> str:
         return self.inner.hash()
 
+    def output_schema_hash(self) -> str:
+        """Hash of just the output schema (not including code or inputs)."""
+        return self.inner.output_schema_hash()
+
     def get_batching(self, use_partitioning: bool = False) -> BatchingStrategy:
         if use_partitioning:
             return Partition()
@@ -176,6 +180,14 @@ class UDFBase(AbstractUDF):
         return hashlib.sha256(
             b"".join([bytes.fromhex(part) for part in parts])
         ).hexdigest()
+
+    def output_schema_hash(self) -> str:
+        """Hash of just the output schema (not including code or inputs).
+
+        Used for partial checkpoint hash to detect schema changes while
+        allowing code-only bug fixes to continue from partial results.
+        """
+        return self.output.hash()
 
     def process(self, *args, **kwargs):
         """Processing function that needs to be defined by user"""

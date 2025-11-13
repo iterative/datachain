@@ -801,3 +801,136 @@ def test_udf_generator_reset_udf(test_session, monkeypatch):
         (60,),  # num=6: 36 (6²), 60 (6x10)
     ]
     assert sorted(result) == sorted(expected)
+
+
+def test_generator_output_schema_change_triggers_rerun(test_session, monkeypatch):
+    """Test that changing generator output type triggers re-run from scratch.
+
+    When a user changes the output schema of a UDF (e.g., int -> str), the
+    system should detect this and re-run from scratch rather than attempting
+    to continue from partial results with incompatible schema.
+    """
+    processed_nums_v1 = []
+    processed_nums_v2 = []
+
+    dc.read_values(num=[1, 2, 3, 4, 5, 6], session=test_session).save("nums")
+
+    # -------------- FIRST RUN (INT OUTPUT, FAILS) -------------------
+    def generator_v1_int(num) -> Iterator[int]:
+        """Generator version 1: yields int, fails on num=4."""
+        processed_nums_v1.append(num)
+        if num == 4:
+            raise Exception(f"Simulated failure on num={num}")
+        yield num * 10
+        yield num * num
+
+    reset_session_job_state()
+
+    chain = dc.read_dataset("nums", session=test_session).settings(batch_size=2)
+
+    with pytest.raises(Exception, match="Simulated failure"):
+        chain.gen(result=generator_v1_int, output=int).save("gen_results")
+
+    # Some inputs were processed before failure
+    assert len(processed_nums_v1) > 0
+
+    # -------------- SECOND RUN (STR OUTPUT, DIFFERENT SCHEMA) -------------------
+    def generator_v2_str(num) -> Iterator[str]:
+        """Generator version 2: yields str instead of int (schema change!)."""
+        processed_nums_v2.append(num)
+        yield f"value_{num * 10}"
+        yield f"square_{num * num}"
+
+    reset_session_job_state()
+
+    # Use generator with different output type - should run from scratch
+    chain.gen(result=generator_v2_str, output=str).save("gen_results")
+
+    # Verify ALL inputs were processed in second run (not continuing from partial)
+    assert sorted(processed_nums_v2) == sorted([1, 2, 3, 4, 5, 6]), (
+        "All inputs should be processed when schema changes"
+    )
+
+    # Verify final results are correct with new schema (str)
+    result = sorted(
+        dc.read_dataset("gen_results", session=test_session).to_list("result")
+    )
+    expected = sorted(
+        [
+            ("square_1",),
+            ("value_10",),  # num=1
+            ("square_4",),
+            ("value_20",),  # num=2
+            ("square_9",),
+            ("value_30",),  # num=3
+            ("square_16",),
+            ("value_40",),  # num=4
+            ("square_25",),
+            ("value_50",),  # num=5
+            ("square_36",),
+            ("value_60",),  # num=6
+        ]
+    )
+    assert result == expected
+
+
+def test_mapper_output_schema_change_triggers_rerun(test_session, monkeypatch):
+    """Test that changing mapper output type triggers re-run from scratch.
+
+    Similar to generator test, but for mappers (1:1 mapping). When output
+    schema changes, the system should detect this and re-run from scratch.
+    """
+    processed_nums_v1 = []
+    processed_nums_v2 = []
+
+    dc.read_values(num=[1, 2, 3, 4, 5, 6], session=test_session).save("nums")
+
+    # -------------- FIRST RUN (INT OUTPUT, FAILS) -------------------
+    def mapper_v1_int(num) -> int:
+        """Mapper version 1: returns int, fails on num=4."""
+        processed_nums_v1.append(num)
+        if num == 4:
+            raise Exception(f"Simulated failure on num={num}")
+        return num * 10
+
+    reset_session_job_state()
+
+    chain = dc.read_dataset("nums", session=test_session).settings(batch_size=2)
+
+    with pytest.raises(Exception, match="Simulated failure"):
+        chain.map(result=mapper_v1_int, output=int).save("map_results")
+
+    # Some inputs were processed before failure
+    assert len(processed_nums_v1) > 0
+
+    # -------------- SECOND RUN (STR OUTPUT, DIFFERENT SCHEMA) -------------------
+    def mapper_v2_str(num) -> str:
+        """Mapper version 2: returns str instead of int (schema change!)."""
+        processed_nums_v2.append(num)
+        return f"value_{num * 10}"
+
+    reset_session_job_state()
+
+    # Use mapper with different output type - should run from scratch
+    chain.map(result=mapper_v2_str, output=str).save("map_results")
+
+    # Verify ALL inputs were processed in second run (not continuing from partial)
+    assert sorted(processed_nums_v2) == sorted([1, 2, 3, 4, 5, 6]), (
+        "All inputs should be processed when schema changes"
+    )
+
+    # Verify final results are correct with new schema (str)
+    result = sorted(
+        dc.read_dataset("map_results", session=test_session).to_list("result")
+    )
+    expected = sorted(
+        [
+            ("value_10",),  # num=1
+            ("value_20",),  # num=2
+            ("value_30",),  # num=3
+            ("value_40",),  # num=4
+            ("value_50",),  # num=5
+            ("value_60",),  # num=6
+        ]
+    )
+    assert result == expected

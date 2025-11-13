@@ -237,13 +237,64 @@ def process_image(file):
 
 ### When UDF Checkpoints Are Invalidated
 
+DataChain distinguishes between two types of UDF changes:
+
+#### 1. Code-Only Changes (Bug Fixes) - Continues from Partial Results
+
+When you fix a bug in your UDF code **without changing the output schema**, DataChain allows you to continue from where the UDF failed. This is the key benefit of UDF-level checkpoints - you don't lose progress when fixing bugs.
+
+**Example: Bug fix without schema change**
+```python
+# First run - fails partway through
+def process(num) -> int:
+    if num > 100:
+        raise Exception("Bug!")  # Oops, a bug!
+    return num * 10
+
+# Second run - continues from where it failed
+def process(num) -> int:
+    return num * 10  # Bug fixed! ✓ Continues from partial results
+```
+
+In this case, DataChain will skip already-processed rows and continue processing the remaining rows with your fixed code.
+
+#### 2. Output Schema Changes - Forces Re-run from Scratch
+
+When you change the **output type or schema** of your UDF, DataChain automatically detects this and reruns the entire UDF from scratch. This prevents schema mismatches that would cause errors or corrupt data.
+
+**Example: Schema change**
+```python
+# First run - fails partway through
+def process(num) -> int:
+    if num > 100:
+        raise Exception("Bug!")
+    return num * 10
+
+# Second run - output type changed
+def process(num) -> str:
+    return f"value_{num * 10}"  # Output type changed! ✗ Reruns from scratch
+```
+
+In this case, DataChain detects that the output changed from `int` to `str` and discards partial results to avoid schema incompatibility. All rows will be reprocessed with the new output schema.
+
+#### Changes That Invalidate In-Progress UDF Checkpoints
+
+Partial results are automatically discarded when you change:
+
+- **Output type or schema** - Changes to the `output` parameter or return type annotations
+- **Operations before the UDF** - Any changes to the data processing chain before the UDF
+
+#### Changes That Invalidate Completed UDF Checkpoints
+
 Once a UDF operation completes successfully, its checkpoint is tied to the UDF function code. If you modify the function and re-run the script, DataChain will detect the change and recompute the entire UDF from scratch.
 
 Changes that invalidate completed UDF checkpoints:
 
-- **Modifying the UDF function logic**
-- **Changing function parameters or output types**
-- **Altering any operations before the UDF in the chain**
+- **Modifying the UDF function logic** - Any code changes inside the function
+- **Changing function parameters or output types** - Changes to input/output specifications
+- **Altering any operations before the UDF in the chain** - Changes to upstream data processing
+
+**Key takeaway:** For in-progress (partial) UDFs, you can fix bugs freely as long as the output schema stays the same. For completed UDFs, any code change triggers a full recomputation.
 
 ### Forcing UDF to Start from Scratch
 

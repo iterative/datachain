@@ -782,6 +782,13 @@ class UDFStep(Step, ABC):
         assert hash_input
         assert hash_output
 
+        # Calculate partial hash that includes output schema
+        # This allows continuing from partial when only code changes (bug fix),
+        # but forces re-run when output schema changes (incompatible)
+        partial_hash = hashlib.sha256(
+            (hash_input + self.udf.output_schema_hash()).encode()
+        ).hexdigest()
+
         udf_reset = env2bool("DATACHAIN_UDF_RESET", undefined=False)
 
         # If partition_by is set, we need to create input table first to ensure
@@ -807,9 +814,9 @@ class UDFStep(Step, ABC):
 
         if ch := self._checkpoint_exist(hash_output):
             # Skip UDF execution by reusing existing output table
-            output_table, input_table = self._skip_udf(ch, hash_input, query)
+            output_table, input_table = self._skip_udf(ch, partial_hash, query)
         elif (
-            (ch_partial := self._checkpoint_exist(hash_input, partial=True))
+            (ch_partial := self._checkpoint_exist(partial_hash, partial=True))
             and not udf_reset
             and ch_partial.job_id != self.job.id
         ):
@@ -819,13 +826,13 @@ class UDFStep(Step, ABC):
             )
         else:
             output_table, input_table = self._run_from_scratch(
-                hash_input, hash_output, query
+                partial_hash, hash_output, query
             )
 
         # After UDF completes successfully, clean up partial checkpoint and
         # processed table
         if ch_partial := self.metastore.find_checkpoint(
-            self.job.id, hash_input, partial=True
+            self.job.id, partial_hash, partial=True
         ):
             self.metastore.remove_checkpoint(ch_partial)
 
@@ -838,7 +845,7 @@ class UDFStep(Step, ABC):
         return step_result(q, cols)
 
     def _skip_udf(
-        self, checkpoint: Checkpoint, hash_input: str, query
+        self, checkpoint: Checkpoint, partial_hash: str, query
     ) -> tuple["Table", "Table"]:
         """
         Skip UDF execution by reusing existing output table.
@@ -868,12 +875,12 @@ class UDFStep(Step, ABC):
             ]
             self.warehouse.copy_table(output_table, sa.select(*select_cols))
 
-        input_table = self.get_or_create_input_table(query, hash_input)
+        input_table = self.get_or_create_input_table(query, partial_hash)
 
         return output_table, input_table
 
     def _run_from_scratch(
-        self, hash_input: str, hash_output: str, query
+        self, partial_hash: str, hash_output: str, query
     ) -> tuple["Table", "Table"]:
         """
         Execute UDF from scratch.
@@ -882,9 +889,9 @@ class UDFStep(Step, ABC):
         On success, promotes partial table to job-specific final table.
         Returns tuple of (output_table, input_table).
         """
-        # Create checkpoint with hash_input (marks start of UDF execution)
+        # Create checkpoint with partial_hash (includes output schema)
         checkpoint = self.metastore.create_checkpoint(
-            self.job.id, hash_input, partial=True
+            self.job.id, partial_hash, partial=True
         )
 
         # Get or create input table (reuse from ancestors if available)
