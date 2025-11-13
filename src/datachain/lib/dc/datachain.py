@@ -850,14 +850,13 @@ class DataChain:
         if (prefetch := self._settings.prefetch) is not None:
             udf_obj.prefetch = prefetch
 
+        sys_schema = SignalSchema({"sys": Sys})
         return self._evolve(
             query=self._query.add_signals(
                 udf_obj.to_udf_wrapper(self._settings.batch_size),
                 **self._settings.to_dict(),
             ),
-            signal_schema=SignalSchema({"sys": Sys})
-            | self.signals_schema
-            | udf_obj.output,
+            signal_schema=sys_schema | self.signals_schema | udf_obj.output,
         )
 
     def gen(
