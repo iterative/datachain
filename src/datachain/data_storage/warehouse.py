@@ -547,12 +547,7 @@ class AbstractWarehouse(ABC, Serializable):
         Returns:
             SQLAlchemy Table object with the new name and same schema
         """
-        if self.db.has_table(new_name):
-            # Target already exists, drop the old table since we don't need it
-            self.db.drop_table(old_table, if_exists=True)
-        else:
-            # Target doesn't exist, rename the old table
-            self.db.rename_table(old_table.name, new_name)
+        self.db.rename_table(old_table.name, new_name)
 
         # Create a new table object with the same columns but new name
         # This preserves the original SQLType types instead of reflecting dialect types

@@ -189,25 +189,27 @@ for ds in dc.datasets():
 
 ## UDF-Level Checkpoints
 
-DataChain automatically creates checkpoints for UDF operations (`.map()`, `.gen()`, `.agg()`), not just at `.save()` calls. For `.map()` and `.gen()` operations, **DataChain saves processed rows continuously during UDF execution**, not only when the UDF completes. If your script fails partway through a UDF operation, the next run will skip already-processed rows and continue where it left off - even if you've modified the UDF code to fix a bug.
+DataChain automatically creates checkpoints for UDFs (`.map()`, `.gen()`, `.agg()`), not just at `.save()` calls. For `.map()` and `.gen()`, **DataChain saves processed rows continuously during UDF execution**, not only when the UDF completes. If your script fails partway through a UDF, the next run will skip already-processed rows and continue where it left off - even if you've modified the UDF code to fix a bug.
 
-**Note:** For `.agg()` operations, checkpoints are created when the aggregation completes successfully, but partial results are not tracked. If an aggregation fails partway through, it will restart from scratch on the next run.
+**Note:** For `.agg()`, checkpoints are created when the aggregation completes successfully, but partial results are not tracked. If an aggregation fails partway through, it will restart from scratch on the next run.
 
 ### How It Works
 
-When executing `.map()` or `.gen()` operations, DataChain:
+When executing `.map()` or `.gen()`, DataChain:
 
 1. **Saves processed rows incrementally** as the UDF processes your dataset
-2. **Creates a checkpoint** when the UDF operation completes successfully
+2. **Creates a checkpoint** when the UDF completes successfully
 3. **Allows you to fix bugs and continue** - if the UDF fails, you can modify the code and re-run, skipping already-processed rows
 4. **Invalidates the checkpoint if you change the UDF after successful completion** - completed UDFs are recomputed from scratch if the code changes
 
-For `.agg()` operations, checkpoints are only created upon successful completion, without incremental progress tracking.
+For `.agg()`, checkpoints are only created upon successful completion, without incremental progress tracking.
 
 ### Example: Fixing a Bug Mid-Execution
 
 ```python
-def process_image(file):
+from datachain import File
+
+def process_image(file: File) -> dict[str, int]:
     # Bug: this will fail on some images
     img = Image.open(file.get_local_path())
     return {"width": img.size[0], "height": img.size[1]}
@@ -224,7 +226,9 @@ result = (
 **After fixing the bug:**
 
 ```python
-def process_image(file):
+from datachain import File
+
+def process_image(file: File) -> dict[str, int]:
     # Fixed: handle corrupted images gracefully
     try:
         img = Image.open(file.get_local_path())
@@ -286,7 +290,7 @@ Partial results are automatically discarded when you change:
 
 #### Changes That Invalidate Completed UDF Checkpoints
 
-Once a UDF operation completes successfully, its checkpoint is tied to the UDF function code. If you modify the function and re-run the script, DataChain will detect the change and recompute the entire UDF from scratch.
+Once a UDF completes successfully, its checkpoint is tied to the UDF function code. If you modify the function and re-run the script, DataChain will detect the change and recompute the entire UDF from scratch.
 
 Changes that invalidate completed UDF checkpoints:
 
@@ -304,7 +308,7 @@ If you want to ignore any in-progress UDF work and recompute from the beginning,
 DATACHAIN_UDF_RESET=1 python my_script.py
 ```
 
-This forces all UDF operations to restart from scratch, discarding any checkpointed progress. This is useful when:
+This forces all UDFs to restart from scratch, discarding any checkpointed progress. This is useful when:
 
 - You've changed the UDF logic and want to reprocess already-completed rows
 - You suspect the checkpointed data is corrupted
@@ -315,18 +319,21 @@ This forces all UDF operations to restart from scratch, discarding any checkpoin
 DataChain uses two levels of checkpoints:
 
 - **Dataset checkpoints** (via `.save()`) - Skip recreating entire datasets if the chain hasn't changed
-- **UDF checkpoints** (automatic) - Resume in-progress UDF operations from where they left off
+- **UDF checkpoints** (automatic) - Resume in-progress UDFs from where they left off
 
-Both work together: if you have multiple `.map()` operations followed by a `.save()`, DataChain will resume from the last incomplete UDF. If all UDFs completed but the script failed before `.save()`, the next run will skip all UDFs and go straight to the save operation.
+Both work together: if you have multiple `.map()` calls followed by a `.save()`, DataChain will resume from the last incomplete UDF. If all UDFs completed but the script failed before `.save()`, the next run will skip all UDFs and go straight to the save.
 
 ## Limitations
 
+When running locally:
+
 - **Script-based:** Code must be run as a script (not interactively or as a module).
-- **Hash-based matching:** Any change to the chain will create a different hash, preventing checkpoint reuse.
 - **Same script path:** The script must be run from the same absolute path for parent job linking to work.
+
+These limitations don't apply when running on Studio, where parent-child job linking is handled automatically by the platform.
 
 ## Future Plans
 
 ### Partial Result Tracking for Aggregations
 
-Currently, `.agg()` operations create checkpoints only upon successful completion, without tracking partial progress. Future versions will extend the same incremental progress tracking that `.map()` and `.gen()` have to aggregations, allowing them to resume from where they failed rather than restarting from scratch.
+Currently, `.agg()` creates checkpoints only upon successful completion, without tracking partial progress. Future versions will extend the same incremental progress tracking that `.map()` and `.gen()` have to aggregations, allowing them to resume from where they failed rather than restarting from scratch.
