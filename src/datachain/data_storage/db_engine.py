@@ -91,7 +91,7 @@ class DatabaseEngine(ABC, Serializable):
                 table = self.metadata.tables.get(name)
                 if table is None:
                     raise TableMissingError(f"Table '{name}' not found")
-            except (KeyError, sa.exc.NoSuchTableError) as e:
+            except sa.exc.NoSuchTableError as e:
                 raise TableMissingError(f"Table '{name}' not found") from e
         return table
 
