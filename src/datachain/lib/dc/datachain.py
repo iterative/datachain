@@ -648,7 +648,7 @@ class DataChain:
         project = self._get_or_create_project(namespace_name, project_name)
 
         # Calculate hash including dataset name and job context to avoid conflicts
-        _hash = self.hash(name=name, in_job=True)
+        _hash = self.hash(name=f"{namespace_name}/{project_name}/{name}", in_job=True)
 
         # Checkpoint handling
         result = self._resolve_checkpoint(name, project, _hash, kwargs)
@@ -676,7 +676,7 @@ class DataChain:
                 )
             )
 
-        catalog.metastore.create_checkpoint(self.job.id, _hash)
+        catalog.metastore.get_or_create_checkpoint(self.job.id, _hash)
         return result
 
     def _validate_version(self, version: str | None) -> None:

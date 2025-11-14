@@ -837,7 +837,7 @@ class UDFStep(Step, ABC):
             self.metastore.remove_checkpoint(ch_partial)
 
         # Create final checkpoint for current job
-        self.metastore.create_checkpoint(self.job.id, hash_output)
+        self.metastore.get_or_create_checkpoint(self.job.id, hash_output)
 
         # Create result query from output table
         input_query = self.get_input_query(input_table.name, query)
@@ -890,7 +890,7 @@ class UDFStep(Step, ABC):
         Returns tuple of (output_table, input_table).
         """
         # Create checkpoint with partial_hash (includes output schema)
-        checkpoint = self.metastore.create_checkpoint(
+        checkpoint = self.metastore.get_or_create_checkpoint(
             self.job.id, partial_hash, partial=True
         )
 
@@ -938,7 +938,9 @@ class UDFStep(Step, ABC):
         assert checkpoint.job_id == self.job.parent_job_id
 
         # Create new partial checkpoint in current job
-        self.metastore.create_checkpoint(self.job.id, checkpoint.hash, partial=True)
+        self.metastore.get_or_create_checkpoint(
+            self.job.id, checkpoint.hash, partial=True
+        )
 
         # Find or create input table (may be in current job or ancestor)
         input_table = self.get_or_create_input_table(query, checkpoint.hash)
