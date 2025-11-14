@@ -12,7 +12,7 @@ import datachain as dc
 from datachain.func import path as pathfunc
 from datachain.lib.file import AudioFile, AudioFragment, File
 from datachain.lib.udf import Mapper
-from datachain.lib.utils import DataChainError
+from datachain.lib.utils import DataChainColumnError, DataChainError
 from tests.utils import LARGE_TREE, NUM_TREE
 
 
@@ -388,6 +388,23 @@ def test_udf_different_types(cloud_test_catalog):
             obj,
         )
     ]
+
+
+def test_udf_rejects_root_override(test_session):
+    class X(dc.DataModel):
+        x: int
+
+    chain = dc.read_values(x=[X(x=0), X(x=1)], session=test_session)
+
+    with pytest.raises(
+        DataChainColumnError,
+        match="Error for column x: signal already exists with a different type",
+    ):
+        chain.map(
+            lambda x: x.model_dump(),
+            params=["x"],
+            output={"x": dict},
+        )
 
 
 @pytest.mark.parametrize("use_cache", [False, True])
