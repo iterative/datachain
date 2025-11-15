@@ -68,7 +68,7 @@ quote_schema = sqlite_dialect.identifier_preparer.quote_schema
 quote = sqlite_dialect.identifier_preparer.quote
 
 # NOTE! This should be manually increased when we change our DB schema in codebase
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 OUTDATED_SCHEMA_ERROR_MESSAGE = (
     "You have an old version of the database schema. Please refer to the documentation"
@@ -333,16 +333,30 @@ class SQLiteDatabaseEngine(DatabaseEngine):
         if_not_exists: bool = True,
         *,
         kind: str | None = None,
-    ) -> None:
+    ) -> bool:
+        """Create table and return True if created, False if already existed."""
+        table_existed = self.has_table(table.name)
         self.execute(CreateTable(table, if_not_exists=if_not_exists))
+        return not table_existed
 
     def drop_table(self, table: "Table", if_exists: bool = False) -> None:
         self.execute(DropTable(table, if_exists=if_exists))
+        # Remove the table from metadata to avoid stale references
+        if table.name in self.metadata.tables:
+            self.metadata.remove(table)
 
     def rename_table(self, old_name: str, new_name: str):
         comp_old_name = quote_schema(old_name)
         comp_new_name = quote_schema(new_name)
-        self.execute_str(f"ALTER TABLE {comp_old_name} RENAME TO {comp_new_name}")
+        try:
+            self.execute_str(f"ALTER TABLE {comp_old_name} RENAME TO {comp_new_name}")
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to rename table from '{old_name}' to '{new_name}': {e}"
+            ) from e
+        # Remove old table from metadata to avoid stale references
+        if old_name in self.metadata.tables:
+            self.metadata.remove(self.metadata.tables[old_name])
 
 
 class SQLiteMetastore(AbstractDBMetastore):
@@ -676,11 +690,15 @@ class SQLiteWarehouse(AbstractWarehouse):
         columns: Sequence["sqlalchemy.Column"] = (),
         if_not_exists: bool = True,
     ) -> Table:
-        table = self.schema.dataset_row_cls.new_table(
-            name,
-            columns=columns,
-            metadata=self.db.metadata,
-        )
+        # Check if table already exists in DB
+        if self.db.has_table(name):
+            table = self.db.get_table(name)
+        else:
+            table = self.schema.dataset_row_cls.new_table(
+                name,
+                columns=columns,
+                metadata=self.db.metadata,
+            )
         self.db.create_table(table, if_not_exists=if_not_exists)
         return table
 
@@ -705,16 +723,37 @@ class SQLiteWarehouse(AbstractWarehouse):
         table: Table,
         rows: Iterable[dict[str, Any]],
         batch_size: int = INSERT_BATCH_SIZE,
+        batch_callback: Callable[[list[dict[str, Any]]], None] | None = None,
+        tracking_field: str | None = None,
     ) -> None:
         for row_chunk in batched(rows, batch_size):
+            # Convert tuple to list for modification
+            row_list = list(row_chunk)
+
+            # Extract and remove tracking field if specified
+            tracking_values = None
+            if tracking_field:
+                tracking_values = [row.pop(tracking_field, None) for row in row_list]
+
             with self.db.transaction() as conn:
                 # transactions speeds up inserts significantly as there is no separate
                 # transaction created for each insert row
                 self.db.executemany(
-                    table.insert().values({f: bindparam(f) for f in row_chunk[0]}),
-                    row_chunk,
+                    table.insert().values({f: bindparam(f) for f in row_list[0]}),
+                    row_list,
                     conn=conn,
                 )
+
+            # After transaction commits, restore tracking field and call callback
+            # Only restore if value is not None (avoid adding field to rows that didn't
+            # have it)
+            if tracking_field and tracking_values:
+                for row, val in zip(row_list, tracking_values, strict=True):
+                    if val is not None:
+                        row[tracking_field] = val
+
+            if batch_callback:
+                batch_callback(row_list)
 
     def insert_dataset_rows(self, df, dataset: DatasetRecord, version: str) -> int:
         dr = self.dataset_rows(dataset, version)
@@ -851,14 +890,19 @@ class SQLiteWarehouse(AbstractWarehouse):
     def _system_random_expr(self):
         return self._system_row_number_expr() * 1103515245 + 12345
 
-    def create_pre_udf_table(self, query: "Select") -> "Table":
+    def create_pre_udf_table(self, query: "Select", name: str) -> "Table":
         """
         Create a temporary table from a query for use in a UDF.
+        If table already exists (shared tables), skip population and just return it.
         """
         columns = [sqlalchemy.Column(c.name, c.type) for c in query.selected_columns]
-        table = self.create_udf_table(columns)
 
-        with tqdm(desc="Preparing", unit=" rows", leave=False) as pbar:
-            self.copy_table(table, query, progress_cb=pbar.update)
+        table, created = self.create_udf_table(columns, name=name)
+
+        # Only populate if table was just created (not if it already existed) to
+        # avoid inserting duplicates
+        if created:
+            with tqdm(desc="Preparing", unit=" rows", leave=False) as pbar:
+                self.copy_table(table, query, progress_cb=pbar.update)
 
         return table
