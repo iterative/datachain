@@ -259,7 +259,7 @@ def test_read_file(cloud_test_catalog, use_cache):
         assert bool(file.get_local_path()) is use_cache
 
 
-@pytest.mark.parametrize("placement", ["fullpath", "filename"])
+@pytest.mark.parametrize("placement", ["fullpath", "filename", "filepath"])
 @pytest.mark.parametrize("use_map", [True, False])
 @pytest.mark.parametrize("use_cache", [True, False])
 @pytest.mark.parametrize("file_type", ["", "binary", "text"])
@@ -305,12 +305,14 @@ def test_to_storage(
         "dog4": "ruff",
     }
 
+    output_root = tmp_dir / "output"
     for file in df.to_values("file"):
         if placement == "filename":
-            file_path = file.name
+            destination_rel = Path(file.name)
         else:
-            file_path = file.get_full_name()
-        with open(tmp_dir / "output" / file_path) as f:
+            destination_rel = Path(file.get_destination_path("", placement))
+
+        with (output_root / destination_rel).open() as f:
             assert f.read() == expected[file.name]
 
     assert mapper.call_count == len(expected)
