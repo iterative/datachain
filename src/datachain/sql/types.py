@@ -336,10 +336,28 @@ class Array(SQLType):
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Union[type["SQLType"], "SQLType"]:
-        sub_t = NAME_TYPES_MAPPING[d["item_type"]["type"]].from_dict(  # type: ignore [attr-defined]
-            d["item_type"]
-        )
-        return cls(sub_t)
+        try:
+            array_item = d["item_type"]
+        except KeyError as e:
+            raise ValueError("Array type must have 'item_type' field") from e
+
+        if not isinstance(array_item, dict):
+            raise TypeError("Array 'item_type' field must be a dictionary")
+
+        try:
+            item_type = array_item["type"]
+        except KeyError as e:
+            raise ValueError("Array 'item_type' must have 'type' field") from e
+
+        try:
+            sub_t = NAME_TYPES_MAPPING[item_type]
+        except KeyError as e:
+            raise ValueError(f"Array item type '{item_type}' is not supported") from e
+
+        try:
+            return cls(sub_t.from_dict(d["item_type"]))  # type: ignore [attr-defined]
+        except KeyError as e:
+            raise ValueError(f"Array item type '{item_type}' is not supported") from e
 
     @staticmethod
     def default_value(dialect):

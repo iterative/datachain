@@ -6,7 +6,9 @@ from pydantic import BaseModel
 from sqlalchemy import func
 
 import datachain as dc
+from datachain import DataModel
 from datachain.lib.dc import C, DatasetMergeError
+from datachain.lib.signal_schema import SignalResolvingError
 from datachain.sql.types import Int, String
 from tests.utils import skip_if_not_sqlite
 
@@ -222,6 +224,161 @@ def test_merge_values(test_session):
 
     assert i == len(order_ids)
     assert j == len(delivery_ids)
+
+
+def test_merge_nested_key_without_collision_matches_schema(test_session):
+    class Item(DataModel):
+        score: float
+
+    class Metadata(DataModel):
+        score: float
+
+    left = dc.read_values(
+        id=[1, 2],
+        item=[Item(score=0.5), Item(score=0.7)],
+        session=test_session,
+    )
+    right = dc.read_values(
+        id=[1, 2],
+        metadata=[Metadata(score=0.3), Metadata(score=0.4)],
+        session=test_session,
+    )
+
+    merged = left.merge(right, "id", rname="right_")
+
+    schema = merged.signals_schema
+    resolved = schema.resolve("id", "item.score", "metadata.score", "right_id")
+
+    assert resolved.values["id"] is int
+    assert resolved.values["item.score"] is float
+    assert resolved.values["metadata.score"] is float
+    assert resolved.values["right_id"] is int
+
+    with pytest.raises(SignalResolvingError):
+        schema.resolve("right_metadata.score")
+
+    rows = (
+        merged.select("id", "item.score", "right_id", "metadata.score")
+        .order_by("id")
+        .results()
+    )
+    assert rows == [(1, 0.5, 1, 0.3), (2, 0.7, 2, 0.4)]
+
+
+def test_merge_prefixed_root_suffix_matches_schema(test_session):
+    class Item(DataModel):
+        score: float
+
+    class RightItem(DataModel):
+        score: float
+
+    class ItemMetrics(DataModel):
+        score: int
+        confidence: int
+
+    left = dc.read_values(
+        id=[1, 2],
+        item=[Item(score=0.5), Item(score=0.7)],
+        right_item=[RightItem(score=0.9), RightItem(score=0.95)],
+        session=test_session,
+    )
+    right = dc.read_values(
+        id=[1, 2],
+        item=[ItemMetrics(score=3, confidence=30), ItemMetrics(score=4, confidence=40)],
+        session=test_session,
+    )
+
+    merged = left.merge(right, "id", rname="right_")
+
+    schema = merged.signals_schema
+    resolved = schema.resolve(
+        "id",
+        "item.score",
+        "right_item.score",
+        "right_item_1.score",
+        "right_item_1.confidence",
+        "right_id",
+    )
+
+    assert resolved.values["id"] is int
+    assert resolved.values["item.score"] is float
+    assert resolved.values["right_item.score"] is float
+    assert resolved.values["right_item_1.score"] is int
+    assert resolved.values["right_item_1.confidence"] is int
+    assert resolved.values["right_id"] is int
+
+    rows = (
+        merged.select(
+            "id",
+            "item.score",
+            "right_item.score",
+            "right_item_1.score",
+            "right_item_1.confidence",
+            "right_id",
+        )
+        .order_by("id")
+        .results()
+    )
+    assert rows == [
+        (1, 0.5, 0.9, 3, 30, 1),
+        (2, 0.7, 0.95, 4, 40, 2),
+    ]
+
+
+def test_merge_rename_collides_with_existing_column_matches_schema(test_session):
+    class ItemFloat(DataModel):
+        score: float
+
+    class ItemInt(DataModel):
+        score: int
+
+    class RightItemStr(DataModel):
+        score: str
+
+    left = dc.read_values(
+        id=[1, 2],
+        item=[ItemFloat(score=0.5), ItemFloat(score=0.7)],
+        session=test_session,
+    )
+    right = dc.read_values(
+        id=[1, 2],
+        item=[ItemInt(score=5), ItemInt(score=6)],
+        right_item=[RightItemStr(score="high"), RightItemStr(score="low")],
+        session=test_session,
+    )
+
+    merged = left.merge(right, "id", rname="right_")
+
+    schema = merged.signals_schema
+    resolved = schema.resolve(
+        "id",
+        "item.score",
+        "right_item.score",
+        "right_item_1.score",
+        "right_id",
+    )
+
+    assert resolved.values["id"] is int
+    assert resolved.values["item.score"] is float
+    assert resolved.values["right_item.score"] is str
+    assert resolved.values["right_item_1.score"] is int
+    assert resolved.values["right_id"] is int
+
+    rows = (
+        merged.select(
+            "id",
+            "item.score",
+            "right_item.score",
+            "right_item_1.score",
+            "right_id",
+        )
+        .order_by("id")
+        .results()
+    )
+    assert rows == [
+        (1, 0.5, "high", 5, 1),
+        (2, 0.7, "low", 6, 2),
+    ]
 
 
 def test_merge_multi_conditions(test_session):
